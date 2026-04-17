@@ -61,7 +61,7 @@ export default function AdminLoginPage() {
           <div className="mb-8">
             <p className="text-sm font-medium text-gray-500">관리자 전용</p>
             <h1 className="mt-2 text-[30px] font-bold tracking-[-0.02em] text-black">
-              관리자 로그인
+              장사꾼 관리자 로그인
             </h1>
             <p className="mt-2 text-[15px] leading-6 text-gray-500">
               관리자 비밀번호를 입력하고 대시보드에 접속하세요.
