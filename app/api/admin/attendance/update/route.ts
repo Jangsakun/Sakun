@@ -8,6 +8,7 @@ export async function PATCH(request: Request) {
     const {
       checkInRecordId,
       checkOutRecordId,
+      employeeId,
       employeeName,
       date,
       checkInTime,
@@ -27,16 +28,6 @@ export async function PATCH(request: Request) {
       );
     }
 
-    if (!checkInRecordId && !checkOutRecordId) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "수정할 출근/퇴근 기록이 없습니다.",
-        },
-        { status: 400 }
-      );
-    }
-
     if (!checkInTime && !checkOutTime) {
       return NextResponse.json(
         {
@@ -47,9 +38,30 @@ export async function PATCH(request: Request) {
       );
     }
 
+    if (!employeeId && (!checkInRecordId || !checkOutRecordId)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "새 기록을 만들려면 employeeId가 필요합니다. 관리자 목록 조회 데이터에 employeeId를 포함해주세요.",
+        },
+        { status: 400 }
+      );
+    }
+
     if (checkInTime && checkOutTime) {
       const inMs = new Date(checkInTime).getTime();
       const outMs = new Date(checkOutTime).getTime();
+
+      if (Number.isNaN(inMs) || Number.isNaN(outMs)) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "출근 또는 퇴근 시간 형식이 올바르지 않습니다.",
+          },
+          { status: 400 }
+        );
+      }
 
       if (outMs < inMs) {
         return NextResponse.json(
@@ -64,73 +76,101 @@ export async function PATCH(request: Request) {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    if (checkInRecordId && checkInTime) {
+    if (checkInTime) {
       const checkInIso = new Date(checkInTime).toISOString();
 
-      const { error: checkInError } = await supabase
-        .from("attendance_records")
-        .update({
-          checked_at: checkInIso,
-        })
-        .eq("id", checkInRecordId)
-        .eq("record_type", "check_in");
+      if (checkInRecordId) {
+        const { error: checkInError } = await supabase
+          .from("attendance_records")
+          .update({
+            checked_at: checkInIso,
+          })
+          .eq("id", checkInRecordId)
+          .eq("record_type", "check_in");
 
-      if (checkInError) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: `출근 시간 수정 실패: ${checkInError.message}`,
-          },
-          { status: 500 }
-        );
+        if (checkInError) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: `출근 시간 수정 실패: ${checkInError.message}`,
+            },
+            { status: 500 }
+          );
+        }
+      } else {
+        const { error: checkInInsertError } = await supabase
+          .from("attendance_records")
+          .insert([
+            {
+              employee_id: employeeId,
+              record_type: "check_in",
+              checked_at: checkInIso,
+              lat: null,
+              lng: null,
+            },
+          ]);
+
+        if (checkInInsertError) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: `출근 기록 생성 실패: ${checkInInsertError.message}`,
+            },
+            { status: 500 }
+          );
+        }
       }
     }
 
-    if (checkOutRecordId && checkOutTime) {
+    if (checkOutTime) {
       const checkOutIso = new Date(checkOutTime).toISOString();
 
-      const { error: checkOutError } = await supabase
-        .from("attendance_records")
-        .update({
-          checked_at: checkOutIso,
-        })
-        .eq("id", checkOutRecordId)
-        .eq("record_type", "check_out");
+      if (checkOutRecordId) {
+        const { error: checkOutError } = await supabase
+          .from("attendance_records")
+          .update({
+            checked_at: checkOutIso,
+          })
+          .eq("id", checkOutRecordId)
+          .eq("record_type", "check_out");
 
-      if (checkOutError) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: `퇴근 시간 수정 실패: ${checkOutError.message}`,
-          },
-          { status: 500 }
-        );
+        if (checkOutError) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: `퇴근 시간 수정 실패: ${checkOutError.message}`,
+            },
+            { status: 500 }
+          );
+        }
+      } else {
+        const { error: checkOutInsertError } = await supabase
+          .from("attendance_records")
+          .insert([
+            {
+              employee_id: employeeId,
+              record_type: "check_out",
+              checked_at: checkOutIso,
+              lat: null,
+              lng: null,
+            },
+          ]);
+
+        if (checkOutInsertError) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: `퇴근 기록 생성 실패: ${checkOutInsertError.message}`,
+            },
+            { status: 500 }
+          );
+        }
       }
-    }
-
-    if (!checkInRecordId && checkInTime) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: `${employeeName || "직원"} ${date || ""} 기록에는 기존 출근 데이터가 없어 새로 만드는 기능은 아직 없습니다.`,
-        },
-        { status: 400 }
-      );
-    }
-
-    if (!checkOutRecordId && checkOutTime) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: `${employeeName || "직원"} ${date || ""} 기록에는 기존 퇴근 데이터가 없어 새로 만드는 기능은 아직 없습니다.`,
-        },
-        { status: 400 }
-      );
     }
 
     return NextResponse.json({
       success: true,
-      message: "출퇴근 시간이 수정되었습니다.",
+      message: "출퇴근 시간이 저장되었습니다.",
     });
   } catch (error) {
     return NextResponse.json(

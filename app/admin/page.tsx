@@ -43,6 +43,7 @@ type EmployeeListResponse = {
 
 type GroupedAttendanceRow = {
   key: string;
+  employeeId: number;
   employeeName: string;
   date: string;
   checkIn: string | null;
@@ -213,6 +214,7 @@ export default function AdminPage() {
       );
 
       const employeeName = sorted[0].employees?.name || "알 수 없음";
+      const employeeId = sorted[0].employee_id;
       const date = toSeoulDateKey(sorted[0].checked_at);
 
       const checkInRecord =
@@ -266,6 +268,7 @@ export default function AdminPage() {
 
       rows.push({
         key,
+        employeeId,
         employeeName,
         date,
         checkIn: checkInRecord?.checked_at || null,
@@ -423,6 +426,7 @@ export default function AdminPage() {
         body: JSON.stringify({
           checkInRecordId: row.checkInRecordId,
           checkOutRecordId: row.checkOutRecordId,
+          employeeId: row.employeeId,
           employeeName: row.employeeName,
           date: row.date,
           checkInTime: editCheckInTime || null,
