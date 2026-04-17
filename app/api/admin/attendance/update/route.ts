@@ -50,8 +50,8 @@ export async function PATCH(request: Request) {
     }
 
     if (checkInTime && checkOutTime) {
-      const inMs = new Date(checkInTime).getTime();
-      const outMs = new Date(checkOutTime).getTime();
+      const inMs = new Date(`${checkInTime}:00+09:00`).getTime();
+      const outMs = new Date(`${checkOutTime}:00+09:00`).getTime();
 
       if (Number.isNaN(inMs) || Number.isNaN(outMs)) {
         return NextResponse.json(
@@ -77,7 +77,7 @@ export async function PATCH(request: Request) {
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     if (checkInTime) {
-      const checkInIso = new Date(checkInTime).toISOString();
+      const checkInIso = new Date(`${checkInTime}:00+09:00`).toISOString();
 
       if (checkInRecordId) {
         const { error: checkInError } = await supabase
@@ -123,7 +123,7 @@ export async function PATCH(request: Request) {
     }
 
     if (checkOutTime) {
-      const checkOutIso = new Date(checkOutTime).toISOString();
+      const checkOutIso = new Date(`${checkOutTime}:00+09:00`).toISOString();
 
       if (checkOutRecordId) {
         const { error: checkOutError } = await supabase
