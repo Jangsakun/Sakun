@@ -3,19 +3,35 @@ import { createClient } from "@supabase/supabase-js";
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body = await request.json();
 
     const { name, birth_date, phone_last4, hourlyWage } = body;
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!supabaseUrl || !serviceRoleKey) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "환경변수가 없습니다.",
+        },
+        { status: 500 }
+      );
+    }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    const updateData: any = {};
+    const updateData: {
+      name?: string;
+      birth_date?: string;
+      phone_last4?: string;
+      hourly_wage?: number;
+    } = {};
 
     if (name !== undefined) updateData.name = name;
     if (birth_date !== undefined) updateData.birth_date = birth_date;
@@ -25,22 +41,30 @@ export async function PATCH(
     const { error } = await supabase
       .from("employees")
       .update(updateData)
-      .eq("id", params.id);
+      .eq("id", id);
 
     if (error) {
       return NextResponse.json(
-        { success: false, message: error.message },
+        {
+          success: false,
+          message: error.message,
+        },
         { status: 500 }
       );
     }
 
     return NextResponse.json({
       success: true,
-      message: "수정 완료",
+      message: "직원 정보가 수정되었습니다.",
     });
-  } catch (err) {
+  } catch (error) {
+    console.error(error);
+
     return NextResponse.json(
-      { success: false, message: "서버 오류" },
+      {
+        success: false,
+        message: "직원 수정 중 오류 발생",
+      },
       { status: 500 }
     );
   }
