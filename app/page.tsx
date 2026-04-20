@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 type Employee = {
   id?: string;
@@ -242,6 +243,16 @@ export default function Home() {
           </button>
         </div>
 
+        <Link href="/worker/payroll" style={payrollLinkStyle}>
+          <div style={payrollIconStyle}>💰</div>
+          <div>
+            <div style={payrollTitleStyle}>근로자 급여조회</div>
+            <div style={payrollDescStyle}>
+              실시간 주단위 급여 / 날짜별 조회 / 주급 명세서 확인
+            </div>
+          </div>
+        </Link>
+
         <div style={statusBoxStyle}>
           <div style={statusHeaderStyle}>현재 상태</div>
           <p style={statusTextStyle}>{message || "대기 중"}</p>
@@ -335,7 +346,7 @@ const subtitleStyle: React.CSSProperties = {
 const buttonRowStyle: React.CSSProperties = {
   display: "flex",
   gap: "12px",
-  marginBottom: "20px",
+  marginBottom: "16px",
 };
 
 const primaryButtonStyle: React.CSSProperties = {
@@ -358,6 +369,43 @@ const secondaryButtonStyle: React.CSSProperties = {
   color: "#111827",
   fontSize: "17px",
   fontWeight: 700,
+};
+
+const payrollLinkStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "14px",
+  textDecoration: "none",
+  border: "1px solid #dbeafe",
+  backgroundColor: "#eff6ff",
+  borderRadius: "16px",
+  padding: "16px",
+  marginBottom: "16px",
+};
+
+const payrollIconStyle: React.CSSProperties = {
+  width: "52px",
+  height: "52px",
+  minWidth: "52px",
+  borderRadius: "14px",
+  backgroundColor: "#dbeafe",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "24px",
+};
+
+const payrollTitleStyle: React.CSSProperties = {
+  fontSize: "16px",
+  fontWeight: 700,
+  color: "#111827",
+  marginBottom: "4px",
+};
+
+const payrollDescStyle: React.CSSProperties = {
+  fontSize: "13px",
+  color: "#4b5563",
+  lineHeight: 1.5,
 };
 
 const statusBoxStyle: React.CSSProperties = {
