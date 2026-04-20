@@ -177,14 +177,19 @@ export default function WorkerPayrollPage() {
 
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700">
-                생년월일
+                생년월일 (숫자만 입력)
               </label>
-              <input
-                type="date"
-                value={birthDate}
-                onChange={(e) => setBirthDate(e.target.value)}
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-black"
-              />
+             <input
+  type="text"
+  value={birthDate}
+  onChange={(e) => {
+    const onlyNumber = e.target.value.replace(/[^0-9]/g, "");
+    setBirthDate(onlyNumber);
+  }}
+  placeholder="예: 971108 또는 19971108"
+  maxLength={8}
+  className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-black"
+/>
             </div>
 
             <div>
