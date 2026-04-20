@@ -63,6 +63,7 @@ type AttendanceUpdateResponse = {
 };
 
 export default function AdminPage() {
+  console.log("🔥 최신코드 적용됨");
   const router = useRouter();
 
   const [tab, setTab] = useState<"attendance" | "employees">("attendance");
