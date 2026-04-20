@@ -33,6 +33,7 @@ type Employee = {
   phone_last4: string;
   is_active: boolean;
   created_at?: string;
+  hourly_wage?: number;
 };
 
 type EmployeeListResponse = {
@@ -85,6 +86,7 @@ export default function AdminPage() {
   const [employeeLoading, setEmployeeLoading] = useState(false);
   const [employeeMessage, setEmployeeMessage] = useState("");
   const [employeeSearch, setEmployeeSearch] = useState("");
+  const [wages, setWages] = useState<{ [key: number]: number }>({});
 
   const [editingEmployeeId, setEditingEmployeeId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
@@ -148,6 +150,12 @@ export default function AdminPage() {
       if (data.success && data.employees) {
         setEmployees(data.employees);
         setEmployeeMessage("");
+
+        const initialWages: { [key: number]: number } = {};
+        data.employees.forEach((emp) => {
+          initialWages[emp.id] = emp.hourly_wage || 0;
+        });
+        setWages(initialWages);
       } else {
         setEmployees([]);
         setEmployeeMessage(data.message || "직원 목록 조회 실패");
@@ -351,6 +359,42 @@ export default function AdminPage() {
     } catch (error) {
       console.error(error);
       alert("직원 수정 중 오류 발생");
+    }
+  };
+
+  const handleWageChange = (id: number, value: number) => {
+    setWages((prev) => ({
+      ...prev,
+      [id]: value,
+    }));
+  };
+
+  const updateWage = async (id: number) => {
+    const wage = wages[id];
+
+    try {
+      const response = await fetch(`/api/admin/employees/${id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          hourlyWage: wage,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        alert(data.message || "시급 수정 실패");
+        return;
+      }
+
+      alert("시급 수정 완료");
+      fetchEmployees();
+    } catch (error) {
+      console.error(error);
+      alert("시급 수정 중 오류 발생");
     }
   };
 
@@ -698,7 +742,7 @@ export default function AdminPage() {
               <div>
                 <h2 style={sectionTitleStyle}>직원 관리</h2>
                 <p style={sectionDescriptionStyle}>
-                  직원 검색, 정보 수정, 활성/비활성 상태 변경이 가능합니다.
+                  직원 검색, 정보 수정, 시급 관리, 활성/비활성 상태 변경이 가능합니다.
                 </p>
               </div>
             </div>
@@ -736,6 +780,7 @@ export default function AdminPage() {
                       <th style={thStyle}>이름</th>
                       <th style={thStyle}>생년월일</th>
                       <th style={thStyle}>전화번호 끝 4자리</th>
+                      <th style={thStyle}>시급</th>
                       <th style={thStyle}>상태</th>
                       <th style={thStyle}>관리</th>
                     </tr>
@@ -782,6 +827,26 @@ export default function AdminPage() {
                             ) : (
                               employee.phone_last4
                             )}
+                          </td>
+
+                          <td style={tdStyle}>
+                            <div style={wageWrapStyle}>
+                              <input
+                                type="number"
+                                min={0}
+                                value={wages[employee.id] || 0}
+                                onChange={(e) =>
+                                  handleWageChange(employee.id, Number(e.target.value))
+                                }
+                                style={wageInputStyle}
+                              />
+                              <button
+                                onClick={() => updateWage(employee.id)}
+                                style={primarySmallButtonStyle}
+                              >
+                                시급저장
+                              </button>
+                            </div>
                           </td>
 
                           <td style={tdStyle}>
@@ -1109,6 +1174,22 @@ const dateTimeInputStyle: CSSProperties = {
   fontSize: "14px",
 };
 
+const wageWrapStyle: CSSProperties = {
+  display: "flex",
+  gap: "8px",
+  alignItems: "center",
+  flexWrap: "wrap",
+};
+
+const wageInputStyle: CSSProperties = {
+  padding: "8px 10px",
+  width: "120px",
+  borderRadius: "10px",
+  border: "1px solid #d1d5db",
+  outline: "none",
+  fontSize: "14px",
+};
+
 const primaryButtonStyle: CSSProperties = {
   padding: "12px 16px",
   border: "none",
@@ -1149,7 +1230,7 @@ const tableStyle: CSSProperties = {
   width: "100%",
   borderCollapse: "separate",
   borderSpacing: 0,
-  minWidth: "900px",
+  minWidth: "1000px",
 };
 
 const thStyle: CSSProperties = {

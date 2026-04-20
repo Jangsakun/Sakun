@@ -1,37 +1,46 @@
-import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "../../../../lib/supabase";
+import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 
-export async function PATCH(request: NextRequest) {
-  const body = await request.json();
-  const { name, birth_date, phone_last4 } = body;
+export async function PATCH(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const body = await request.json();
+    const { hourlyWage } = body;
 
-  const pathnameParts = new URL(request.url).pathname.split("/");
-  const id = pathnameParts[pathnameParts.length - 1];
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-  if (!id) {
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+    if (!hourlyWage || hourlyWage < 0) {
+      return NextResponse.json(
+        { success: false, message: "시급이 올바르지 않습니다." },
+        { status: 400 }
+      );
+    }
+
+    const { error } = await supabase
+      .from("employees")
+      .update({ hourly_wage: hourlyWage })
+      .eq("id", params.id);
+
+    if (error) {
+      return NextResponse.json(
+        { success: false, message: error.message },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json({
-      success: false,
-      message: "직원 id가 없습니다.",
+      success: true,
+      message: "시급 수정 완료",
     });
+  } catch (err) {
+    return NextResponse.json(
+      { success: false, message: "서버 오류" },
+      { status: 500 }
+    );
   }
-
-  const { error } = await supabase
-    .from("employees")
-    .update({
-      name,
-      birth_date,
-      phone_last4,
-    })
-    .eq("id", id);
-
-  if (error) {
-    return NextResponse.json({
-      success: false,
-      message: error.message,
-    });
-  }
-
-  return NextResponse.json({
-    success: true,
-  });
 }
