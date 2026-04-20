@@ -63,11 +63,11 @@ type AttendanceUpdateResponse = {
 };
 
 export default function AdminPage() {
-  console.log("🔥 최신코드 적용됨");
-  
   const router = useRouter();
 
-  const [tab, setTab] = useState<"attendance" | "employees">("attendance");
+  const [tab, setTab] = useState<"attendance" | "employees" | "payroll">(
+    "attendance"
+  );
 
   const [startDate, setStartDate] = useState(() => {
     const today = new Date();
@@ -90,12 +90,16 @@ export default function AdminPage() {
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [wages, setWages] = useState<{ [key: number]: number }>({});
 
-  const [editingEmployeeId, setEditingEmployeeId] = useState<number | null>(null);
+  const [editingEmployeeId, setEditingEmployeeId] = useState<number | null>(
+    null
+  );
   const [editName, setEditName] = useState("");
   const [editBirthDate, setEditBirthDate] = useState("");
   const [editPhoneLast4, setEditPhoneLast4] = useState("");
 
-  const [editingAttendanceKey, setEditingAttendanceKey] = useState<string | null>(null);
+  const [editingAttendanceKey, setEditingAttendanceKey] = useState<
+    string | null
+  >(null);
   const [editCheckInTime, setEditCheckInTime] = useState("");
   const [editCheckOutTime, setEditCheckOutTime] = useState("");
   const [attendanceSaving, setAttendanceSaving] = useState(false);
@@ -172,12 +176,12 @@ export default function AdminPage() {
   };
 
   useEffect(() => {
-  fetchRecords();
-}, []);
+    fetchRecords();
+  }, []);
 
-useEffect(() => {
-  fetchEmployees();
-}, []);
+  useEffect(() => {
+    fetchEmployees();
+  }, []);
 
   useEffect(() => {
     if (tab === "attendance") {
@@ -186,7 +190,7 @@ useEffect(() => {
   }, [startDate, endDate, tab]);
 
   useEffect(() => {
-    if (tab === "employees") {
+    if (tab === "employees" || tab === "payroll") {
       fetchEmployees();
     }
   }, [tab]);
@@ -203,6 +207,12 @@ useEffect(() => {
           new Date(b.checked_at).getTime() - new Date(a.checked_at).getTime()
       );
   }, [records, attendanceSearch]);
+
+  const filteredEmployees = useMemo(() => {
+    return employees.filter((employee) =>
+      employee.name.toLowerCase().includes(employeeSearch.toLowerCase())
+    );
+  }, [employees, employeeSearch]);
 
   const groupedAttendanceRows = useMemo(() => {
     const grouped = new Map<string, AdminRecord[]>();
@@ -304,12 +314,6 @@ useEffect(() => {
     });
   }, [filteredRecords]);
 
-  const filteredEmployees = useMemo(() => {
-    return employees.filter((employee) =>
-      employee.name.toLowerCase().includes(employeeSearch.toLowerCase())
-    );
-  }, [employees, employeeSearch]);
-
   const summaryCheckInCount = groupedAttendanceRows.filter(
     (row) => row.checkIn !== null
   ).length;
@@ -318,7 +322,9 @@ useEffect(() => {
     (row) => row.checkOut !== null
   ).length;
 
-  const activeEmployeeCount = employees.filter((employee) => employee.is_active).length;
+  const activeEmployeeCount = employees.filter(
+    (employee) => employee.is_active
+  ).length;
 
   const incompleteAttendanceCount = groupedAttendanceRows.filter(
     (row) => row.checkIn === null || row.checkOut === null
@@ -412,15 +418,18 @@ useEffect(() => {
     if (!ok) return;
 
     try {
-      const response = await fetch(`/api/admin/employees/${employee.id}/status`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          is_active: nextActive,
-        }),
-      });
+      const response = await fetch(
+        `/api/admin/employees/${employee.id}/status`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            is_active: nextActive,
+          }),
+        }
+      );
 
       const data = await response.json();
 
@@ -516,7 +525,13 @@ useEffect(() => {
 
           <div style={headerButtonWrapStyle}>
             <button
-              onClick={tab === "attendance" ? fetchRecords : fetchEmployees}
+              onClick={() => {
+                if (tab === "attendance") {
+                  fetchRecords();
+                } else {
+                  fetchEmployees();
+                }
+              }}
               style={secondaryTopButtonStyle}
             >
               새로고침
@@ -553,7 +568,8 @@ useEffect(() => {
 
         {tab === "attendance" && incompleteAttendanceCount > 0 && (
           <div style={warningBoxStyle}>
-            출근 또는 퇴근이 비어 있는 기록이 <strong>{incompleteAttendanceCount}건</strong> 있습니다.
+            출근 또는 퇴근이 비어 있는 기록이{" "}
+            <strong>{incompleteAttendanceCount}건</strong> 있습니다.
           </div>
         )}
 
@@ -579,6 +595,17 @@ useEffect(() => {
           >
             직원 관리
           </button>
+
+          <button
+            onClick={() => setTab("payroll")}
+            style={{
+              ...tabButtonStyle,
+              backgroundColor: tab === "payroll" ? "#111827" : "#f3f4f6",
+              color: tab === "payroll" ? "#ffffff" : "#111827",
+            }}
+          >
+            급여 관리
+          </button>
         </div>
 
         {tab === "attendance" && (
@@ -587,7 +614,8 @@ useEffect(() => {
               <div>
                 <h2 style={sectionTitleStyle}>출퇴근 기록</h2>
                 <p style={sectionDescriptionStyle}>
-                  기간과 이름으로 조회하고, 직원별로 출근/퇴근 시간을 한 줄로 확인할 수 있습니다.
+                  기간과 이름으로 조회하고, 직원별로 출근/퇴근 시간을 한 줄로
+                  확인할 수 있습니다.
                 </p>
               </div>
             </div>
@@ -668,7 +696,9 @@ useEffect(() => {
                               <input
                                 type="datetime-local"
                                 value={editCheckInTime}
-                                onChange={(e) => setEditCheckInTime(e.target.value)}
+                                onChange={(e) =>
+                                  setEditCheckInTime(e.target.value)
+                                }
                                 style={dateTimeInputStyle}
                               />
                             ) : (
@@ -681,7 +711,9 @@ useEffect(() => {
                               <input
                                 type="datetime-local"
                                 value={editCheckOutTime}
-                                onChange={(e) => setEditCheckOutTime(e.target.value)}
+                                onChange={(e) =>
+                                  setEditCheckOutTime(e.target.value)
+                                }
                                 style={dateTimeInputStyle}
                               />
                             ) : (
@@ -689,7 +721,9 @@ useEffect(() => {
                             )}
                           </td>
 
-                          <td style={tdStyle}>{formatWorkMinutes(row.workMinutes)}</td>
+                          <td style={tdStyle}>
+                            {formatWorkMinutes(row.workMinutes)}
+                          </td>
 
                           <td style={tdStyle}>
                             <span
@@ -748,7 +782,7 @@ useEffect(() => {
               <div>
                 <h2 style={sectionTitleStyle}>직원 관리</h2>
                 <p style={sectionDescriptionStyle}>
-                  직원 검색, 정보 수정, 시급 관리, 활성/비활성 상태 변경이 가능합니다.
+                  직원 검색, 정보 수정, 활성/비활성 상태 변경이 가능합니다.
                 </p>
               </div>
             </div>
@@ -786,7 +820,6 @@ useEffect(() => {
                       <th style={thStyle}>이름</th>
                       <th style={thStyle}>생년월일</th>
                       <th style={thStyle}>전화번호 끝 4자리</th>
-                      <th style={thStyle}>시급</th>
                       <th style={thStyle}>상태</th>
                       <th style={thStyle}>관리</th>
                     </tr>
@@ -826,7 +859,9 @@ useEffect(() => {
                             {isEditing ? (
                               <input
                                 value={editPhoneLast4}
-                                onChange={(e) => setEditPhoneLast4(e.target.value)}
+                                onChange={(e) =>
+                                  setEditPhoneLast4(e.target.value)
+                                }
                                 maxLength={4}
                                 style={smallInputStyle}
                               />
@@ -836,30 +871,12 @@ useEffect(() => {
                           </td>
 
                           <td style={tdStyle}>
-                            <div style={wageWrapStyle}>
-                              <input
-                                type="number"
-                                min={0}
-                                value={wages[employee.id] || 0}
-                                onChange={(e) =>
-                                  handleWageChange(employee.id, Number(e.target.value))
-                                }
-                                style={wageInputStyle}
-                              />
-                              <button
-                                onClick={() => updateWage(employee.id)}
-                                style={primarySmallButtonStyle}
-                              >
-                                시급저장
-                              </button>
-                            </div>
-                          </td>
-
-                          <td style={tdStyle}>
                             <span
                               style={{
                                 ...badgeStyle,
-                                backgroundColor: employee.is_active ? "#e8f5e9" : "#ffebee",
+                                backgroundColor: employee.is_active
+                                  ? "#e8f5e9"
+                                  : "#ffebee",
                                 color: employee.is_active ? "#2e7d32" : "#c62828",
                               }}
                             >
@@ -897,7 +914,9 @@ useEffect(() => {
                                 onClick={() => toggleEmployeeActive(employee)}
                                 style={{
                                   ...secondarySmallButtonStyle,
-                                  backgroundColor: employee.is_active ? "#fff7ed" : "#ecfdf5",
+                                  backgroundColor: employee.is_active
+                                    ? "#fff7ed"
+                                    : "#ecfdf5",
                                 }}
                               >
                                 {employee.is_active ? "비활성화" : "활성화"}
@@ -907,6 +926,95 @@ useEffect(() => {
                         </tr>
                       );
                     })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )}
+
+        {tab === "payroll" && (
+          <section style={cardStyle}>
+            <div style={sectionHeaderStyle}>
+              <div>
+                <h2 style={sectionTitleStyle}>급여 관리</h2>
+                <p style={sectionDescriptionStyle}>
+                  직원별 시급을 따로 관리할 수 있습니다.
+                </p>
+              </div>
+            </div>
+
+            <div style={filterRowStyle}>
+              <div style={fieldGroupStyle}>
+                <label style={labelStyle}>직원 이름 검색</label>
+                <input
+                  type="text"
+                  placeholder="직원 이름 입력"
+                  value={employeeSearch}
+                  onChange={(e) => setEmployeeSearch(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+
+              <div style={fieldButtonGroupStyle}>
+                <button onClick={fetchEmployees} style={primaryButtonStyle}>
+                  급여 새로고침
+                </button>
+              </div>
+            </div>
+
+            {employeeLoading ? (
+              <div style={emptyBoxStyle}>직원 목록을 불러오는 중입니다...</div>
+            ) : employeeMessage ? (
+              <div style={emptyBoxStyle}>{employeeMessage}</div>
+            ) : filteredEmployees.length === 0 ? (
+              <div style={emptyBoxStyle}>직원이 없습니다.</div>
+            ) : (
+              <div style={tableScrollStyle}>
+                <table style={tableStyle}>
+                  <thead>
+                    <tr>
+                      <th style={thStyle}>이름</th>
+                      <th style={thStyle}>생년월일</th>
+                      <th style={thStyle}>전화번호 끝 4자리</th>
+                      <th style={thStyle}>시급</th>
+                      <th style={thStyle}>관리</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredEmployees.map((employee) => (
+                      <tr key={employee.id}>
+                        <td style={tdStyle}>
+                          <span style={nameTextStyle}>{employee.name}</span>
+                        </td>
+                        <td style={tdStyle}>{employee.birth_date}</td>
+                        <td style={tdStyle}>{employee.phone_last4}</td>
+                        <td style={tdStyle}>
+                          <div style={wageWrapStyle}>
+                            <input
+                              type="number"
+                              min={0}
+                              value={wages[employee.id] || 0}
+                              onChange={(e) =>
+                                handleWageChange(
+                                  employee.id,
+                                  Number(e.target.value)
+                                )
+                              }
+                              style={wageInputStyle}
+                            />
+                          </div>
+                        </td>
+                        <td style={tdStyle}>
+                          <button
+                            onClick={() => updateWage(employee.id)}
+                            style={primarySmallButtonStyle}
+                          >
+                            시급저장
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
