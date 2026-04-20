@@ -25,6 +25,12 @@ export async function POST(request: Request) {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
+    // ✅ KST 날짜 포맷 함수
+    const formatKST = (date: Date) =>
+      new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Seoul",
+      }).format(date);
+
     // 1. 출퇴근 기록 가져오기
     const { data: records, error } = await supabase
       .from("attendance_records")
@@ -58,15 +64,11 @@ export async function POST(request: Request) {
       );
     }
 
-    // 3. 날짜별 묶기 (직원 + 날짜)
+    // 3. 날짜별 묶기
     const grouped: any = {};
 
     for (const r of filtered) {
-      const date = new Date(r.checked_at);
-      const kstDate = new Intl.DateTimeFormat("en-CA", {
-        timeZone: "Asia/Seoul",
-      }).format(date);
-
+      const kstDate = formatKST(new Date(r.checked_at));
       const key = `${r.employee_id}_${kstDate}`;
 
       if (!grouped[key]) grouped[key] = [];
@@ -86,11 +88,11 @@ export async function POST(request: Request) {
       const employee = items[0].employees;
       const employeeId = items[0].employee_id;
       const employeeName = employee?.name || "이름없음";
-      const wage = employee?.hourly_wage || 0;
 
-      const date = new Intl.DateTimeFormat("en-CA", {
-        timeZone: "Asia/Seoul",
-      }).format(new Date(items[0].checked_at));
+      // ✅ 기본 시급 10320
+      const wage = employee?.hourly_wage ?? 10320;
+
+      const date = formatKST(new Date(items[0].checked_at));
 
       const checkIn = items.find((i: any) => i.record_type === "check_in");
       const checkOuts = items.filter((i: any) => i.record_type === "check_out");
@@ -126,21 +128,21 @@ export async function POST(request: Request) {
       });
     }
 
-    // 5. 주차별 묶기
+    // 5. 주차별 묶기 (KST 기준)
     const weekly: any = {};
 
     for (const row of dailyWorks) {
       const d = new Date(row.date);
 
-      const day = d.getDay(); // 0~6
+      const day = d.getDay();
       const monday = new Date(d);
       monday.setDate(d.getDate() - ((day + 6) % 7));
 
       const sunday = new Date(monday);
       sunday.setDate(monday.getDate() + 6);
 
-      const weekStart = monday.toISOString().slice(0, 10);
-      const weekEnd = sunday.toISOString().slice(0, 10);
+      const weekStart = formatKST(monday);
+      const weekEnd = formatKST(sunday);
 
       const key = `${row.employeeId}_${weekStart}`;
 
@@ -158,15 +160,17 @@ export async function POST(request: Request) {
       weekly[key].totalHours += row.hours;
     }
 
-    // 6. 급여 계산
+    // 6. 급여 계산 (반올림 적용)
     const result = Object.values(weekly).map((w: any) => {
-      const basePay = w.totalHours * w.hourlyWage;
+      const basePay = Math.round(w.totalHours * w.hourlyWage);
 
-      const weeklyAllowance =
-        (w.totalHours / 5) * w.hourlyWage;
+      const weeklyAllowance = Math.round(
+        (w.totalHours / 5) * w.hourlyWage
+      );
 
       const grossPay = basePay + weeklyAllowance;
-      const netPay = grossPay * 0.967;
+
+      const netPay = Math.round(grossPay * 0.967);
 
       return {
         employeeId: String(w.employeeId),

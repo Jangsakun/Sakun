@@ -1,38 +1,72 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { CSSProperties, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-type TabType = "employees" | "attendance" | "payroll";
-
-type Employee = {
-  id: string;
-  name: string;
-  birth_date: string | null;
-  phone_last4: string | null;
-  hourly_wage: number | null;
-  created_at?: string;
-};
-
-type AttendanceItem = {
-  id?: string;
-  employee_id?: string;
-  employee_name?: string;
-  record_type?: string;
-  checked_at?: string;
-  created_at?: string;
-  lat?: number | null;
-  lng?: number | null;
-  employees?: {
-    id?: string;
-    name?: string;
-    birth_date?: string | null;
-    phone_last4?: string | null;
-    hourly_wage?: number | null;
+type AdminRecord = {
+  id: number;
+  record_type: string;
+  lat: number;
+  lng: number;
+  checked_at: string;
+  created_at: string;
+  employee_id: number;
+  employees: {
+    id: number;
+    name: string;
+    birth_date: string;
+    phone_last4: string;
+    is_active?: boolean;
+    hourly_wage?: number;
   } | null;
 };
 
-type PayrollItem = {
+type AdminAttendanceResponse = {
+  success: boolean;
+  records?: AdminRecord[];
+  message?: string;
+};
+
+type Employee = {
+  id: number;
+  name: string;
+  birth_date: string;
+  phone_last4: string;
+  is_active: boolean;
+  created_at?: string;
+  hourly_wage?: number;
+};
+
+type EmployeeListResponse = {
+  success: boolean;
+  employees?: Employee[];
+  message?: string;
+};
+
+type GroupedAttendanceRow = {
+  key: string;
+  employeeId: number;
+  employeeName: string;
+  date: string;
+  checkIn: string | null;
+  checkOut: string | null;
+  checkInRecordId: number | null;
+  checkOutRecordId: number | null;
+  workMinutes: number | null;
+  hourlyWage: number;
+  grossPay: number | null;
+  netPay: number | null;
+  statusText: string;
+  statusColor: string;
+  statusBg: string;
+};
+
+type AttendanceUpdateResponse = {
+  success: boolean;
+  message?: string;
+};
+
+type PayrollRow = {
   employeeId: string;
   employeeName: string;
   weekStart: string;
@@ -43,831 +77,1741 @@ type PayrollItem = {
   weeklyAllowance: number;
   grossPay: number;
   netPay: number;
-  daysWorked?: number;
 };
 
-function formatDate(value?: string | null) {
-  if (!value) return "-";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return new Intl.DateTimeFormat("ko-KR", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(d);
+type PayrollResponse = {
+  success: boolean;
+  payrolls?: PayrollRow[];
+  message?: string;
+};
+
+export default function AdminPage() {
+  const router = useRouter();
+
+  const [tab, setTab] = useState<"attendance" | "employees" | "payroll">(
+    "attendance"
+  );
+
+  const [startDate, setStartDate] = useState(() => {
+    const today = new Date();
+    return today.toISOString().slice(0, 10);
+  });
+
+  const [endDate, setEndDate] = useState(() => {
+    const today = new Date();
+    return today.toISOString().slice(0, 10);
+  });
+
+  const [records, setRecords] = useState<AdminRecord[]>([]);
+  const [attendanceLoading, setAttendanceLoading] = useState(true);
+  const [attendanceMessage, setAttendanceMessage] = useState("");
+  const [attendanceSearch, setAttendanceSearch] = useState("");
+
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [employeeLoading, setEmployeeLoading] = useState(false);
+  const [employeeMessage, setEmployeeMessage] = useState("");
+  const [employeeSearch, setEmployeeSearch] = useState("");
+  const [wages, setWages] = useState<{ [key: number]: number }>({});
+
+  const [payrollRows, setPayrollRows] = useState<PayrollRow[]>([]);
+  const [payrollLoading, setPayrollLoading] = useState(false);
+  const [payrollMessage, setPayrollMessage] = useState("");
+
+  const [editingEmployeeId, setEditingEmployeeId] = useState<number | null>(
+    null
+  );
+  const [editName, setEditName] = useState("");
+  const [editBirthDate, setEditBirthDate] = useState("");
+  const [editPhoneLast4, setEditPhoneLast4] = useState("");
+
+  const [editingAttendanceKey, setEditingAttendanceKey] = useState<
+    string | null
+  >(null);
+  const [editCheckInTime, setEditCheckInTime] = useState("");
+  const [editCheckOutTime, setEditCheckOutTime] = useState("");
+  const [attendanceSaving, setAttendanceSaving] = useState(false);
+
+  const handleLogout = async () => {
+    await fetch("/api/admin/logout", {
+      method: "POST",
+    });
+
+    router.push("/admin/login");
+    router.refresh();
+  };
+
+  const fetchRecords = async () => {
+    try {
+      setAttendanceLoading(true);
+
+      const response = await fetch("/api/admin/attendance", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          startDate,
+          endDate,
+        }),
+      });
+
+      const data: AdminAttendanceResponse = await response.json();
+
+      if (data.success && data.records) {
+        setRecords(data.records);
+        setAttendanceMessage("");
+      } else {
+        setRecords([]);
+        setAttendanceMessage(data.message || "기록 조회 실패");
+      }
+    } catch (error) {
+      console.error(error);
+      setRecords([]);
+      setAttendanceMessage("서버 요청 중 오류 발생");
+    } finally {
+      setAttendanceLoading(false);
+    }
+  };
+
+  const fetchEmployees = async () => {
+    try {
+      setEmployeeLoading(true);
+
+      const response = await fetch("/api/admin/employees");
+      const data: EmployeeListResponse = await response.json();
+
+      if (data.success && data.employees) {
+        setEmployees(data.employees);
+        setEmployeeMessage("");
+
+        const initialWages: { [key: number]: number } = {};
+        data.employees.forEach((emp) => {
+          initialWages[emp.id] = emp.hourly_wage || 0;
+        });
+        setWages(initialWages);
+      } else {
+        setEmployees([]);
+        setEmployeeMessage(data.message || "직원 목록 조회 실패");
+      }
+    } catch (error) {
+      console.error(error);
+      setEmployees([]);
+      setEmployeeMessage("직원 목록 요청 중 오류 발생");
+    } finally {
+      setEmployeeLoading(false);
+    }
+  };
+
+  const fetchPayroll = async () => {
+    try {
+      setPayrollLoading(true);
+
+      const response = await fetch("/api/admin/payroll", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          startDate,
+          endDate,
+          name: employeeSearch,
+        }),
+      });
+
+      const data: PayrollResponse = await response.json();
+
+      if (data.success && data.payrolls) {
+        setPayrollRows(data.payrolls);
+        setPayrollMessage("");
+      } else {
+        setPayrollRows([]);
+        setPayrollMessage(data.message || "급여 조회 실패");
+      }
+    } catch (error) {
+      console.error(error);
+      setPayrollRows([]);
+      setPayrollMessage("급여 조회 중 오류 발생");
+    } finally {
+      setPayrollLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRecords();
+  }, []);
+
+  useEffect(() => {
+    fetchEmployees();
+  }, []);
+
+  useEffect(() => {
+    if (tab === "attendance") {
+      fetchRecords();
+    }
+  }, [startDate, endDate, tab]);
+
+  useEffect(() => {
+    if (tab === "employees") {
+      fetchEmployees();
+    }
+  }, [tab]);
+
+  useEffect(() => {
+    if (tab === "payroll") {
+      fetchPayroll();
+    }
+  }, [tab]);
+
+  const employeeMap = useMemo(() => {
+    const map = new Map<number, Employee>();
+    employees.forEach((employee) => {
+      map.set(employee.id, employee);
+    });
+    return map;
+  }, [employees]);
+
+  const filteredRecords = useMemo(() => {
+    return records
+      .filter((record) =>
+        (record.employees?.name || "")
+          .toLowerCase()
+          .includes(attendanceSearch.toLowerCase())
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.checked_at).getTime() - new Date(a.checked_at).getTime()
+      );
+  }, [records, attendanceSearch]);
+
+  const filteredEmployees = useMemo(() => {
+    return employees.filter((employee) =>
+      employee.name.toLowerCase().includes(employeeSearch.toLowerCase())
+    );
+  }, [employees, employeeSearch]);
+
+  const groupedAttendanceRows = useMemo(() => {
+    const grouped = new Map<string, AdminRecord[]>();
+
+    filteredRecords.forEach((record) => {
+      const dateKey = toSeoulDateKey(record.checked_at);
+      const key = `${record.employee_id}_${dateKey}`;
+
+      if (!grouped.has(key)) {
+        grouped.set(key, []);
+      }
+
+      grouped.get(key)!.push(record);
+    });
+
+    const rows: GroupedAttendanceRow[] = [];
+
+    grouped.forEach((items, key) => {
+      const sorted = [...items].sort(
+        (a, b) =>
+          new Date(a.checked_at).getTime() - new Date(b.checked_at).getTime()
+      );
+
+      const employeeName = sorted[0].employees?.name || "알 수 없음";
+      const employeeId = sorted[0].employee_id;
+      const date = toSeoulDateKey(sorted[0].checked_at);
+
+      const checkInRecord =
+        sorted.find((item) => item.record_type === "check_in") || null;
+
+      const checkOutCandidates = sorted.filter(
+        (item) => item.record_type === "check_out"
+      );
+      const checkOutRecord =
+        checkOutCandidates.length > 0
+          ? checkOutCandidates[checkOutCandidates.length - 1]
+          : null;
+
+      let workMinutes: number | null = null;
+
+      if (checkInRecord && checkOutRecord) {
+        const checkInDate = new Date(checkInRecord.checked_at);
+        const checkOutDate = new Date(checkOutRecord.checked_at);
+
+        const dateKey = toSeoulDateKey(checkInRecord.checked_at);
+        const standardStart = new Date(`${dateKey}T09:30:00+09:00`);
+
+        const actualStartMs = checkInDate.getTime();
+        const standardStartMs = standardStart.getTime();
+        const workStartMs = Math.max(actualStartMs, standardStartMs);
+
+        const diffMs = checkOutDate.getTime() - workStartMs;
+
+        if (diffMs >= 0) {
+          workMinutes = Math.floor(diffMs / 1000 / 60);
+        }
+      }
+
+      const employee = employeeMap.get(employeeId);
+      const hourlyWage = employee?.hourly_wage || 0;
+
+      let grossPay: number | null = null;
+      let netPay: number | null = null;
+
+      if (workMinutes !== null && hourlyWage > 0) {
+        grossPay = Math.round((workMinutes / 60) * hourlyWage);
+        netPay = Math.round(grossPay * 0.967);
+      }
+
+      let statusText = "기록 확인 필요";
+      let statusColor = "#92400e";
+      let statusBg = "#fef3c7";
+
+      if (checkInRecord && checkOutRecord) {
+        statusText = "완료";
+        statusColor = "#166534";
+        statusBg = "#dcfce7";
+      } else if (checkInRecord && !checkOutRecord) {
+        statusText = "퇴근 없음";
+        statusColor = "#1d4ed8";
+        statusBg = "#dbeafe";
+      } else if (!checkInRecord && checkOutRecord) {
+        statusText = "출근 없음";
+        statusColor = "#b91c1c";
+        statusBg = "#fee2e2";
+      }
+
+      rows.push({
+        key,
+        employeeId,
+        employeeName,
+        date,
+        checkIn: checkInRecord?.checked_at || null,
+        checkOut: checkOutRecord?.checked_at || null,
+        checkInRecordId: checkInRecord?.id || null,
+        checkOutRecordId: checkOutRecord?.id || null,
+        workMinutes,
+        hourlyWage,
+        grossPay,
+        netPay,
+        statusText,
+        statusColor,
+        statusBg,
+      });
+    });
+
+    return rows.sort((a, b) => {
+      if (a.date === b.date) {
+        return a.employeeName.localeCompare(b.employeeName, "ko");
+      }
+      return b.date.localeCompare(a.date);
+    });
+  }, [filteredRecords, employeeMap]);
+
+  const summaryCheckInCount = groupedAttendanceRows.filter(
+    (row) => row.checkIn !== null
+  ).length;
+
+  const summaryCheckOutCount = groupedAttendanceRows.filter(
+    (row) => row.checkOut !== null
+  ).length;
+
+  const activeEmployeeCount = employees.filter(
+    (employee) => employee.is_active
+  ).length;
+
+  const incompleteAttendanceCount = groupedAttendanceRows.filter(
+    (row) => row.checkIn === null || row.checkOut === null
+  ).length;
+
+  const totalGrossPay = groupedAttendanceRows.reduce((sum, row) => {
+    return sum + (row.grossPay || 0);
+  }, 0);
+
+  const totalNetPay = groupedAttendanceRows.reduce((sum, row) => {
+    return sum + (row.netPay || 0);
+  }, 0);
+
+  const payrollSummary = useMemo(() => {
+    return payrollRows.reduce(
+      (acc, row) => {
+        acc.totalHours += row.totalHours || 0;
+        acc.basePay += row.basePay || 0;
+        acc.weeklyAllowance += row.weeklyAllowance || 0;
+        acc.grossPay += row.grossPay || 0;
+        acc.netPay += row.netPay || 0;
+        return acc;
+      },
+      {
+        totalHours: 0,
+        basePay: 0,
+        weeklyAllowance: 0,
+        grossPay: 0,
+        netPay: 0,
+      }
+    );
+  }, [payrollRows]);
+
+  const startEdit = (employee: Employee) => {
+    setEditingEmployeeId(employee.id);
+    setEditName(employee.name);
+    setEditBirthDate(employee.birth_date);
+    setEditPhoneLast4(employee.phone_last4);
+  };
+
+  const cancelEdit = () => {
+    setEditingEmployeeId(null);
+    setEditName("");
+    setEditBirthDate("");
+    setEditPhoneLast4("");
+  };
+
+  const updateEmployee = async (employeeId: number) => {
+    try {
+      const response = await fetch(`/api/admin/employees/${employeeId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: editName,
+          birth_date: editBirthDate,
+          phone_last4: editPhoneLast4,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        alert(data.message || "직원 수정 실패");
+        return;
+      }
+
+      alert("직원 정보가 수정되었습니다.");
+      cancelEdit();
+      fetchEmployees();
+    } catch (error) {
+      console.error(error);
+      alert("직원 수정 중 오류 발생");
+    }
+  };
+
+  const handleWageChange = (id: number, value: number) => {
+    setWages((prev) => ({
+      ...prev,
+      [id]: value,
+    }));
+  };
+
+  const updateWage = async (id: number) => {
+    const wage = wages[id];
+
+    try {
+      const response = await fetch(`/api/admin/employees/${id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          hourlyWage: wage,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        alert(data.message || "시급 수정 실패");
+        return;
+      }
+
+      alert("시급 수정 완료");
+      fetchEmployees();
+    } catch (error) {
+      console.error(error);
+      alert("시급 수정 중 오류 발생");
+    }
+  };
+
+  const toggleEmployeeActive = async (employee: Employee) => {
+    const nextActive = !employee.is_active;
+    const actionText = nextActive ? "활성화" : "비활성화";
+
+    const ok = window.confirm(`${employee.name} 직원을 ${actionText}할까요?`);
+    if (!ok) return;
+
+    try {
+      const response = await fetch(
+        `/api/admin/employees/${employee.id}/status`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            is_active: nextActive,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!data.success) {
+        alert(data.message || `직원 ${actionText} 실패`);
+        return;
+      }
+
+      alert(`직원이 ${actionText}되었습니다.`);
+      fetchEmployees();
+    } catch (error) {
+      console.error(error);
+      alert(`직원 ${actionText} 중 오류 발생`);
+    }
+  };
+
+  const startAttendanceEdit = (row: GroupedAttendanceRow) => {
+    setEditingAttendanceKey(row.key);
+    setEditCheckInTime(toDateTimeLocalValue(row.checkIn));
+    setEditCheckOutTime(toDateTimeLocalValue(row.checkOut));
+  };
+
+  const cancelAttendanceEdit = () => {
+    setEditingAttendanceKey(null);
+    setEditCheckInTime("");
+    setEditCheckOutTime("");
+  };
+
+  const saveAttendanceEdit = async (row: GroupedAttendanceRow) => {
+    if (!editCheckInTime && !editCheckOutTime) {
+      alert("출근 또는 퇴근 시간 중 하나는 입력해야 합니다.");
+      return;
+    }
+
+    if (editCheckInTime && editCheckOutTime) {
+      const inTime = new Date(editCheckInTime).getTime();
+      const outTime = new Date(editCheckOutTime).getTime();
+
+      if (outTime < inTime) {
+        alert("퇴근 시간은 출근 시간보다 빠를 수 없습니다.");
+        return;
+      }
+    }
+
+    try {
+      setAttendanceSaving(true);
+
+      const response = await fetch("/api/admin/attendance/update", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          checkInRecordId: row.checkInRecordId,
+          checkOutRecordId: row.checkOutRecordId,
+          employeeId: row.employeeId,
+          employeeName: row.employeeName,
+          date: row.date,
+          checkInTime: editCheckInTime || null,
+          checkOutTime: editCheckOutTime || null,
+        }),
+      });
+
+      const data: AttendanceUpdateResponse = await response.json();
+
+      if (!data.success) {
+        alert(data.message || "출퇴근 수정 실패");
+        return;
+      }
+
+      alert("출퇴근 시간이 수정되었습니다.");
+      cancelAttendanceEdit();
+      fetchRecords();
+    } catch (error) {
+      console.error(error);
+      alert("출퇴근 수정 중 오류 발생");
+    } finally {
+      setAttendanceSaving(false);
+    }
+  };
+
+  const downloadAttendanceCsv = () => {
+    if (groupedAttendanceRows.length === 0) {
+      alert("다운로드할 출퇴근 기록이 없습니다.");
+      return;
+    }
+
+    const headers = [
+      "이름",
+      "날짜",
+      "출근",
+      "퇴근",
+      "총 근무시간",
+      "시급",
+      "세전 급여",
+      "세후 급여(3.3% 공제)",
+      "상태",
+    ];
+
+    const rows = groupedAttendanceRows.map((row) => [
+      row.employeeName,
+      formatDate(row.date),
+      formatTime(row.checkIn),
+      formatTime(row.checkOut),
+      formatWorkMinutes(row.workMinutes),
+      row.hourlyWage ? String(row.hourlyWage) : "0",
+      row.grossPay !== null ? String(row.grossPay) : "-",
+      row.netPay !== null ? String(row.netPay) : "-",
+      row.statusText,
+    ]);
+
+    const csvContent = [headers, ...rows]
+      .map((line) =>
+        line
+          .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
+          .join(",")
+      )
+      .join("\n");
+
+    const blob = new Blob(["\ufeff" + csvContent], {
+      type: "text/csv;charset=utf-8;",
+    });
+
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const fileName = `attendance_${startDate}_${endDate}.csv`;
+
+    link.href = url;
+    link.setAttribute("download", fileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  };
+
+  const downloadPayrollCsv = () => {
+    if (payrollRows.length === 0) {
+      alert("다운로드할 급여 데이터가 없습니다.");
+      return;
+    }
+
+    const headers = [
+      "이름",
+      "주 시작",
+      "주 종료",
+      "총 근무시간",
+      "시급",
+      "기본급",
+      "주휴수당",
+      "세전 급여",
+      "세후 급여",
+    ];
+
+    const rows = payrollRows.map((row) => [
+      row.employeeName,
+      row.weekStart,
+      row.weekEnd,
+      row.totalHours.toFixed(2),
+      String(row.hourlyWage),
+      String(Math.round(row.basePay)),
+      String(Math.round(row.weeklyAllowance)),
+      String(Math.round(row.grossPay)),
+      String(Math.round(row.netPay)),
+    ]);
+
+    const csvContent = [headers, ...rows]
+      .map((line) =>
+        line
+          .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
+          .join(",")
+      )
+      .join("\n");
+
+    const blob = new Blob(["\ufeff" + csvContent], {
+      type: "text/csv;charset=utf-8;",
+    });
+
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const fileName = `payroll_${startDate}_${endDate}.csv`;
+
+    link.href = url;
+    link.setAttribute("download", fileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  };
+
+  return (
+    <main style={pageStyle}>
+      <div style={containerStyle}>
+        <header style={headerStyle}>
+          <div>
+            <p style={eyebrowStyle}>Admin Dashboard</p>
+            <h1 style={titleStyle}>장사꾼 관리자 대시보드</h1>
+            <p style={descriptionStyle}>
+              직원 상태와 출퇴근 기록, 급여를 한 화면에서 관리할 수 있습니다.
+            </p>
+          </div>
+
+          <div style={headerButtonWrapStyle}>
+            <button
+              onClick={() => {
+                if (tab === "attendance") {
+                  fetchRecords();
+                } else if (tab === "employees") {
+                  fetchEmployees();
+                } else {
+                  fetchPayroll();
+                }
+              }}
+              style={secondaryTopButtonStyle}
+            >
+              새로고침
+            </button>
+
+            <button onClick={handleLogout} style={logoutButtonStyle}>
+              로그아웃
+            </button>
+          </div>
+        </header>
+
+        <section style={summaryGridStyle}>
+          <SummaryCard
+            label="조회 결과"
+            value={`${groupedAttendanceRows.length}건`}
+            helper="직원 + 날짜 묶음"
+          />
+          <SummaryCard
+            label="출근 있음"
+            value={`${summaryCheckInCount}건`}
+            helper="출근 기록 포함"
+          />
+          <SummaryCard
+            label="퇴근 있음"
+            value={`${summaryCheckOutCount}건`}
+            helper="퇴근 기록 포함"
+          />
+          <SummaryCard
+            label="활성 직원"
+            value={`${activeEmployeeCount}명`}
+            helper="직원 관리 기준"
+          />
+        </section>
+
+        {tab === "attendance" && incompleteAttendanceCount > 0 && (
+          <div style={warningBoxStyle}>
+            출근 또는 퇴근이 비어 있는 기록이{" "}
+            <strong>{incompleteAttendanceCount}건</strong> 있습니다.
+          </div>
+        )}
+
+        <div style={tabWrapStyle}>
+          <button
+            onClick={() => setTab("attendance")}
+            style={{
+              ...tabButtonStyle,
+              backgroundColor: tab === "attendance" ? "#111827" : "#f3f4f6",
+              color: tab === "attendance" ? "#ffffff" : "#111827",
+            }}
+          >
+            출퇴근 기록
+          </button>
+
+          <button
+            onClick={() => setTab("employees")}
+            style={{
+              ...tabButtonStyle,
+              backgroundColor: tab === "employees" ? "#111827" : "#f3f4f6",
+              color: tab === "employees" ? "#ffffff" : "#111827",
+            }}
+          >
+            직원 관리
+          </button>
+
+          <button
+            onClick={() => setTab("payroll")}
+            style={{
+              ...tabButtonStyle,
+              backgroundColor: tab === "payroll" ? "#111827" : "#f3f4f6",
+              color: tab === "payroll" ? "#ffffff" : "#111827",
+            }}
+          >
+            급여 관리
+          </button>
+        </div>
+
+        {tab === "attendance" && (
+          <section style={cardStyle}>
+            <div style={sectionHeaderStyle}>
+              <div>
+                <h2 style={sectionTitleStyle}>출퇴근 기록</h2>
+                <p style={sectionDescriptionStyle}>
+                  근무시간에 비례한 세전/세후 급여를 함께 확인하고 CSV로
+                  다운로드할 수 있습니다.
+                </p>
+              </div>
+
+              <div style={sectionHeaderButtonWrapStyle}>
+                <button onClick={downloadAttendanceCsv} style={primaryButtonStyle}>
+                  엑셀 다운로드
+                </button>
+              </div>
+            </div>
+
+            <div style={paySummaryWrapStyle}>
+              <div style={paySummaryCardStyle}>
+                <div style={paySummaryLabelStyle}>세전 급여 합계</div>
+                <div style={paySummaryValueStyle}>
+                  {formatCurrency(totalGrossPay)}
+                </div>
+              </div>
+
+              <div style={paySummaryCardStyle}>
+                <div style={paySummaryLabelStyle}>세후 급여 합계</div>
+                <div style={paySummaryValueStyle}>
+                  {formatCurrency(totalNetPay)}
+                </div>
+              </div>
+            </div>
+
+            <div style={filterRowStyle}>
+              <div style={fieldGroupStyle}>
+                <label style={labelStyle}>시작일</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+
+              <div style={fieldGroupStyle}>
+                <label style={labelStyle}>종료일</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+
+              <div style={fieldGroupStyle}>
+                <label style={labelStyle}>이름 검색</label>
+                <input
+                  type="text"
+                  placeholder="직원 이름 입력"
+                  value={attendanceSearch}
+                  onChange={(e) => setAttendanceSearch(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+
+              <div style={fieldButtonGroupStyle}>
+                <button onClick={fetchRecords} style={primaryButtonStyle}>
+                  조회하기
+                </button>
+              </div>
+            </div>
+
+            {attendanceLoading ? (
+              <div style={emptyBoxStyle}>기록을 불러오는 중입니다...</div>
+            ) : attendanceMessage ? (
+              <div style={emptyBoxStyle}>{attendanceMessage}</div>
+            ) : groupedAttendanceRows.length === 0 ? (
+              <div style={emptyBoxStyle}>검색 결과가 없습니다.</div>
+            ) : (
+              <div style={tableScrollStyle}>
+                <table style={tableStyle}>
+                  <thead>
+                    <tr>
+                      <th style={thStyle}>이름</th>
+                      <th style={thStyle}>날짜</th>
+                      <th style={thStyle}>출근</th>
+                      <th style={thStyle}>퇴근</th>
+                      <th style={thStyle}>총 근무시간</th>
+                      <th style={thStyle}>시급</th>
+                      <th style={thStyle}>세전 급여</th>
+                      <th style={thStyle}>세후 급여</th>
+                      <th style={thStyle}>상태</th>
+                      <th style={thStyle}>관리</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {groupedAttendanceRows.map((row) => {
+                      const isEditingAttendance =
+                        editingAttendanceKey === row.key;
+
+                      return (
+                        <tr key={row.key}>
+                          <td style={tdStyle}>
+                            <span style={nameTextStyle}>{row.employeeName}</span>
+                          </td>
+
+                          <td style={tdStyle}>{formatDate(row.date)}</td>
+
+                          <td style={tdStyle}>
+                            {isEditingAttendance ? (
+                              <input
+                                type="datetime-local"
+                                value={editCheckInTime}
+                                onChange={(e) =>
+                                  setEditCheckInTime(e.target.value)
+                                }
+                                style={dateTimeInputStyle}
+                              />
+                            ) : (
+                              formatTime(row.checkIn)
+                            )}
+                          </td>
+
+                          <td style={tdStyle}>
+                            {isEditingAttendance ? (
+                              <input
+                                type="datetime-local"
+                                value={editCheckOutTime}
+                                onChange={(e) =>
+                                  setEditCheckOutTime(e.target.value)
+                                }
+                                style={dateTimeInputStyle}
+                              />
+                            ) : (
+                              formatTime(row.checkOut)
+                            )}
+                          </td>
+
+                          <td style={tdStyle}>
+                            {formatWorkMinutes(row.workMinutes)}
+                          </td>
+
+                          <td style={tdStyle}>
+                            {row.hourlyWage > 0
+                              ? formatCurrency(row.hourlyWage)
+                              : "-"}
+                          </td>
+
+                          <td style={tdStyle}>
+                            {row.grossPay !== null
+                              ? formatCurrency(row.grossPay)
+                              : "-"}
+                          </td>
+
+                          <td style={tdStyle}>
+                            {row.netPay !== null
+                              ? formatCurrency(row.netPay)
+                              : "-"}
+                          </td>
+
+                          <td style={tdStyle}>
+                            <span
+                              style={{
+                                ...badgeStyle,
+                                color: row.statusColor,
+                                backgroundColor: row.statusBg,
+                              }}
+                            >
+                              {row.statusText}
+                            </span>
+                          </td>
+
+                          <td style={tdStyle}>
+                            <div style={actionWrapStyle}>
+                              {isEditingAttendance ? (
+                                <>
+                                  <button
+                                    onClick={() => saveAttendanceEdit(row)}
+                                    style={primarySmallButtonStyle}
+                                    disabled={attendanceSaving}
+                                  >
+                                    저장
+                                  </button>
+                                  <button
+                                    onClick={cancelAttendanceEdit}
+                                    style={secondarySmallButtonStyle}
+                                    disabled={attendanceSaving}
+                                  >
+                                    취소
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  onClick={() => startAttendanceEdit(row)}
+                                  style={primarySmallButtonStyle}
+                                >
+                                  시간수정
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )}
+
+        {tab === "employees" && (
+          <section style={cardStyle}>
+            <div style={sectionHeaderStyle}>
+              <div>
+                <h2 style={sectionTitleStyle}>직원 관리</h2>
+                <p style={sectionDescriptionStyle}>
+                  직원 검색, 정보 수정, 활성/비활성 상태 변경, 시급 수정이 가능합니다.
+                </p>
+              </div>
+            </div>
+
+            <div style={filterRowStyle}>
+              <div style={fieldGroupStyle}>
+                <label style={labelStyle}>직원 이름 검색</label>
+                <input
+                  type="text"
+                  placeholder="직원 이름 입력"
+                  value={employeeSearch}
+                  onChange={(e) => setEmployeeSearch(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+
+              <div style={fieldButtonGroupStyle}>
+                <button onClick={fetchEmployees} style={primaryButtonStyle}>
+                  직원 새로고침
+                </button>
+              </div>
+            </div>
+
+            {employeeLoading ? (
+              <div style={emptyBoxStyle}>직원 목록을 불러오는 중입니다...</div>
+            ) : employeeMessage ? (
+              <div style={emptyBoxStyle}>{employeeMessage}</div>
+            ) : filteredEmployees.length === 0 ? (
+              <div style={emptyBoxStyle}>직원이 없습니다.</div>
+            ) : (
+              <div style={tableScrollStyle}>
+                <table style={tableStyle}>
+                  <thead>
+                    <tr>
+                      <th style={thStyle}>이름</th>
+                      <th style={thStyle}>생년월일</th>
+                      <th style={thStyle}>전화번호 끝 4자리</th>
+                      <th style={thStyle}>시급</th>
+                      <th style={thStyle}>상태</th>
+                      <th style={thStyle}>관리</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredEmployees.map((employee) => {
+                      const isEditing = editingEmployeeId === employee.id;
+
+                      return (
+                        <tr key={employee.id}>
+                          <td style={tdStyle}>
+                            {isEditing ? (
+                              <input
+                                value={editName}
+                                onChange={(e) => setEditName(e.target.value)}
+                                style={smallInputStyle}
+                              />
+                            ) : (
+                              <span style={nameTextStyle}>{employee.name}</span>
+                            )}
+                          </td>
+
+                          <td style={tdStyle}>
+                            {isEditing ? (
+                              <input
+                                type="date"
+                                value={editBirthDate}
+                                onChange={(e) => setEditBirthDate(e.target.value)}
+                                style={smallInputStyle}
+                              />
+                            ) : (
+                              employee.birth_date
+                            )}
+                          </td>
+
+                          <td style={tdStyle}>
+                            {isEditing ? (
+                              <input
+                                value={editPhoneLast4}
+                                onChange={(e) =>
+                                  setEditPhoneLast4(e.target.value)
+                                }
+                                maxLength={4}
+                                style={smallInputStyle}
+                              />
+                            ) : (
+                              employee.phone_last4
+                            )}
+                          </td>
+
+                          <td style={tdStyle}>
+                            <div style={wageWrapStyle}>
+                              <input
+                                type="number"
+                                min={0}
+                                value={wages[employee.id] || 0}
+                                onChange={(e) =>
+                                  handleWageChange(
+                                    employee.id,
+                                    Number(e.target.value)
+                                  )
+                                }
+                                style={wageInputStyle}
+                              />
+                              <button
+                                onClick={() => updateWage(employee.id)}
+                                style={primarySmallButtonStyle}
+                              >
+                                시급저장
+                              </button>
+                            </div>
+                          </td>
+
+                          <td style={tdStyle}>
+                            <span
+                              style={{
+                                ...badgeStyle,
+                                backgroundColor: employee.is_active
+                                  ? "#e8f5e9"
+                                  : "#ffebee",
+                                color: employee.is_active ? "#2e7d32" : "#c62828",
+                              }}
+                            >
+                              {employee.is_active ? "활성" : "비활성"}
+                            </span>
+                          </td>
+
+                          <td style={tdStyle}>
+                            <div style={actionWrapStyle}>
+                              {isEditing ? (
+                                <>
+                                  <button
+                                    onClick={() => updateEmployee(employee.id)}
+                                    style={primarySmallButtonStyle}
+                                  >
+                                    저장
+                                  </button>
+                                  <button
+                                    onClick={cancelEdit}
+                                    style={secondarySmallButtonStyle}
+                                  >
+                                    취소
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  onClick={() => startEdit(employee)}
+                                  style={primarySmallButtonStyle}
+                                >
+                                  수정
+                                </button>
+                              )}
+
+                              <button
+                                onClick={() => toggleEmployeeActive(employee)}
+                                style={{
+                                  ...secondarySmallButtonStyle,
+                                  backgroundColor: employee.is_active
+                                    ? "#fff7ed"
+                                    : "#ecfdf5",
+                                }}
+                              >
+                                {employee.is_active ? "비활성화" : "활성화"}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )}
+
+        {tab === "payroll" && (
+          <section style={cardStyle}>
+            <div style={sectionHeaderStyle}>
+              <div>
+                <h2 style={sectionTitleStyle}>급여 관리</h2>
+                <p style={sectionDescriptionStyle}>
+                  기간을 직접 선택해서 직원별 주차 합산 급여와 주휴수당을 확인할 수 있습니다.
+                </p>
+              </div>
+
+              <div style={sectionHeaderButtonWrapStyle}>
+                <button onClick={downloadPayrollCsv} style={primaryButtonStyle}>
+                  엑셀 다운로드
+                </button>
+              </div>
+            </div>
+
+            <div style={paySummaryWrapStyle}>
+              <div style={paySummaryCardStyle}>
+                <div style={paySummaryLabelStyle}>총 근무시간 합계</div>
+                <div style={paySummaryValueStyle}>
+                  {payrollSummary.totalHours.toFixed(2)}시간
+                </div>
+              </div>
+
+              <div style={paySummaryCardStyle}>
+                <div style={paySummaryLabelStyle}>기본급 합계</div>
+                <div style={paySummaryValueStyle}>
+                  {formatCurrency(Math.round(payrollSummary.basePay))}
+                </div>
+              </div>
+
+              <div style={paySummaryCardStyle}>
+                <div style={paySummaryLabelStyle}>주휴수당 합계</div>
+                <div style={paySummaryValueStyle}>
+                  {formatCurrency(Math.round(payrollSummary.weeklyAllowance))}
+                </div>
+              </div>
+
+              <div style={paySummaryCardStyle}>
+                <div style={paySummaryLabelStyle}>세전 급여 합계</div>
+                <div style={paySummaryValueStyle}>
+                  {formatCurrency(Math.round(payrollSummary.grossPay))}
+                </div>
+              </div>
+
+              <div style={paySummaryCardStyle}>
+                <div style={paySummaryLabelStyle}>세후 급여 합계</div>
+                <div style={paySummaryValueStyle}>
+                  {formatCurrency(Math.round(payrollSummary.netPay))}
+                </div>
+              </div>
+            </div>
+
+            <div style={filterRowStyle}>
+              <div style={fieldGroupStyle}>
+                <label style={labelStyle}>시작일</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+
+              <div style={fieldGroupStyle}>
+                <label style={labelStyle}>종료일</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+
+              <div style={fieldGroupStyle}>
+                <label style={labelStyle}>이름 검색</label>
+                <input
+                  type="text"
+                  placeholder="직원 이름 입력"
+                  value={employeeSearch}
+                  onChange={(e) => setEmployeeSearch(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+
+              <div style={fieldButtonGroupStyle}>
+                <button onClick={fetchPayroll} style={primaryButtonStyle}>
+                  조회하기
+                </button>
+              </div>
+            </div>
+
+            <div style={{ ...warningBoxStyle, marginBottom: "18px" }}>
+              주휴수당 계산식: <strong>(해당 주 총근무시간 ÷ 5) × 시급</strong>
+            </div>
+
+            {payrollLoading ? (
+              <div style={emptyBoxStyle}>급여 데이터를 불러오는 중입니다...</div>
+            ) : payrollMessage ? (
+              <div style={emptyBoxStyle}>{payrollMessage}</div>
+            ) : payrollRows.length === 0 ? (
+              <div style={emptyBoxStyle}>급여 데이터가 없습니다.</div>
+            ) : (
+              <div style={tableScrollStyle}>
+                <table style={tableStyle}>
+                  <thead>
+                    <tr>
+                      <th style={thStyle}>이름</th>
+                      <th style={thStyle}>주 시작</th>
+                      <th style={thStyle}>주 종료</th>
+                      <th style={thStyle}>총 근무시간</th>
+                      <th style={thStyle}>시급</th>
+                      <th style={thStyle}>기본급</th>
+                      <th style={thStyle}>주휴수당</th>
+                      <th style={thStyle}>세전 급여</th>
+                      <th style={thStyle}>세후 급여</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {payrollRows.map((row, index) => (
+                      <tr key={`${row.employeeId}-${row.weekStart}-${index}`}>
+                        <td style={tdStyle}>
+                          <span style={nameTextStyle}>{row.employeeName}</span>
+                        </td>
+                        <td style={tdStyle}>{formatDate(row.weekStart)}</td>
+                        <td style={tdStyle}>{formatDate(row.weekEnd)}</td>
+                        <td style={tdStyle}>{row.totalHours.toFixed(2)}시간</td>
+                        <td style={tdStyle}>{formatCurrency(row.hourlyWage)}</td>
+                        <td style={tdStyle}>
+                          {formatCurrency(Math.round(row.basePay))}
+                        </td>
+                        <td
+                          style={{
+                            ...tdStyle,
+                            color: "#2563eb",
+                            fontWeight: 700,
+                          }}
+                        >
+                          {formatCurrency(Math.round(row.weeklyAllowance))}
+                        </td>
+                        <td style={tdStyle}>
+                          {formatCurrency(Math.round(row.grossPay))}
+                        </td>
+                        <td
+                          style={{
+                            ...tdStyle,
+                            color: "#059669",
+                            fontWeight: 700,
+                          }}
+                        >
+                          {formatCurrency(Math.round(row.netPay))}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )}
+      </div>
+    </main>
+  );
 }
 
-function formatDateTime(value?: string | null) {
-  if (!value) return "-";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return new Intl.DateTimeFormat("ko-KR", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(d);
+function SummaryCard({
+  label,
+  value,
+  helper,
+}: {
+  label: string;
+  value: string;
+  helper: string;
+}) {
+  return (
+    <div style={summaryCardStyle}>
+      <p style={summaryLabelStyle}>{label}</p>
+      <p style={summaryValueStyle}>{value}</p>
+      <p style={summaryHelperStyle}>{helper}</p>
+    </div>
+  );
 }
 
-function formatNumber(value?: number | null) {
-  const num = Number(value ?? 0);
-  return num.toLocaleString("ko-KR");
-}
-
-function formatCurrency(value?: number | null) {
-  const num = Number(value ?? 0);
-  return `${num.toLocaleString("ko-KR")}원`;
-}
-
-function formatHours(value?: number | null) {
-  const num = Number(value ?? 0);
-  return `${num.toFixed(2)}시간`;
-}
-
-function getTodayString() {
-  const now = new Date();
+function toSeoulDateKey(value: string) {
+  const date = new Date(value);
   const formatter = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Seoul",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   });
-  return formatter.format(now);
+
+  return formatter.format(date);
 }
 
-function downloadCsv(filename: string, rows: (string | number)[][]) {
-  const csvContent = rows
-    .map((row) =>
-      row
-        .map((cell) => {
-          const value = String(cell ?? "");
-          if (value.includes(",") || value.includes('"') || value.includes("\n")) {
-            return `"${value.replace(/"/g, '""')}"`;
-          }
-          return value;
-        })
-        .join(",")
-    )
-    .join("\n");
+function formatTime(value: string | null) {
+  if (!value) return "-";
 
-  const bom = "\uFEFF";
-  const blob = new Blob([bom + csvContent], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-
-  URL.revokeObjectURL(url);
+  return new Date(value).toLocaleTimeString("ko-KR", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
-export default function AdminPage() {
-  const router = useRouter();
-
-  const [activeTab, setActiveTab] = useState<TabType>("employees");
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
-
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [attendanceRows, setAttendanceRows] = useState<AttendanceItem[]>([]);
-  const [payrollRows, setPayrollRows] = useState<PayrollItem[]>([]);
-
-  const [attendanceStartDate, setAttendanceStartDate] = useState(getTodayString());
-  const [attendanceEndDate, setAttendanceEndDate] = useState(getTodayString());
-
-  const [payrollStartDate, setPayrollStartDate] = useState(getTodayString());
-  const [payrollEndDate, setPayrollEndDate] = useState(getTodayString());
-  const [payrollNameKeyword, setPayrollNameKeyword] = useState("");
-
-  const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
-  const [editingWage, setEditingWage] = useState<string>("");
-
-  const [deletingEmployeeId, setDeletingEmployeeId] = useState<string | null>(null);
-
-  async function handleLogout() {
-    try {
-      await fetch("/api/admin/logout", {
-        method: "POST",
-      });
-    } catch (error) {
-      console.error(error);
-    } finally {
-      router.push("/admin/login");
-      router.refresh();
-    }
-  }
-
-  async function fetchEmployees() {
-    try {
-      setLoading(true);
-      setMessage("");
-
-      const res = await fetch("/api/admin/employees", {
-        method: "GET",
-        cache: "no-store",
-      });
-
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        setMessage(data.message || "직원 목록을 불러오지 못했습니다.");
-        return;
-      }
-
-      setEmployees(data.employees ?? []);
-    } catch (error) {
-      console.error(error);
-      setMessage("직원 목록 조회 중 오류가 발생했습니다.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function fetchAttendance() {
-    try {
-      setLoading(true);
-      setMessage("");
-
-      const res = await fetch("/api/admin/attendance", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          startDate: attendanceStartDate,
-          endDate: attendanceEndDate,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        setAttendanceRows([]);
-        setMessage(data.message || "출퇴근 기록을 불러오지 못했습니다.");
-        return;
-      }
-
-      const rows = data.records || data.attendance || data.data || [];
-      setAttendanceRows(rows);
-    } catch (error) {
-      console.error(error);
-      setAttendanceRows([]);
-      setMessage("출퇴근 기록 조회 중 오류가 발생했습니다.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function fetchPayroll() {
-    try {
-      setLoading(true);
-      setMessage("");
-
-      const res = await fetch("/api/admin/payroll", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          startDate: payrollStartDate,
-          endDate: payrollEndDate,
-          name: payrollNameKeyword,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        setPayrollRows([]);
-        setMessage(data.message || "급여 데이터를 불러오지 못했습니다.");
-        return;
-      }
-
-      const rows = data.payrolls || data.records || data.data || [];
-      setPayrollRows(rows);
-    } catch (error) {
-      console.error(error);
-      setPayrollRows([]);
-      setMessage("급여 데이터 조회 중 오류가 발생했습니다.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function saveHourlyWage(employeeId: string) {
-    try {
-      const numericWage = Number(editingWage);
-
-      if (Number.isNaN(numericWage) || numericWage < 0) {
-        setMessage("시급을 올바르게 입력해주세요.");
-        return;
-      }
-
-      setLoading(true);
-      setMessage("");
-
-      const res = await fetch(`/api/admin/employees/${employeeId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          hourlyWage: numericWage,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        setMessage(data.message || "시급 수정에 실패했습니다.");
-        return;
-      }
-
-      setEmployees((prev) =>
-        prev.map((emp) =>
-          emp.id === employeeId
-            ? {
-                ...emp,
-                hourly_wage: numericWage,
-              }
-            : emp
-        )
-      );
-
-      setEditingEmployeeId(null);
-      setEditingWage("");
-      setMessage("시급이 수정되었습니다.");
-    } catch (error) {
-      console.error(error);
-      setMessage("시급 수정 중 오류가 발생했습니다.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function deleteEmployee(employeeId: string) {
-    try {
-      setDeletingEmployeeId(employeeId);
-      setLoading(true);
-      setMessage("");
-
-      const res = await fetch(`/api/admin/employees/${employeeId}`, {
-        method: "DELETE",
-      });
-
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        setMessage(data.message || "직원 삭제에 실패했습니다.");
-        return;
-      }
-
-      setEmployees((prev) => prev.filter((emp) => emp.id !== employeeId));
-      setMessage("직원이 삭제되었습니다.");
-    } catch (error) {
-      console.error(error);
-      setMessage("직원 삭제 중 오류가 발생했습니다.");
-    } finally {
-      setDeletingEmployeeId(null);
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    fetchEmployees();
-  }, []);
-
-  const payrollSummary = useMemo(() => {
-    const totalHours = payrollRows.reduce((sum, row) => sum + Number(row.totalHours || 0), 0);
-    const totalBasePay = payrollRows.reduce((sum, row) => sum + Number(row.basePay || 0), 0);
-    const totalWeeklyAllowance = payrollRows.reduce(
-      (sum, row) => sum + Number(row.weeklyAllowance || 0),
-      0
-    );
-    const totalGrossPay = payrollRows.reduce((sum, row) => sum + Number(row.grossPay || 0), 0);
-    const totalNetPay = payrollRows.reduce((sum, row) => sum + Number(row.netPay || 0), 0);
-
-    return {
-      totalHours,
-      totalBasePay,
-      totalWeeklyAllowance,
-      totalGrossPay,
-      totalNetPay,
-    };
-  }, [payrollRows]);
-
-  function handlePayrollCsvDownload() {
-    if (!payrollRows.length) {
-      setMessage("다운로드할 급여 데이터가 없습니다.");
-      return;
-    }
-
-    const rows: (string | number)[][] = [
-      [
-        "이름",
-        "정산 시작일",
-        "정산 종료일",
-        "총 근무시간",
-        "시급",
-        "기본급",
-        "주휴수당",
-        "주휴포함 세전",
-        "주휴포함 세후",
-      ],
-      ...payrollRows.map((row) => [
-        row.employeeName,
-        row.weekStart,
-        row.weekEnd,
-        row.totalHours.toFixed(2),
-        row.hourlyWage,
-        Math.round(row.basePay),
-        Math.round(row.weeklyAllowance),
-        Math.round(row.grossPay),
-        Math.round(row.netPay),
-      ]),
-    ];
-
-    downloadCsv(
-      `payroll_${payrollStartDate}_${payrollEndDate}.csv`,
-      rows
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mb-6 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-100">
-          <div className="flex flex-col gap-4 border-b border-gray-100 px-5 py-5 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">관리자 페이지</h1>
-              <p className="mt-1 text-sm text-gray-500">
-                직원 관리, 출퇴근 기록, 급여 관리를 한 곳에서 확인할 수 있습니다.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => {
-                  setActiveTab("employees");
-                  fetchEmployees();
-                }}
-                className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
-                  activeTab === "employees"
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                직원 관리
-              </button>
-
-              <button
-                onClick={() => {
-                  setActiveTab("attendance");
-                  fetchAttendance();
-                }}
-                className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
-                  activeTab === "attendance"
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                출퇴근 기록
-              </button>
-
-              <button
-                onClick={() => {
-                  setActiveTab("payroll");
-                  fetchPayroll();
-                }}
-                className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
-                  activeTab === "payroll"
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                급여 관리
-              </button>
-
-              <button
-                onClick={handleLogout}
-                className="rounded-xl bg-red-50 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-100"
-              >
-                로그아웃
-              </button>
-            </div>
-          </div>
-
-          {message ? (
-            <div className="border-b border-gray-100 bg-yellow-50 px-5 py-3 text-sm text-yellow-800">
-              {message}
-            </div>
-          ) : null}
-
-          {activeTab === "employees" && (
-            <div className="p-5">
-              <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">직원 목록</h2>
-                  <p className="mt-1 text-sm text-gray-500">
-                    직원 정보와 시급을 여기서 관리합니다.
-                  </p>
-                </div>
-
-                <button
-                  onClick={fetchEmployees}
-                  disabled={loading}
-                  className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
-                >
-                  {loading ? "불러오는 중..." : "새로고침"}
-                </button>
-              </div>
-
-              <div className="overflow-hidden rounded-2xl border border-gray-200">
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
-                    <thead className="bg-gray-100 text-gray-700">
-                      <tr>
-                        <th className="px-4 py-3 text-left font-semibold">이름</th>
-                        <th className="px-4 py-3 text-left font-semibold">생년월일</th>
-                        <th className="px-4 py-3 text-left font-semibold">전화번호 뒤4자리</th>
-                        <th className="px-4 py-3 text-left font-semibold">시급</th>
-                        <th className="px-4 py-3 text-left font-semibold">등록일</th>
-                        <th className="px-4 py-3 text-left font-semibold">관리</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {employees.length === 0 ? (
-                        <tr>
-                          <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
-                            직원 데이터가 없습니다.
-                          </td>
-                        </tr>
-                      ) : (
-                        employees.map((employee) => {
-                          const isEditing = editingEmployeeId === employee.id;
-
-                          return (
-                            <tr key={employee.id} className="border-t border-gray-100">
-                              <td className="px-4 py-3 font-medium text-gray-900">
-                                {employee.name}
-                              </td>
-                              <td className="px-4 py-3 text-gray-700">
-                                {employee.birth_date || "-"}
-                              </td>
-                              <td className="px-4 py-3 text-gray-700">
-                                {employee.phone_last4 || "-"}
-                              </td>
-                              <td className="px-4 py-3 text-gray-700">
-                                {isEditing ? (
-                                  <div className="flex items-center gap-2">
-                                    <input
-                                      type="number"
-                                      value={editingWage}
-                                      onChange={(e) => setEditingWage(e.target.value)}
-                                      className="w-32 rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-blue-500"
-                                      placeholder="시급"
-                                    />
-                                    <span className="text-gray-500">원</span>
-                                  </div>
-                                ) : (
-                                  formatCurrency(employee.hourly_wage ?? 0)
-                                )}
-                              </td>
-                              <td className="px-4 py-3 text-gray-700">
-                                {formatDate(employee.created_at)}
-                              </td>
-                              <td className="px-4 py-3">
-                                <div className="flex flex-wrap gap-2">
-                                  {isEditing ? (
-                                    <>
-                                      <button
-                                        onClick={() => saveHourlyWage(employee.id)}
-                                        disabled={loading}
-                                        className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-                                      >
-                                        저장
-                                      </button>
-                                      <button
-                                        onClick={() => {
-                                          setEditingEmployeeId(null);
-                                          setEditingWage("");
-                                        }}
-                                        className="rounded-lg bg-gray-100 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-200"
-                                      >
-                                        취소
-                                      </button>
-                                    </>
-                                  ) : (
-                                    <button
-                                      onClick={() => {
-                                        setEditingEmployeeId(employee.id);
-                                        setEditingWage(String(employee.hourly_wage ?? 0));
-                                      }}
-                                      className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
-                                    >
-                                      시급 수정
-                                    </button>
-                                  )}
-
-                                  <button
-                                    onClick={() => {
-                                      const ok = window.confirm(
-                                        `${employee.name} 직원을 삭제하시겠습니까?`
-                                      );
-                                      if (ok) {
-                                        deleteEmployee(employee.id);
-                                      }
-                                    }}
-                                    disabled={deletingEmployeeId === employee.id}
-                                    className="rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-100 disabled:opacity-50"
-                                  >
-                                    {deletingEmployeeId === employee.id ? "삭제 중..." : "삭제"}
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === "attendance" && (
-            <div className="p-5">
-              <div className="mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">출퇴근 기록 조회</h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  시작일과 종료일을 직접 선택해서 기록을 조회합니다.
-                </p>
-              </div>
-
-              <div className="mb-4 grid grid-cols-1 gap-3 rounded-2xl border border-gray-200 bg-gray-50 p-4 md:grid-cols-4">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    시작일
-                  </label>
-                  <input
-                    type="date"
-                    value={attendanceStartDate}
-                    onChange={(e) => setAttendanceStartDate(e.target.value)}
-                    className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 outline-none focus:border-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    종료일
-                  </label>
-                  <input
-                    type="date"
-                    value={attendanceEndDate}
-                    onChange={(e) => setAttendanceEndDate(e.target.value)}
-                    className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 outline-none focus:border-blue-500"
-                  />
-                </div>
-
-                <div className="md:col-span-2 flex items-end">
-                  <button
-                    onClick={fetchAttendance}
-                    disabled={loading}
-                    className="w-full rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {loading ? "조회 중..." : "출퇴근 기록 조회"}
-                  </button>
-                </div>
-              </div>
-
-              <div className="overflow-hidden rounded-2xl border border-gray-200">
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
-                    <thead className="bg-gray-100 text-gray-700">
-                      <tr>
-                        <th className="px-4 py-3 text-left font-semibold">이름</th>
-                        <th className="px-4 py-3 text-left font-semibold">구분</th>
-                        <th className="px-4 py-3 text-left font-semibold">시간</th>
-                        <th className="px-4 py-3 text-left font-semibold">위도</th>
-                        <th className="px-4 py-3 text-left font-semibold">경도</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {attendanceRows.length === 0 ? (
-                        <tr>
-                          <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
-                            조회된 출퇴근 기록이 없습니다.
-                          </td>
-                        </tr>
-                      ) : (
-                        attendanceRows.map((row, index) => (
-                          <tr key={`${row.id || row.checked_at || index}`} className="border-t border-gray-100">
-                            <td className="px-4 py-3 font-medium text-gray-900">
-                              {row.employees?.name || row.employee_name || "-"}
-                            </td>
-                            <td className="px-4 py-3 text-gray-700">
-                              {row.record_type === "check_in"
-                                ? "출근"
-                                : row.record_type === "check_out"
-                                ? "퇴근"
-                                : row.record_type || "-"}
-                            </td>
-                            <td className="px-4 py-3 text-gray-700">
-                              {formatDateTime(row.checked_at || row.created_at)}
-                            </td>
-                            <td className="px-4 py-3 text-gray-700">
-                              {row.lat ?? "-"}
-                            </td>
-                            <td className="px-4 py-3 text-gray-700">
-                              {row.lng ?? "-"}
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === "payroll" && (
-            <div className="p-5">
-              <div className="mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">급여 관리</h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  기간을 직접 선택해서 직원별 주차 합산 급여를 확인합니다.
-                </p>
-              </div>
-
-              <div className="mb-4 grid grid-cols-1 gap-3 rounded-2xl border border-gray-200 bg-gray-50 p-4 md:grid-cols-5">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    시작일
-                  </label>
-                  <input
-                    type="date"
-                    value={payrollStartDate}
-                    onChange={(e) => setPayrollStartDate(e.target.value)}
-                    className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 outline-none focus:border-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    종료일
-                  </label>
-                  <input
-                    type="date"
-                    value={payrollEndDate}
-                    onChange={(e) => setPayrollEndDate(e.target.value)}
-                    className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 outline-none focus:border-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    이름 검색
-                  </label>
-                  <input
-                    type="text"
-                    value={payrollNameKeyword}
-                    onChange={(e) => setPayrollNameKeyword(e.target.value)}
-                    className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 outline-none focus:border-blue-500"
-                    placeholder="직원 이름"
-                  />
-                </div>
-
-                <div className="flex items-end">
-                  <button
-                    onClick={fetchPayroll}
-                    disabled={loading}
-                    className="w-full rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {loading ? "조회 중..." : "급여 조회"}
-                  </button>
-                </div>
-
-                <div className="flex items-end">
-                  <button
-                    onClick={handlePayrollCsvDownload}
-                    className="w-full rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
-                  >
-                    CSV 다운로드
-                  </button>
-                </div>
-              </div>
-
-              <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-5">
-                <div className="rounded-2xl border border-gray-200 bg-white p-4">
-                  <div className="text-sm text-gray-500">총 근무시간</div>
-                  <div className="mt-2 text-xl font-bold text-gray-900">
-                    {formatHours(payrollSummary.totalHours)}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-gray-200 bg-white p-4">
-                  <div className="text-sm text-gray-500">기본급 합계</div>
-                  <div className="mt-2 text-xl font-bold text-gray-900">
-                    {formatCurrency(Math.round(payrollSummary.totalBasePay))}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-gray-200 bg-white p-4">
-                  <div className="text-sm text-gray-500">주휴수당 합계</div>
-                  <div className="mt-2 text-xl font-bold text-gray-900">
-                    {formatCurrency(Math.round(payrollSummary.totalWeeklyAllowance))}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-gray-200 bg-white p-4">
-                  <div className="text-sm text-gray-500">세전 급여 합계</div>
-                  <div className="mt-2 text-xl font-bold text-gray-900">
-                    {formatCurrency(Math.round(payrollSummary.totalGrossPay))}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-gray-200 bg-white p-4">
-                  <div className="text-sm text-gray-500">세후 급여 합계</div>
-                  <div className="mt-2 text-xl font-bold text-gray-900">
-                    {formatCurrency(Math.round(payrollSummary.totalNetPay))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="overflow-hidden rounded-2xl border border-gray-200">
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
-                    <thead className="bg-gray-100 text-gray-700">
-                      <tr>
-                        <th className="px-4 py-3 text-left font-semibold">이름</th>
-                        <th className="px-4 py-3 text-left font-semibold">정산 시작</th>
-                        <th className="px-4 py-3 text-left font-semibold">정산 종료</th>
-                        <th className="px-4 py-3 text-left font-semibold">총 근무시간</th>
-                        <th className="px-4 py-3 text-left font-semibold">시급</th>
-                        <th className="px-4 py-3 text-left font-semibold">기본급</th>
-                        <th className="px-4 py-3 text-left font-semibold">주휴수당</th>
-                        <th className="px-4 py-3 text-left font-semibold">주휴포함 세전</th>
-                        <th className="px-4 py-3 text-left font-semibold">주휴포함 세후</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {payrollRows.length === 0 ? (
-                        <tr>
-                          <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
-                            조회된 급여 데이터가 없습니다.
-                          </td>
-                        </tr>
-                      ) : (
-                        payrollRows.map((row, index) => (
-                          <tr
-                            key={`${row.employeeId}-${row.weekStart}-${row.weekEnd}-${index}`}
-                            className="border-t border-gray-100"
-                          >
-                            <td className="px-4 py-3 font-medium text-gray-900">
-                              {row.employeeName}
-                            </td>
-                            <td className="px-4 py-3 text-gray-700">{row.weekStart}</td>
-                            <td className="px-4 py-3 text-gray-700">{row.weekEnd}</td>
-                            <td className="px-4 py-3 text-gray-700">
-                              {formatHours(row.totalHours)}
-                            </td>
-                            <td className="px-4 py-3 text-gray-700">
-                              {formatCurrency(row.hourlyWage)}
-                            </td>
-                            <td className="px-4 py-3 text-gray-700">
-                              {formatCurrency(Math.round(row.basePay))}
-                            </td>
-                            <td className="px-4 py-3 text-blue-700 font-semibold">
-                              {formatCurrency(Math.round(row.weeklyAllowance))}
-                            </td>
-                            <td className="px-4 py-3 text-gray-900 font-semibold">
-                              {formatCurrency(Math.round(row.grossPay))}
-                            </td>
-                            <td className="px-4 py-3 text-emerald-700 font-semibold">
-                              {formatCurrency(Math.round(row.netPay))}
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <div className="mt-4 rounded-2xl bg-blue-50 p-4 text-sm text-blue-900">
-                주휴수당 계산 방식: <strong>(해당 주 총근무시간 ÷ 5) × 시급</strong>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+function formatDate(value: string) {
+  const [year, month, day] = value.split("-");
+  return `${year}.${month}.${day}`;
 }
+
+function formatWorkMinutes(minutes: number | null) {
+  if (minutes === null || minutes < 0) return "-";
+
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+
+  if (hours === 0) return `${mins}분`;
+  if (mins === 0) return `${hours}시간`;
+
+  return `${hours}시간 ${mins}분`;
+}
+
+function formatCurrency(value: number) {
+  return `${value.toLocaleString("ko-KR")}원`;
+}
+
+function toDateTimeLocalValue(value: string | null) {
+  if (!value) return "";
+
+  const date = new Date(value);
+  const kstMs = date.getTime() + 9 * 60 * 60 * 1000;
+  const kstDate = new Date(kstMs);
+
+  return kstDate.toISOString().slice(0, 16);
+}
+
+const pageStyle: CSSProperties = {
+  minHeight: "100vh",
+  backgroundColor: "#f8fafc",
+  padding: "24px",
+  fontFamily: "sans-serif",
+};
+
+const containerStyle: CSSProperties = {
+  maxWidth: "1400px",
+  margin: "0 auto",
+};
+
+const headerStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: "16px",
+  flexWrap: "wrap",
+  marginBottom: "24px",
+};
+
+const eyebrowStyle: CSSProperties = {
+  margin: 0,
+  fontSize: "12px",
+  fontWeight: 700,
+  color: "#64748b",
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+};
+
+const titleStyle: CSSProperties = {
+  margin: "8px 0 8px",
+  fontSize: "32px",
+  fontWeight: 800,
+  color: "#0f172a",
+};
+
+const descriptionStyle: CSSProperties = {
+  margin: 0,
+  fontSize: "15px",
+  color: "#475569",
+};
+
+const headerButtonWrapStyle: CSSProperties = {
+  display: "flex",
+  gap: "10px",
+  flexWrap: "wrap",
+};
+
+const summaryGridStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  gap: "14px",
+  marginBottom: "24px",
+};
+
+const summaryCardStyle: CSSProperties = {
+  backgroundColor: "#ffffff",
+  border: "1px solid #e5e7eb",
+  borderRadius: "18px",
+  padding: "18px",
+  boxShadow: "0 8px 24px rgba(15, 23, 42, 0.05)",
+};
+
+const summaryLabelStyle: CSSProperties = {
+  margin: 0,
+  fontSize: "13px",
+  color: "#64748b",
+  fontWeight: 600,
+};
+
+const summaryValueStyle: CSSProperties = {
+  margin: "10px 0 6px",
+  fontSize: "28px",
+  fontWeight: 800,
+  color: "#0f172a",
+};
+
+const summaryHelperStyle: CSSProperties = {
+  margin: 0,
+  fontSize: "13px",
+  color: "#94a3b8",
+};
+
+const warningBoxStyle: CSSProperties = {
+  marginBottom: "20px",
+  padding: "14px 16px",
+  borderRadius: "14px",
+  backgroundColor: "#fff7ed",
+  color: "#9a3412",
+  border: "1px solid #fed7aa",
+};
+
+const tabWrapStyle: CSSProperties = {
+  display: "flex",
+  gap: "10px",
+  marginBottom: "20px",
+  flexWrap: "wrap",
+};
+
+const tabButtonStyle: CSSProperties = {
+  padding: "12px 18px",
+  border: "none",
+  borderRadius: "12px",
+  cursor: "pointer",
+  fontWeight: 700,
+  fontSize: "14px",
+};
+
+const cardStyle: CSSProperties = {
+  backgroundColor: "#ffffff",
+  border: "1px solid #e5e7eb",
+  borderRadius: "20px",
+  padding: "22px",
+  boxShadow: "0 8px 24px rgba(15, 23, 42, 0.05)",
+};
+
+const sectionHeaderStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "12px",
+  marginBottom: "18px",
+  flexWrap: "wrap",
+};
+
+const sectionHeaderButtonWrapStyle: CSSProperties = {
+  display: "flex",
+  gap: "8px",
+  flexWrap: "wrap",
+};
+
+const sectionTitleStyle: CSSProperties = {
+  margin: 0,
+  fontSize: "22px",
+  fontWeight: 800,
+  color: "#111827",
+};
+
+const sectionDescriptionStyle: CSSProperties = {
+  margin: "6px 0 0",
+  fontSize: "14px",
+  color: "#6b7280",
+};
+
+const paySummaryWrapStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: "12px",
+  marginBottom: "18px",
+};
+
+const paySummaryCardStyle: CSSProperties = {
+  backgroundColor: "#f8fafc",
+  border: "1px solid #e5e7eb",
+  borderRadius: "16px",
+  padding: "16px",
+};
+
+const paySummaryLabelStyle: CSSProperties = {
+  fontSize: "13px",
+  color: "#64748b",
+  fontWeight: 700,
+  marginBottom: "8px",
+};
+
+const paySummaryValueStyle: CSSProperties = {
+  fontSize: "24px",
+  fontWeight: 800,
+  color: "#0f172a",
+};
+
+const filterRowStyle: CSSProperties = {
+  display: "flex",
+  gap: "12px",
+  alignItems: "flex-end",
+  flexWrap: "wrap",
+  marginBottom: "18px",
+};
+
+const fieldGroupStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "8px",
+  minWidth: "220px",
+  flex: "1 1 220px",
+};
+
+const fieldButtonGroupStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "flex-end",
+};
+
+const labelStyle: CSSProperties = {
+  fontSize: "13px",
+  fontWeight: 700,
+  color: "#374151",
+};
+
+const inputStyle: CSSProperties = {
+  padding: "12px 14px",
+  borderRadius: "12px",
+  border: "1px solid #d1d5db",
+  outline: "none",
+  fontSize: "14px",
+  backgroundColor: "#ffffff",
+};
+
+const smallInputStyle: CSSProperties = {
+  padding: "8px 10px",
+  width: "100%",
+  minWidth: "110px",
+  borderRadius: "10px",
+  border: "1px solid #d1d5db",
+  outline: "none",
+  fontSize: "14px",
+};
+
+const dateTimeInputStyle: CSSProperties = {
+  padding: "8px 10px",
+  width: "100%",
+  minWidth: "180px",
+  borderRadius: "10px",
+  border: "1px solid #d1d5db",
+  outline: "none",
+  fontSize: "14px",
+};
+
+const wageWrapStyle: CSSProperties = {
+  display: "flex",
+  gap: "8px",
+  alignItems: "center",
+  flexWrap: "wrap",
+};
+
+const wageInputStyle: CSSProperties = {
+  padding: "8px 10px",
+  width: "120px",
+  borderRadius: "10px",
+  border: "1px solid #d1d5db",
+  outline: "none",
+  fontSize: "14px",
+};
+
+const primaryButtonStyle: CSSProperties = {
+  padding: "12px 16px",
+  border: "none",
+  borderRadius: "12px",
+  cursor: "pointer",
+  backgroundColor: "#111827",
+  color: "#ffffff",
+  fontWeight: 700,
+  fontSize: "14px",
+};
+
+const secondaryTopButtonStyle: CSSProperties = {
+  padding: "10px 14px",
+  border: "1px solid #d1d5db",
+  borderRadius: "12px",
+  cursor: "pointer",
+  backgroundColor: "#ffffff",
+  color: "#111827",
+  fontWeight: 700,
+};
+
+const logoutButtonStyle: CSSProperties = {
+  padding: "10px 14px",
+  border: "none",
+  borderRadius: "12px",
+  cursor: "pointer",
+  backgroundColor: "#111827",
+  color: "#ffffff",
+  fontWeight: 700,
+};
+
+const tableScrollStyle: CSSProperties = {
+  width: "100%",
+  overflowX: "auto",
+};
+
+const tableStyle: CSSProperties = {
+  width: "100%",
+  borderCollapse: "separate",
+  borderSpacing: 0,
+  minWidth: "1300px",
+};
+
+const thStyle: CSSProperties = {
+  textAlign: "left",
+  padding: "14px 16px",
+  fontSize: "13px",
+  fontWeight: 800,
+  color: "#475569",
+  backgroundColor: "#f8fafc",
+  borderBottom: "1px solid #e5e7eb",
+};
+
+const tdStyle: CSSProperties = {
+  padding: "14px 16px",
+  fontSize: "14px",
+  color: "#111827",
+  borderBottom: "1px solid #f1f5f9",
+  verticalAlign: "middle",
+};
+
+const badgeStyle: CSSProperties = {
+  display: "inline-block",
+  padding: "6px 10px",
+  borderRadius: "999px",
+  fontWeight: 700,
+  fontSize: "13px",
+};
+
+const nameTextStyle: CSSProperties = {
+  fontWeight: 700,
+  color: "#0f172a",
+};
+
+const actionWrapStyle: CSSProperties = {
+  display: "flex",
+  gap: "8px",
+  flexWrap: "wrap",
+};
+
+const primarySmallButtonStyle: CSSProperties = {
+  padding: "8px 12px",
+  border: "none",
+  borderRadius: "10px",
+  cursor: "pointer",
+  backgroundColor: "#111827",
+  color: "#ffffff",
+  fontWeight: 700,
+};
+
+const secondarySmallButtonStyle: CSSProperties = {
+  padding: "8px 12px",
+  border: "none",
+  borderRadius: "10px",
+  cursor: "pointer",
+  backgroundColor: "#f3f4f6",
+  color: "#111827",
+  fontWeight: 700,
+};
+
+const emptyBoxStyle: CSSProperties = {
+  padding: "24px",
+  borderRadius: "14px",
+  backgroundColor: "#f8fafc",
+  color: "#475569",
+  textAlign: "center",
+};
