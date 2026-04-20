@@ -170,8 +170,12 @@ export default function AdminPage() {
   };
 
   useEffect(() => {
-    fetchRecords();
-  }, []);
+  fetchRecords();
+}, []);
+
+useEffect(() => {
+  fetchEmployees();
+}, []);
 
   useEffect(() => {
     if (tab === "attendance") {
