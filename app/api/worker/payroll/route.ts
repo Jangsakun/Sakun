@@ -259,13 +259,25 @@ export async function POST(request: Request) {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    const { data: employee, error: employeeError } = await supabase
-      .from("employees")
-      .select("id, name, birth_date, phone_last4, hourly_wage")
-      .eq("name", name)
-      .eq("birth_date", birthDate)
-      .eq("phone_last4", phoneLast4)
-      .maybeSingle<Employee>();
+   function normalizeBirthDateForCompare(value: string) {
+  const onlyNumber = value.replace(/[^0-9]/g, "");
+
+  if (onlyNumber.length === 8) {
+    return onlyNumber.slice(2); // 19971108 -> 971108
+  }
+
+  return onlyNumber;
+}
+
+const normalizedBirthDate = normalizeBirthDateForCompare(birthDate);
+
+const { data: employee, error: employeeError } = await supabase
+  .from("employees")
+  .select("id, name, birth_date, phone_last4, hourly_wage")
+  .eq("name", name)
+  .eq("birth_date", normalizedBirthDate)
+  .eq("phone_last4", phoneLast4)
+  .maybeSingle<Employee>();
 
     if (employeeError) {
       return NextResponse.json(
