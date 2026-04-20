@@ -52,6 +52,9 @@ type GroupedAttendanceRow = {
   checkInRecordId: number | null;
   checkOutRecordId: number | null;
   workMinutes: number | null;
+  hourlyWage: number;
+  grossPay: number | null;
+  netPay: number | null;
   statusText: string;
   statusColor: string;
   statusBg: string;
@@ -195,6 +198,14 @@ export default function AdminPage() {
     }
   }, [tab]);
 
+  const employeeMap = useMemo(() => {
+    const map = new Map<number, Employee>();
+    employees.forEach((employee) => {
+      map.set(employee.id, employee);
+    });
+    return map;
+  }, [employees]);
+
   const filteredRecords = useMemo(() => {
     return records
       .filter((record) =>
@@ -220,7 +231,7 @@ export default function AdminPage() {
     filteredRecords.forEach((record) => {
       const employeeName = record.employees?.name || "알 수 없음";
       const dateKey = toSeoulDateKey(record.checked_at);
-      const key = `${employeeName}_${dateKey}`;
+      const key = `${record.employee_id}_${dateKey}`;
 
       if (!grouped.has(key)) {
         grouped.set(key, []);
@@ -272,6 +283,17 @@ export default function AdminPage() {
         }
       }
 
+      const employee = employeeMap.get(employeeId);
+      const hourlyWage = employee?.hourly_wage || 0;
+
+      let grossPay: number | null = null;
+      let netPay: number | null = null;
+
+      if (workMinutes !== null && hourlyWage > 0) {
+        grossPay = Math.round((workMinutes / 60) * hourlyWage);
+        netPay = Math.round(grossPay * 0.967);
+      }
+
       let statusText = "기록 확인 필요";
       let statusColor = "#92400e";
       let statusBg = "#fef3c7";
@@ -300,6 +322,9 @@ export default function AdminPage() {
         checkInRecordId: checkInRecord?.id || null,
         checkOutRecordId: checkOutRecord?.id || null,
         workMinutes,
+        hourlyWage,
+        grossPay,
+        netPay,
         statusText,
         statusColor,
         statusBg,
@@ -312,7 +337,7 @@ export default function AdminPage() {
       }
       return b.date.localeCompare(a.date);
     });
-  }, [filteredRecords]);
+  }, [filteredRecords, employeeMap]);
 
   const summaryCheckInCount = groupedAttendanceRows.filter(
     (row) => row.checkIn !== null
@@ -329,6 +354,14 @@ export default function AdminPage() {
   const incompleteAttendanceCount = groupedAttendanceRows.filter(
     (row) => row.checkIn === null || row.checkOut === null
   ).length;
+
+  const totalGrossPay = groupedAttendanceRows.reduce((sum, row) => {
+    return sum + (row.grossPay || 0);
+  }, 0);
+
+  const totalNetPay = groupedAttendanceRows.reduce((sum, row) => {
+    return sum + (row.netPay || 0);
+  }, 0);
 
   const startEdit = (employee: Employee) => {
     setEditingEmployeeId(employee.id);
@@ -511,6 +544,60 @@ export default function AdminPage() {
     }
   };
 
+  const downloadAttendanceCsv = () => {
+    if (groupedAttendanceRows.length === 0) {
+      alert("다운로드할 출퇴근 기록이 없습니다.");
+      return;
+    }
+
+    const headers = [
+      "이름",
+      "날짜",
+      "출근",
+      "퇴근",
+      "총 근무시간",
+      "시급",
+      "세전 급여",
+      "세후 급여(3.3% 공제)",
+      "상태",
+    ];
+
+    const rows = groupedAttendanceRows.map((row) => [
+      row.employeeName,
+      formatDate(row.date),
+      formatTime(row.checkIn),
+      formatTime(row.checkOut),
+      formatWorkMinutes(row.workMinutes),
+      row.hourlyWage ? String(row.hourlyWage) : "0",
+      row.grossPay !== null ? String(row.grossPay) : "-",
+      row.netPay !== null ? String(row.netPay) : "-",
+      row.statusText,
+    ]);
+
+    const csvContent = [headers, ...rows]
+      .map((line) =>
+        line
+          .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
+          .join(",")
+      )
+      .join("\n");
+
+    const blob = new Blob(["\ufeff" + csvContent], {
+      type: "text/csv;charset=utf-8;",
+    });
+
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const fileName = `attendance_${startDate}_${endDate}.csv`;
+
+    link.href = url;
+    link.setAttribute("download", fileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  };
+
   return (
     <main style={pageStyle}>
       <div style={containerStyle}>
@@ -519,7 +606,7 @@ export default function AdminPage() {
             <p style={eyebrowStyle}>Admin Dashboard</p>
             <h1 style={titleStyle}>장사꾼 관리자 대시보드</h1>
             <p style={descriptionStyle}>
-              직원 상태와 출퇴근 기록을 한 화면에서 관리할 수 있습니다.
+              직원 상태와 출퇴근 기록, 급여를 한 화면에서 관리할 수 있습니다.
             </p>
           </div>
 
@@ -614,9 +701,31 @@ export default function AdminPage() {
               <div>
                 <h2 style={sectionTitleStyle}>출퇴근 기록</h2>
                 <p style={sectionDescriptionStyle}>
-                  기간과 이름으로 조회하고, 직원별로 출근/퇴근 시간을 한 줄로
-                  확인할 수 있습니다.
+                  근무시간에 비례한 세전/세후 급여를 함께 확인하고 CSV로
+                  다운로드할 수 있습니다.
                 </p>
+              </div>
+
+              <div style={sectionHeaderButtonWrapStyle}>
+                <button onClick={downloadAttendanceCsv} style={primaryButtonStyle}>
+                  엑셀 다운로드
+                </button>
+              </div>
+            </div>
+
+            <div style={paySummaryWrapStyle}>
+              <div style={paySummaryCardStyle}>
+                <div style={paySummaryLabelStyle}>세전 급여 합계</div>
+                <div style={paySummaryValueStyle}>
+                  {formatCurrency(totalGrossPay)}
+                </div>
+              </div>
+
+              <div style={paySummaryCardStyle}>
+                <div style={paySummaryLabelStyle}>세후 급여 합계</div>
+                <div style={paySummaryValueStyle}>
+                  {formatCurrency(totalNetPay)}
+                </div>
               </div>
             </div>
 
@@ -675,13 +784,17 @@ export default function AdminPage() {
                       <th style={thStyle}>출근</th>
                       <th style={thStyle}>퇴근</th>
                       <th style={thStyle}>총 근무시간</th>
+                      <th style={thStyle}>시급</th>
+                      <th style={thStyle}>세전 급여</th>
+                      <th style={thStyle}>세후 급여</th>
                       <th style={thStyle}>상태</th>
                       <th style={thStyle}>관리</th>
                     </tr>
                   </thead>
                   <tbody>
                     {groupedAttendanceRows.map((row) => {
-                      const isEditingAttendance = editingAttendanceKey === row.key;
+                      const isEditingAttendance =
+                        editingAttendanceKey === row.key;
 
                       return (
                         <tr key={row.key}>
@@ -723,6 +836,24 @@ export default function AdminPage() {
 
                           <td style={tdStyle}>
                             {formatWorkMinutes(row.workMinutes)}
+                          </td>
+
+                          <td style={tdStyle}>
+                            {row.hourlyWage > 0
+                              ? formatCurrency(row.hourlyWage)
+                              : "-"}
+                          </td>
+
+                          <td style={tdStyle}>
+                            {row.grossPay !== null
+                              ? formatCurrency(row.grossPay)
+                              : "-"}
+                          </td>
+
+                          <td style={tdStyle}>
+                            {row.netPay !== null
+                              ? formatCurrency(row.netPay)
+                              : "-"}
                           </td>
 
                           <td style={tdStyle}>
@@ -1083,6 +1214,10 @@ function formatWorkMinutes(minutes: number | null) {
   return `${hours}시간 ${mins}분`;
 }
 
+function formatCurrency(value: number) {
+  return `${value.toLocaleString("ko-KR")}원`;
+}
+
 function toDateTimeLocalValue(value: string | null) {
   if (!value) return "";
 
@@ -1101,7 +1236,7 @@ const pageStyle: CSSProperties = {
 };
 
 const containerStyle: CSSProperties = {
-  maxWidth: "1200px",
+  maxWidth: "1400px",
   margin: "0 auto",
 };
 
@@ -1219,6 +1354,12 @@ const sectionHeaderStyle: CSSProperties = {
   flexWrap: "wrap",
 };
 
+const sectionHeaderButtonWrapStyle: CSSProperties = {
+  display: "flex",
+  gap: "8px",
+  flexWrap: "wrap",
+};
+
 const sectionTitleStyle: CSSProperties = {
   margin: 0,
   fontSize: "22px",
@@ -1230,6 +1371,33 @@ const sectionDescriptionStyle: CSSProperties = {
   margin: "6px 0 0",
   fontSize: "14px",
   color: "#6b7280",
+};
+
+const paySummaryWrapStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: "12px",
+  marginBottom: "18px",
+};
+
+const paySummaryCardStyle: CSSProperties = {
+  backgroundColor: "#f8fafc",
+  border: "1px solid #e5e7eb",
+  borderRadius: "16px",
+  padding: "16px",
+};
+
+const paySummaryLabelStyle: CSSProperties = {
+  fontSize: "13px",
+  color: "#64748b",
+  fontWeight: 700,
+  marginBottom: "8px",
+};
+
+const paySummaryValueStyle: CSSProperties = {
+  fontSize: "24px",
+  fontWeight: 800,
+  color: "#0f172a",
 };
 
 const filterRowStyle: CSSProperties = {
@@ -1344,7 +1512,7 @@ const tableStyle: CSSProperties = {
   width: "100%",
   borderCollapse: "separate",
   borderSpacing: 0,
-  minWidth: "1000px",
+  minWidth: "1300px",
 };
 
 const thStyle: CSSProperties = {
