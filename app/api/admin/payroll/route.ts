@@ -1,17 +1,27 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+type EmployeeNested =
+  | {
+      id: number;
+      name: string;
+      hourly_wage?: number | null;
+      weekly_allowance_status?: string | null;
+    }
+  | {
+      id: number;
+      name: string;
+      hourly_wage?: number | null;
+      weekly_allowance_status?: string | null;
+    }[]
+  | null;
+
 type AttendanceRecord = {
   id: number;
   record_type: string;
   checked_at: string;
   employee_id: number;
-  employees: {
-    id: number;
-    name: string;
-    hourly_wage?: number | null;
-    weekly_allowance_status?: string | null;
-  } | null;
+  employees: EmployeeNested;
 };
 
 type DailyWorkRow = {
@@ -66,6 +76,11 @@ function roundToWon(value: number) {
   return Math.round(value);
 }
 
+function getEmployeeObject(rawEmployee: EmployeeNested) {
+  if (!rawEmployee) return null;
+  return Array.isArray(rawEmployee) ? rawEmployee[0] || null : rawEmployee;
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -90,7 +105,10 @@ export async function POST(request: Request) {
 
     if (startDate > endDate) {
       return NextResponse.json(
-        { success: false, message: "시작일이 종료일보다 늦을 수 없습니다." },
+        {
+          success: false,
+          message: "시작일이 종료일보다 늦을 수 없습니다.",
+        },
         { status: 400 }
       );
     }
@@ -122,11 +140,15 @@ export async function POST(request: Request) {
       );
     }
 
-    let filtered: AttendanceRecord[] = (records || []) as AttendanceRecord[];
+    const safeRecords = (records || []) as AttendanceRecord[];
+    let filtered = safeRecords;
 
     if (name && String(name).trim()) {
       const keyword = String(name).trim();
-      filtered = filtered.filter((r) => r.employees?.name?.includes(keyword));
+      filtered = filtered.filter((r) => {
+        const employee = getEmployeeObject(r.employees);
+        return employee?.name?.includes(keyword);
+      });
     }
 
     const grouped: Record<string, AttendanceRecord[]> = {};
@@ -150,24 +172,26 @@ export async function POST(request: Request) {
           new Date(a.checked_at).getTime() - new Date(b.checked_at).getTime()
       );
 
-      const employee = items[0]?.employees;
+      const employee = getEmployeeObject(items[0]?.employees);
       const employeeId = items[0]?.employee_id;
       const employeeName = employee?.name || "이름없음";
+
       const wage =
         typeof employee?.hourly_wage === "number" && employee.hourly_wage > 0
           ? employee.hourly_wage
           : 10320;
+
       const weeklyAllowanceStatus =
         employee?.weekly_allowance_status || "검토필요";
 
       const date = formatKST(new Date(items[0].checked_at));
 
-      const checkIn =
-        items.find((i) => isCheckInType(i.record_type)) || null;
+      const checkIn = items.find((i) => isCheckInType(i.record_type)) || null;
 
       const checkOutCandidates = items.filter((i) =>
         isCheckOutType(i.record_type)
       );
+
       const checkOut =
         checkOutCandidates.length > 0
           ? checkOutCandidates[checkOutCandidates.length - 1]
@@ -180,9 +204,8 @@ export async function POST(request: Request) {
         const outTime = new Date(checkOut.checked_at);
 
         const standardStart = new Date(`${date}T09:30:00+09:00`);
-        const paidStart = inTime.getTime() > standardStart.getTime()
-          ? inTime
-          : standardStart;
+        const paidStart =
+          inTime.getTime() > standardStart.getTime() ? inTime : standardStart;
 
         let minutes = 0;
         const diffMs = outTime.getTime() - paidStart.getTime();
