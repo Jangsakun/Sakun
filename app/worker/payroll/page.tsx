@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 
 type PayrollRow = {
   date: string;
@@ -195,87 +197,57 @@ export default function WorkerPayrollPage() {
     setMessage("저장된 본인 확인 정보가 삭제되었습니다.");
   };
 
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
     if (!result || !result.employee || !result.summary) {
       setMessage("먼저 주급 명세서를 조회해주세요.");
       return;
     }
 
-    const printContents = statementRef.current?.innerHTML;
-    if (!printContents) {
+    if (!statementRef.current) {
       setMessage("출력할 명세서가 없습니다.");
       return;
     }
 
-    const printWindow = window.open("", "_blank", "width=900,height=700");
-    if (!printWindow) {
-      setMessage("팝업이 차단되어 있습니다. 팝업 허용 후 다시 시도해주세요.");
-      return;
+    try {
+      setMessage("PDF 생성 중입니다...");
+
+      const canvas = await html2canvas(statementRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+      });
+
+      const imgData = canvas.toDataURL("image/png");
+
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      const margin = 10;
+      const usableWidth = pageWidth - margin * 2;
+      const imgHeight = (canvas.height * usableWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = margin;
+
+      pdf.addImage(imgData, "PNG", margin, position, usableWidth, imgHeight);
+      heightLeft -= pageHeight - margin * 2;
+
+      while (heightLeft > 0) {
+        pdf.addPage();
+        position = margin - (imgHeight - heightLeft);
+        pdf.addImage(imgData, "PNG", margin, position, usableWidth, imgHeight);
+        heightLeft -= pageHeight - margin * 2;
+      }
+
+      const fileName = `주급명세서_${result.employee.name}_${result.range?.startDate || ""}_${result.range?.endDate || ""}.pdf`;
+      pdf.save(fileName);
+
+      setMessage("PDF가 다운로드되었습니다.");
+    } catch (error) {
+      console.error(error);
+      setMessage("PDF 생성 중 오류가 발생했습니다.");
     }
-
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>주급 명세서</title>
-          <style>
-            body {
-              font-family: Arial, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-              padding: 24px;
-              color: #111;
-            }
-            h1, h2, h3, p {
-              margin: 0 0 12px 0;
-            }
-            .header {
-              margin-bottom: 24px;
-              border-bottom: 2px solid #111;
-              padding-bottom: 12px;
-            }
-            .summary-grid {
-              display: grid;
-              grid-template-columns: repeat(2, 1fr);
-              gap: 12px;
-              margin: 20px 0;
-            }
-            .card {
-              border: 1px solid #ddd;
-              border-radius: 12px;
-              padding: 12px;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              margin-top: 16px;
-            }
-            th, td {
-              border: 1px solid #ddd;
-              padding: 10px;
-              text-align: left;
-              font-size: 14px;
-            }
-            th {
-              background: #f5f5f5;
-            }
-            .foot {
-              margin-top: 16px;
-              font-size: 12px;
-              color: #666;
-              line-height: 1.7;
-            }
-          </style>
-        </head>
-        <body>
-          ${printContents}
-          <script>
-            window.onload = function() {
-              window.print();
-            };
-          </script>
-        </body>
-      </html>
-    `);
-
-    printWindow.document.close();
   };
 
   return (
@@ -641,67 +613,146 @@ export default function WorkerPayrollPage() {
               </div>
             </div>
 
-            <div className="mt-6 hidden">
+            <div
+              style={{
+                position: "fixed",
+                left: "-99999px",
+                top: 0,
+                width: "800px",
+                backgroundColor: "#ffffff",
+                padding: "24px",
+                zIndex: -1,
+              }}
+            >
               <div ref={statementRef}>
-                <div className="header">
-                  <h1>주급 명세서</h1>
-                  <p>이름: {result.employee.name}</p>
-                  <p>
+                <div
+                  style={{
+                    marginBottom: "24px",
+                    borderBottom: "2px solid #111",
+                    paddingBottom: "12px",
+                    color: "#111",
+                    fontFamily:
+                      'Arial, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif',
+                  }}
+                >
+                  <h1 style={{ fontSize: "28px", marginBottom: "12px", fontWeight: 700 }}>
+                    주급 명세서
+                  </h1>
+                  <p style={{ margin: "0 0 8px 0" }}>이름: {result.employee.name}</p>
+                  <p style={{ margin: "0 0 8px 0" }}>
                     조회 기간: {result.range.startDate} ~ {result.range.endDate}
                   </p>
-                  <p>시급: {formatWon(result.employee.hourlyWage)}</p>
-                  <p>
+                  <p style={{ margin: "0 0 8px 0" }}>
+                    시급: {formatWon(result.employee.hourlyWage)}
+                  </p>
+                  <p style={{ margin: 0 }}>
                     주휴수당: {result.weeklyAllowance?.displayText || "해당 없음"}
                   </p>
                 </div>
 
-                <div className="summary-grid">
-                  <div className="card">
-                    <h3>총 근무시간</h3>
-                    <p>{result.summary.totalWorkText}</p>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(2, 1fr)",
+                    gap: "12px",
+                    margin: "20px 0",
+                    color: "#111",
+                    fontFamily:
+                      'Arial, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif',
+                  }}
+                >
+                  <div
+                    style={{
+                      border: "1px solid #ddd",
+                      borderRadius: "12px",
+                      padding: "12px",
+                    }}
+                  >
+                    <h3 style={{ margin: "0 0 8px 0" }}>총 근무시간</h3>
+                    <p style={{ margin: 0 }}>{result.summary.totalWorkText}</p>
                   </div>
-                  <div className="card">
-                    <h3>총 지급 급여</h3>
-                    <p>{formatWon(result.summary.totalGrossPay)}</p>
+                  <div
+                    style={{
+                      border: "1px solid #ddd",
+                      borderRadius: "12px",
+                      padding: "12px",
+                    }}
+                  >
+                    <h3 style={{ margin: "0 0 8px 0" }}>총 지급 급여</h3>
+                    <p style={{ margin: 0 }}>{formatWon(result.summary.totalGrossPay)}</p>
                   </div>
-                  <div className="card">
-                    <h3>세후 급여</h3>
-                    <p>{formatWon(result.summary.totalNetPay)}</p>
+                  <div
+                    style={{
+                      border: "1px solid #ddd",
+                      borderRadius: "12px",
+                      padding: "12px",
+                    }}
+                  >
+                    <h3 style={{ margin: "0 0 8px 0" }}>세후 급여</h3>
+                    <p style={{ margin: 0 }}>{formatWon(result.summary.totalNetPay)}</p>
                   </div>
-                  <div className="card">
-                    <h3>주휴수당</h3>
-                    <p>{result.weeklyAllowance?.displayText || "해당 없음"}</p>
+                  <div
+                    style={{
+                      border: "1px solid #ddd",
+                      borderRadius: "12px",
+                      padding: "12px",
+                    }}
+                  >
+                    <h3 style={{ margin: "0 0 8px 0" }}>주휴수당</h3>
+                    <p style={{ margin: 0 }}>
+                      {result.weeklyAllowance?.displayText || "해당 없음"}
+                    </p>
                   </div>
                 </div>
 
-                <table>
+                <table
+                  style={{
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    marginTop: "16px",
+                    color: "#111",
+                    fontFamily:
+                      'Arial, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif',
+                  }}
+                >
                   <thead>
                     <tr>
-                      <th>날짜</th>
-                      <th>출근</th>
-                      <th>퇴근</th>
-                      <th>근무시간</th>
-                      <th>휴게 반영</th>
-                      <th>지급 급여</th>
-                      <th>세후 급여</th>
+                      <th style={pdfThStyle}>날짜</th>
+                      <th style={pdfThStyle}>출근</th>
+                      <th style={pdfThStyle}>퇴근</th>
+                      <th style={pdfThStyle}>근무시간</th>
+                      <th style={pdfThStyle}>휴게 반영</th>
+                      <th style={pdfThStyle}>지급 급여</th>
+                      <th style={pdfThStyle}>세후 급여</th>
                     </tr>
                   </thead>
                   <tbody>
                     {(result.dailyRows || []).map((row) => (
                       <tr key={`print-${row.date}`}>
-                        <td>{row.date}</td>
-                        <td>{row.checkInText}</td>
-                        <td>{row.checkOutText}</td>
-                        <td>{row.workText}</td>
-                        <td>{row.lunchDeducted ? "점심 1시간 제외" : "-"}</td>
-                        <td>{formatWon(row.grossPay)}</td>
-                        <td>{formatWon(row.netPay)}</td>
+                        <td style={pdfTdStyle}>{row.date}</td>
+                        <td style={pdfTdStyle}>{row.checkInText}</td>
+                        <td style={pdfTdStyle}>{row.checkOutText}</td>
+                        <td style={pdfTdStyle}>{row.workText}</td>
+                        <td style={pdfTdStyle}>
+                          {row.lunchDeducted ? "점심 1시간 제외" : "-"}
+                        </td>
+                        <td style={pdfTdStyle}>{formatWon(row.grossPay)}</td>
+                        <td style={pdfTdStyle}>{formatWon(row.netPay)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
 
-                <div className="foot">
+                <div
+                  style={{
+                    marginTop: "16px",
+                    fontSize: "12px",
+                    color: "#666",
+                    lineHeight: 1.7,
+                    fontFamily:
+                      'Arial, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif',
+                  }}
+                >
                   09:30 이전 출근은 09:30부터 급여 계산
                   <br />
                   12:30 이전 출근하고 13:30 이후 퇴근한 경우 점심 1시간 자동 제외
@@ -718,3 +769,18 @@ export default function WorkerPayrollPage() {
     </main>
   );
 }
+
+const pdfThStyle: React.CSSProperties = {
+  border: "1px solid #ddd",
+  padding: "10px",
+  textAlign: "left",
+  fontSize: "14px",
+  backgroundColor: "#f5f5f5",
+};
+
+const pdfTdStyle: React.CSSProperties = {
+  border: "1px solid #ddd",
+  padding: "10px",
+  textAlign: "left",
+  fontSize: "14px",
+};
