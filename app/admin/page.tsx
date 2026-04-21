@@ -832,6 +832,16 @@ export default function AdminPage() {
           >
             급여 관리
           </button>
+          <button
+  onClick={() => router.push("/admin/weekly-allowance")}
+  style={{
+    ...tabButtonStyle,
+    backgroundColor: "#10b981",
+    color: "#ffffff",
+  }}
+>
+  주휴수당 관리
+</button>
         </div>
 
         {tab === "attendance" && (
