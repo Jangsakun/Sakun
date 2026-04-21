@@ -69,6 +69,13 @@ function getWeekStartMonday(dateStr?: string) {
   return result.toISOString().slice(0, 10);
 }
 
+const iosInputStyle = {
+  color: "#000",
+  backgroundColor: "#fff",
+  WebkitTextFillColor: "#000",
+  opacity: 1,
+} as const;
+
 export default function WorkerPayrollPage() {
   const statementRef = useRef<HTMLDivElement | null>(null);
 
@@ -305,6 +312,9 @@ export default function WorkerPayrollPage() {
                 onChange={(e) => setName(e.target.value)}
                 placeholder="이름 입력"
                 className="w-full rounded-xl border border-gray-300 px-4 py-3 text-black bg-white placeholder-gray-400 outline-none focus:border-black"
+                style={iosInputStyle}
+                autoCapitalize="off"
+                autoCorrect="off"
               />
             </div>
 
@@ -325,6 +335,10 @@ export default function WorkerPayrollPage() {
                 placeholder="예: 971108 또는 19971108"
                 maxLength={8}
                 className="w-full rounded-xl border border-gray-300 px-4 py-3 text-black bg-white placeholder-gray-400 outline-none focus:border-black"
+                style={iosInputStyle}
+                autoCapitalize="off"
+                autoCorrect="off"
+                inputMode="numeric"
               />
             </div>
 
@@ -341,6 +355,10 @@ export default function WorkerPayrollPage() {
                 }
                 placeholder="1234"
                 className="w-full rounded-xl border border-gray-300 px-4 py-3 text-black bg-white placeholder-gray-400 outline-none focus:border-black"
+                style={iosInputStyle}
+                autoCapitalize="off"
+                autoCorrect="off"
+                inputMode="numeric"
               />
             </div>
           </div>
@@ -413,6 +431,7 @@ export default function WorkerPayrollPage() {
                     value={singleDate}
                     onChange={(e) => setSingleDate(e.target.value)}
                     className="w-full rounded-xl border border-gray-300 px-4 py-3 text-black bg-white outline-none focus:border-black"
+                    style={iosInputStyle}
                   />
                 </div>
               ) : (
@@ -426,6 +445,7 @@ export default function WorkerPayrollPage() {
                       value={rangeStartDate}
                       onChange={(e) => setRangeStartDate(e.target.value)}
                       className="w-full rounded-xl border border-gray-300 px-4 py-3 text-black bg-white outline-none focus:border-black"
+                      style={iosInputStyle}
                     />
                   </div>
                   <div>
@@ -437,6 +457,7 @@ export default function WorkerPayrollPage() {
                       value={rangeEndDate}
                       onChange={(e) => setRangeEndDate(e.target.value)}
                       className="w-full rounded-xl border border-gray-300 px-4 py-3 text-black bg-white outline-none focus:border-black"
+                      style={iosInputStyle}
                     />
                   </div>
                 </div>
@@ -454,6 +475,7 @@ export default function WorkerPayrollPage() {
                 value={statementWeekStart}
                 onChange={(e) => setStatementWeekStart(e.target.value)}
                 className="w-full rounded-xl border border-gray-300 px-4 py-3 text-black bg-white outline-none focus:border-black"
+                style={iosInputStyle}
               />
             </div>
           )}
