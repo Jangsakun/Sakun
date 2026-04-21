@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { sendTelegramMessage } from "@/app/lib/telegram/sendMessage";
-import { detectIntent } from "@/app/lib/bot/detectIntent";
-import { executeIntent } from "@/app/lib/bot/executeIntent";
+import { sendTelegramMessage } from "@/lib/telegram/sendMessage";
+import { detectIntent } from "@/lib/bot/detectIntent";
+import { executeIntent } from "@/lib/bot/executeIntent";
 
 type TelegramWebhookBody = {
   message?: {
