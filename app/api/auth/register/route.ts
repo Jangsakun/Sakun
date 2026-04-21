@@ -25,7 +25,12 @@ function getBirthDateFromResidentNumber(residentNumber: string) {
 
   let century = "";
 
-  if (genderCode === "1" || genderCode === "2" || genderCode === "5" || genderCode === "6") {
+  if (
+    genderCode === "1" ||
+    genderCode === "2" ||
+    genderCode === "5" ||
+    genderCode === "6"
+  ) {
     century = "19";
   } else if (
     genderCode === "3" ||
@@ -64,6 +69,7 @@ export async function POST(request: Request) {
     const phoneDigits = trimmedPhone.replace(/[^0-9]/g, "");
     const residentDigits = trimmedResidentNumber.replace(/[^0-9]/g, "");
     const accountDigits = trimmedAccountNumber.replace(/[^0-9]/g, "");
+    const phoneLast4 = phoneDigits.slice(-4);
 
     if (
       !trimmedName ||
@@ -75,7 +81,18 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           success: false,
-          message: "이름, 휴대폰번호, 주민번호, 은행명, 계좌번호를 모두 입력해주세요.",
+          message:
+            "이름, 휴대폰번호, 주민번호, 은행명, 계좌번호를 모두 입력해주세요.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (phoneDigits.length < 4) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "휴대폰번호는 최소 4자리 이상이어야 합니다.",
         },
         { status: 400 }
       );
@@ -168,6 +185,7 @@ export async function POST(request: Request) {
         {
           name: trimmedName,
           phone: phoneDigits,
+          phone_last4: phoneLast4,
           resident_number: residentDigits,
           resident_number_masked: maskedResidentNumber,
           birth_date: birthDate,
@@ -204,6 +222,7 @@ export async function POST(request: Request) {
         id: data.id,
         name: data.name,
         phone: data.phone,
+        phoneLast4: data.phone_last4,
         residentNumberMasked: data.resident_number_masked,
         birthDate: data.birth_date,
         bankName: data.bank_name,
