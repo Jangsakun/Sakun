@@ -39,6 +39,11 @@ type PayrollResponse = {
     totalGrossPay: number;
     totalNetPay: number;
   };
+  weeklyAllowance?: {
+    status: string;
+    amount: number;
+    displayText: string;
+  };
   dailyRows?: PayrollRow[];
 };
 
@@ -248,6 +253,7 @@ export default function WorkerPayrollPage() {
               margin-top: 16px;
               font-size: 12px;
               color: #666;
+              line-height: 1.7;
             }
           </style>
         </head>
@@ -493,7 +499,7 @@ export default function WorkerPayrollPage() {
                 )}
               </div>
 
-              <div className="mt-5 grid gap-4 md:grid-cols-4">
+              <div className="mt-5 grid gap-4 md:grid-cols-5">
                 <div className="rounded-2xl bg-gray-50 p-4">
                   <p className="text-sm text-gray-500">총 근무시간</p>
                   <p className="mt-2 text-xl font-bold text-gray-900">
@@ -516,9 +522,17 @@ export default function WorkerPayrollPage() {
                 </div>
 
                 <div className="rounded-2xl bg-gray-50 p-4">
+                  <p className="text-sm text-gray-500">주휴수당</p>
+                  <p className="mt-2 text-xl font-bold text-gray-900">
+                    {result.weeklyAllowance?.displayText || "해당 없음"}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl bg-gray-50 p-4">
                   <p className="text-sm text-gray-500">근무 일수</p>
                   <p className="mt-2 text-xl font-bold text-gray-900">
-                    {result.dailyRows?.filter((row) => row.paidMinutes > 0).length || 0}일
+                    {result.dailyRows?.filter((row) => row.paidMinutes > 0).length || 0}
+                    일
                   </p>
                 </div>
               </div>
@@ -545,9 +559,9 @@ export default function WorkerPayrollPage() {
                     {(result.dailyRows || []).length === 0 ? (
                       <tr>
                         <td
-colSpan={8}
-  className="px-3 py-6 text-center text-sm text-gray-500"
->
+                          colSpan={8}
+                          className="px-3 py-6 text-center text-sm text-gray-500"
+                        >
                           조회된 출퇴근 기록이 없습니다.
                         </td>
                       </tr>
@@ -557,21 +571,19 @@ colSpan={8}
                           <td className="px-3 py-3 text-sm text-gray-900">{row.date}</td>
                           <td className="px-3 py-3 text-sm text-gray-900">{row.checkInText}</td>
                           <td className="px-3 py-3 text-sm text-gray-900">{row.checkOutText}</td>
-                         <td className="px-3 py-3 text-sm text-gray-900">
-  {row.workText}
-</td>
-<td className="px-3 py-3 text-sm text-gray-900">
-  {row.lunchDeducted ? (
-    <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
-      점심 1시간 제외
-    </span>
-  ) : (
-    "-"
-  )}
-</td>
-<td className="px-3 py-3 text-sm font-semibold text-gray-900">
-  {formatWon(row.grossPay)}
-</td>
+                          <td className="px-3 py-3 text-sm text-gray-900">{row.workText}</td>
+                          <td className="px-3 py-3 text-sm text-gray-900">
+                            {row.lunchDeducted ? (
+                              <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
+                                점심 1시간 제외
+                              </span>
+                            ) : (
+                              "-"
+                            )}
+                          </td>
+                          <td className="px-3 py-3 text-sm font-semibold text-gray-900">
+                            {formatWon(row.grossPay)}
+                          </td>
                           <td className="px-3 py-3 text-sm font-semibold text-blue-600">
                             {formatWon(row.netPay)}
                           </td>
@@ -592,6 +604,19 @@ colSpan={8}
                   </tbody>
                 </table>
               </div>
+
+              <div className="mt-5 rounded-2xl bg-gray-50 p-4 text-sm text-gray-600">
+                기준:
+                <br />
+                - 09:30 이전 출근은 09:30부터 급여 계산
+                <br />
+                - 12:30 이전 출근하고 13:30 이후 퇴근한 경우 점심 1시간 자동 제외
+                <br />
+                - 주휴수당은 관리자 설정 기준에 따라 금액 또는 해당 없음으로 표시
+                <br />
+                - 세후 급여는 3.3% 공제 기준
+                <br />- 오늘 출근 후 퇴근 전이면 현재 시각 기준으로 실시간 계산
+              </div>
             </div>
 
             <div className="mt-6 hidden">
@@ -603,6 +628,9 @@ colSpan={8}
                     조회 기간: {result.range.startDate} ~ {result.range.endDate}
                   </p>
                   <p>시급: {formatWon(result.employee.hourlyWage)}</p>
+                  <p>
+                    주휴수당: {result.weeklyAllowance?.displayText || "해당 없음"}
+                  </p>
                 </div>
 
                 <div className="summary-grid">
@@ -619,8 +647,8 @@ colSpan={8}
                     <p>{formatWon(result.summary.totalNetPay)}</p>
                   </div>
                   <div className="card">
-                    <h3>공제 기준</h3>
-                    <p>3.3% 공제</p>
+                    <h3>주휴수당</h3>
+                    <p>{result.weeklyAllowance?.displayText || "해당 없음"}</p>
                   </div>
                 </div>
 
@@ -631,6 +659,7 @@ colSpan={8}
                       <th>출근</th>
                       <th>퇴근</th>
                       <th>근무시간</th>
+                      <th>휴게 반영</th>
                       <th>지급 급여</th>
                       <th>세후 급여</th>
                     </tr>
@@ -642,6 +671,7 @@ colSpan={8}
                         <td>{row.checkInText}</td>
                         <td>{row.checkOutText}</td>
                         <td>{row.workText}</td>
+                        <td>{row.lunchDeducted ? "점심 1시간 제외" : "-"}</td>
                         <td>{formatWon(row.grossPay)}</td>
                         <td>{formatWon(row.netPay)}</td>
                       </tr>
@@ -649,14 +679,15 @@ colSpan={8}
                   </tbody>
                 </table>
 
-            👇 이걸로 교체
-<div className="foot">
-  09:30 이전 출근은 09:30부터 급여 계산
-  <br />
-  12:30 이전 출근하고 13:30 이후 퇴근한 경우 점심 1시간 자동 제외
-  <br />
-  세후 급여는 3.3% 공제 기준
-</div>
+                <div className="foot">
+                  09:30 이전 출근은 09:30부터 급여 계산
+                  <br />
+                  12:30 이전 출근하고 13:30 이후 퇴근한 경우 점심 1시간 자동 제외
+                  <br />
+                  주휴수당은 관리자 설정 기준에 따라 금액 또는 해당 없음으로 표시
+                  <br />
+                  세후 급여는 3.3% 공제 기준
+                </div>
               </div>
             </div>
           </>

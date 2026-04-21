@@ -15,15 +15,27 @@ type Employee = {
   birth_date: string;
   phone_last4: string;
   hourly_wage?: number | null;
+  weekly_allowance_status?: string | null;
+  weekly_allowance_reason?: string | null;
+  weekly_allowance_note?: string | null;
+};
+
+type DailyPayrollRow = {
+  date: string;
+  checkIn: string | null;
+  checkOut: string | null;
+  paidMinutes: number;
+  grossPay: number;
+  netPay: number;
+  isWorking: boolean;
+  lunchDeducted: boolean;
+  checkInRecordId: string | null;
+  checkOutRecordId: string | null;
 };
 
 function formatKSTDate(date: Date) {
   const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
   return kst.toISOString().slice(0, 10);
-}
-
-function getKSTNow() {
-  return new Date(Date.now() + 9 * 60 * 60 * 1000);
 }
 
 function getWeekStartMondayKST(inputDateStr?: string) {
@@ -32,7 +44,7 @@ function getWeekStartMondayKST(inputDateStr?: string) {
     : new Date();
 
   const kst = new Date(base.getTime() + 9 * 60 * 60 * 1000);
-  const day = kst.getUTCDay(); // 0=Sun, 1=Mon ...
+  const day = kst.getUTCDay();
   const diff = day === 0 ? -6 : 1 - day;
 
   const monday = new Date(kst);
@@ -103,7 +115,26 @@ function minutesToHourString(totalMinutes: number) {
   return `${hours}시간 ${minutes}분`;
 }
 
-function buildDailyPayroll(records: AttendanceRecord[], hourlyWage: number) {
+function normalizeBirthDateForCompare(value: string) {
+  const onlyNumber = value.replace(/[^0-9]/g, "");
+
+  if (onlyNumber.length === 8) {
+    return onlyNumber.slice(2);
+  }
+
+  return onlyNumber;
+}
+
+function buildDailyPayroll(
+  records: AttendanceRecord[],
+  hourlyWage: number
+): {
+  dailyRows: DailyPayrollRow[];
+  totalMinutes: number;
+  totalGrossPay: number;
+  totalNetPay: number;
+  totalWorkText: string;
+} {
   const grouped: Record<
     string,
     {
@@ -131,7 +162,7 @@ function buildDailyPayroll(records: AttendanceRecord[], hourlyWage: number) {
 
   const todayKST = formatKSTDate(new Date());
 
-  const dailyRows = Object.entries(grouped)
+  const dailyRows: DailyPayrollRow[] = Object.entries(grouped)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, value]) => {
       const sortedCheckIns = value.checkIns.sort(
@@ -158,6 +189,7 @@ function buildDailyPayroll(records: AttendanceRecord[], hourlyWage: number) {
           grossPay: 0,
           netPay: 0,
           isWorking: false,
+          lunchDeducted: false,
           checkInRecordId: null,
           checkOutRecordId: null,
         };
@@ -182,45 +214,44 @@ function buildDailyPayroll(records: AttendanceRecord[], hourlyWage: number) {
         isWorking = true;
       }
 
-     let paidMinutes = 0;
-let lunchDeducted = false;
+      let paidMinutes = 0;
+      let lunchDeducted = false;
 
-if (paidEnd && paidEnd.getTime() > paidStart.getTime()) {
-  paidMinutes = Math.floor(
-    (paidEnd.getTime() - paidStart.getTime()) / (1000 * 60)
-  );
-}
+      if (paidEnd && paidEnd.getTime() > paidStart.getTime()) {
+        paidMinutes = Math.floor(
+          (paidEnd.getTime() - paidStart.getTime()) / (1000 * 60)
+        );
+      }
 
-// 점심시간(12:30~13:30) 전체 포함한 경우만 60분 차감
-if (paidEnd && paidMinutes > 0) {
-  const lunchStart = new Date(`${date}T12:30:00+09:00`);
-  const lunchEnd = new Date(`${date}T13:30:00+09:00`);
+      if (paidEnd && paidMinutes > 0) {
+        const lunchStart = new Date(`${date}T12:30:00+09:00`);
+        const lunchEnd = new Date(`${date}T13:30:00+09:00`);
 
-  const includesFullLunch =
-    paidStart.getTime() <= lunchStart.getTime() &&
-    paidEnd.getTime() >= lunchEnd.getTime();
+        const includesFullLunch =
+          paidStart.getTime() <= lunchStart.getTime() &&
+          paidEnd.getTime() >= lunchEnd.getTime();
 
-  if (includesFullLunch) {
-    paidMinutes = Math.max(0, paidMinutes - 60);
-    lunchDeducted = true;
-  }
-}
+        if (includesFullLunch) {
+          paidMinutes = Math.max(0, paidMinutes - 60);
+          lunchDeducted = true;
+        }
+      }
 
-const grossPay = roundToWon((paidMinutes / 60) * hourlyWage);
-const netPay = roundToWon(grossPay * 0.967);
+      const grossPay = roundToWon((paidMinutes / 60) * hourlyWage);
+      const netPay = roundToWon(grossPay * 0.967);
 
       return {
-  date,
-  checkIn: firstCheckIn ? firstCheckIn.checked_at : null,
-  checkOut: lastCheckOut ? lastCheckOut.checked_at : null,
-  paidMinutes,
-  grossPay,
-  netPay,
-  isWorking,
-  lunchDeducted,
-  checkInRecordId: firstCheckIn?.id || null,
-  checkOutRecordId: lastCheckOut?.id || null,
-};
+        date,
+        checkIn: firstCheckIn.checked_at,
+        checkOut: lastCheckOut ? lastCheckOut.checked_at : null,
+        paidMinutes,
+        grossPay,
+        netPay,
+        isWorking,
+        lunchDeducted,
+        checkInRecordId: firstCheckIn.id || null,
+        checkOutRecordId: lastCheckOut?.id || null,
+      };
     });
 
   const totalMinutes = dailyRows.reduce((sum, row) => sum + row.paidMinutes, 0);
@@ -276,25 +307,17 @@ export async function POST(request: Request) {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-   function normalizeBirthDateForCompare(value: string) {
-  const onlyNumber = value.replace(/[^0-9]/g, "");
+    const normalizedBirthDate = normalizeBirthDateForCompare(birthDate);
 
-  if (onlyNumber.length === 8) {
-    return onlyNumber.slice(2); // 19971108 -> 971108
-  }
-
-  return onlyNumber;
-}
-
-const normalizedBirthDate = normalizeBirthDateForCompare(birthDate);
-
-const { data: employee, error: employeeError } = await supabase
-  .from("employees")
-  .select("id, name, birth_date, phone_last4, hourly_wage")
-  .eq("name", name)
-  .eq("birth_date", normalizedBirthDate)
-  .eq("phone_last4", phoneLast4)
-  .maybeSingle<Employee>();
+    const { data: employee, error: employeeError } = await supabase
+      .from("employees")
+      .select(
+        "id, name, birth_date, phone_last4, hourly_wage, weekly_allowance_status, weekly_allowance_reason, weekly_allowance_note"
+      )
+      .eq("name", String(name).trim())
+      .eq("birth_date", normalizedBirthDate)
+      .eq("phone_last4", String(phoneLast4).trim())
+      .maybeSingle<Employee>();
 
     if (employeeError) {
       return NextResponse.json(
@@ -379,6 +402,23 @@ const { data: employee, error: employeeError } = await supabase
 
     const payroll = buildDailyPayroll(records || [], hourlyWage);
 
+    const weeklyAllowanceStatus =
+      employee.weekly_allowance_status || "검토필요";
+
+    let weeklyAllowanceAmount = 0;
+    let weeklyAllowanceDisplayText = "해당 없음";
+
+    if (weeklyAllowanceStatus === "대상") {
+      weeklyAllowanceAmount = 0;
+      weeklyAllowanceDisplayText =
+        weeklyAllowanceAmount > 0
+          ? `${weeklyAllowanceAmount.toLocaleString("ko-KR")}원`
+          : "해당 없음";
+    } else {
+      weeklyAllowanceAmount = 0;
+      weeklyAllowanceDisplayText = "해당 없음";
+    }
+
     const response = {
       success: true,
       employee: {
@@ -398,13 +438,18 @@ const { data: employee, error: employeeError } = await supabase
         totalGrossPay: payroll.totalGrossPay,
         totalNetPay: payroll.totalNetPay,
       },
-  dailyRows: payroll.dailyRows.map((row) => ({
-  ...row,
-  checkInText: row.checkIn ? getKSTTimeString(row.checkIn) : "-",
-  checkOutText: row.checkOut ? getKSTTimeString(row.checkOut) : "-",
-  workText: minutesToHourString(row.paidMinutes),
-  lunchText: row.lunchDeducted ? "점심 1시간 제외" : "-",
-})),
+      weeklyAllowance: {
+        status: weeklyAllowanceStatus,
+        amount: weeklyAllowanceAmount,
+        displayText: weeklyAllowanceDisplayText,
+      },
+      dailyRows: payroll.dailyRows.map((row) => ({
+        ...row,
+        checkInText: row.checkIn ? getKSTTimeString(row.checkIn) : "-",
+        checkOutText: row.checkOut ? getKSTTimeString(row.checkOut) : "-",
+        workText: minutesToHourString(row.paidMinutes),
+        lunchText: row.lunchDeducted ? "점심 1시간 제외" : "-",
+      })),
     };
 
     return NextResponse.json(response);
