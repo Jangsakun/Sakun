@@ -76,13 +76,15 @@ export async function POST(request: Request) {
     // 3) 없으면 신규 등록
     const { data, error } = await supabase
       .from("employees")
-      .insert([
-        {
-          name,
-          birth_date: birthDate,
-          phone_last4: phoneLast4,
-        },
-      ])
+     .insert([
+  {
+    name,
+    birth_date: birthDate,
+    phone_last4: phoneLast4,
+    hourly_wage: 10320,
+    weekly_allowance_status: "비대상",
+  },
+])
       .select()
       .single();
 
