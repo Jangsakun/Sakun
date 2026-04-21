@@ -304,7 +304,7 @@ export default function WorkerPayrollPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="이름 입력"
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-black"
+                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-black bg-white placeholder-gray-400 outline-none focus:border-black"
               />
             </div>
 
@@ -324,7 +324,7 @@ export default function WorkerPayrollPage() {
                 }}
                 placeholder="예: 971108 또는 19971108"
                 maxLength={8}
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-black"
+                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-black bg-white placeholder-gray-400 outline-none focus:border-black"
               />
             </div>
 
@@ -340,7 +340,7 @@ export default function WorkerPayrollPage() {
                   setPhoneLast4(e.target.value.replace(/[^0-9]/g, ""))
                 }
                 placeholder="1234"
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-black"
+                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-black bg-white placeholder-gray-400 outline-none focus:border-black"
               />
             </div>
           </div>
@@ -412,7 +412,7 @@ export default function WorkerPayrollPage() {
                     type="date"
                     value={singleDate}
                     onChange={(e) => setSingleDate(e.target.value)}
-                    className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-black"
+                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-black bg-white outline-none focus:border-black"
                   />
                 </div>
               ) : (
@@ -425,7 +425,7 @@ export default function WorkerPayrollPage() {
                       type="date"
                       value={rangeStartDate}
                       onChange={(e) => setRangeStartDate(e.target.value)}
-                      className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-black"
+                      className="w-full rounded-xl border border-gray-300 px-4 py-3 text-black bg-white outline-none focus:border-black"
                     />
                   </div>
                   <div>
@@ -436,7 +436,7 @@ export default function WorkerPayrollPage() {
                       type="date"
                       value={rangeEndDate}
                       onChange={(e) => setRangeEndDate(e.target.value)}
-                      className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-black"
+                      className="w-full rounded-xl border border-gray-300 px-4 py-3 text-black bg-white outline-none focus:border-black"
                     />
                   </div>
                 </div>
@@ -453,7 +453,7 @@ export default function WorkerPayrollPage() {
                 type="date"
                 value={statementWeekStart}
                 onChange={(e) => setStatementWeekStart(e.target.value)}
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-black"
+                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-black bg-white outline-none focus:border-black"
               />
             </div>
           )}
