@@ -402,22 +402,35 @@ export async function POST(request: Request) {
 
     const payroll = buildDailyPayroll(records || [], hourlyWage);
 
-    const weeklyAllowanceStatus =
-      employee.weekly_allowance_status || "검토필요";
+ const weeklyAllowanceStatus =
+  employee.weekly_allowance_status || "검토필요";
 
-    let weeklyAllowanceAmount = 0;
-    let weeklyAllowanceDisplayText = "해당 없음";
+let weeklyAllowanceAmount = 0;
+let weeklyAllowanceDisplayText = "해당 없음";
 
-    if (weeklyAllowanceStatus === "대상") {
-      weeklyAllowanceAmount = 0;
-      weeklyAllowanceDisplayText =
-        weeklyAllowanceAmount > 0
-          ? `${weeklyAllowanceAmount.toLocaleString("ko-KR")}원`
-          : "해당 없음";
-    } else {
-      weeklyAllowanceAmount = 0;
-      weeklyAllowanceDisplayText = "해당 없음";
-    }
+// 👉 주휴수당 계산 (예: 하루 평균 근무시간 기준)
+if (weeklyAllowanceStatus === "대상") {
+  const totalMinutes = payroll.totalMinutes;
+
+  const totalHours = totalMinutes / 60;
+
+  // 👉 기준: 주 15시간 이상일 때만 (한국 기준)
+  if (totalHours >= 15) {
+    const dailyAvgHours = totalHours / 5; // 주5일 기준
+    weeklyAllowanceAmount = Math.round(dailyAvgHours * hourlyWage);
+  } else {
+    weeklyAllowanceAmount = 0;
+  }
+
+  weeklyAllowanceDisplayText =
+    weeklyAllowanceAmount > 0
+      ? `${weeklyAllowanceAmount.toLocaleString("ko-KR")}원`
+      : "해당 없음";
+} else {
+  // 👉 비대상 / 검토필요
+  weeklyAllowanceAmount = 0;
+  weeklyAllowanceDisplayText = "해당 없음";
+}
 
     const response = {
       success: true,

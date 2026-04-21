@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Employee = {
   id: string;
@@ -18,6 +18,7 @@ export default function AdminWeeklyAllowancePage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
 
   const fetchEmployees = async () => {
     setLoading(true);
@@ -43,6 +44,24 @@ export default function AdminWeeklyAllowancePage() {
   useEffect(() => {
     fetchEmployees();
   }, []);
+
+  const filteredEmployees = useMemo(() => {
+    const keyword = searchTerm.trim().toLowerCase();
+
+    if (!keyword) return employees;
+
+    return employees.filter((employee) => {
+      const name = String(employee.name || "").toLowerCase();
+      const birthDate = String(employee.birth_date || "").toLowerCase();
+      const phoneLast4 = String(employee.phone_last4 || "").toLowerCase();
+
+      return (
+        name.includes(keyword) ||
+        birthDate.includes(keyword) ||
+        phoneLast4.includes(keyword)
+      );
+    });
+  }, [employees, searchTerm]);
 
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-6">
@@ -74,6 +93,16 @@ export default function AdminWeeklyAllowancePage() {
               </button>
             </div>
           </div>
+
+          <div className="mt-4">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="이름 / 생년월일 / 전화번호 뒤 4자리 검색"
+              className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
+            />
+          </div>
         </div>
 
         {message && (
@@ -88,14 +117,20 @@ export default function AdminWeeklyAllowancePage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {employees.map((employee) => (
-              <EmployeeAllowanceCard
-                key={employee.id}
-                employee={employee}
-                onSaved={fetchEmployees}
-                setParentMessage={setMessage}
-              />
-            ))}
+            {filteredEmployees.length === 0 ? (
+              <div className="rounded-2xl bg-white p-10 text-center text-gray-500 shadow-sm">
+                검색 결과가 없습니다.
+              </div>
+            ) : (
+              filteredEmployees.map((employee) => (
+                <EmployeeAllowanceCard
+                  key={employee.id}
+                  employee={employee}
+                  onSaved={fetchEmployees}
+                  setParentMessage={setMessage}
+                />
+              ))
+            )}
           </div>
         )}
       </div>
