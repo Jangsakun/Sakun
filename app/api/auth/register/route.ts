@@ -58,13 +58,23 @@ function getBirthDateFromResidentNumber(residentNumber: string) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, phone, residentNumber, bankName, accountNumber } = body;
+    const {
+      name,
+      phone,
+      residentNumber,
+      bankName,
+      accountNumber,
+      reconnectCode,
+    } = body;
 
     const trimmedName = String(name || "").trim();
     const trimmedPhone = String(phone || "").trim();
     const trimmedResidentNumber = String(residentNumber || "").trim();
     const trimmedBankName = String(bankName || "").trim();
     const trimmedAccountNumber = String(accountNumber || "").trim();
+    const trimmedReconnectCode = String(reconnectCode || "")
+      .trim()
+      .toUpperCase();
 
     const phoneDigits = trimmedPhone.replace(/[^0-9]/g, "");
     const residentDigits = trimmedResidentNumber.replace(/[^0-9]/g, "");
@@ -141,7 +151,18 @@ export async function POST(request: Request) {
 
     const { data: existingEmployee, error: findError } = await supabase
       .from("employees")
-      .select("id, name, phone, resident_number, resident_number_masked")
+      .select(
+        `
+        id,
+        name,
+        phone,
+        resident_number,
+        resident_number_masked,
+        reconnect_code,
+        reconnect_expires_at,
+        is_active
+        `
+      )
       .eq("resident_number", residentDigits)
       .maybeSingle();
 
@@ -161,23 +182,141 @@ export async function POST(request: Request) {
       );
     }
 
+    const maskedResidentNumber = maskResidentNumber(residentDigits);
+
     if (existingEmployee) {
+      if (existingEmployee.is_active === false) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "비활성화된 직원은 등록할 수 없습니다.",
+          },
+          { status: 403 }
+        );
+      }
+
+      if (!trimmedReconnectCode) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "이미 등록된 회원입니다.",
+            employee: {
+              id: existingEmployee.id,
+              name: existingEmployee.name,
+              phone: existingEmployee.phone,
+              residentNumberMasked: existingEmployee.resident_number_masked,
+            },
+          },
+          { status: 409 }
+        );
+      }
+
+      if (!existingEmployee.reconnect_code) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "발급된 재연결 코드가 없습니다. 관리자에게 요청해주세요.",
+          },
+          { status: 400 }
+        );
+      }
+
+      if (existingEmployee.reconnect_code !== trimmedReconnectCode) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "재연결 코드가 일치하지 않습니다.",
+          },
+          { status: 400 }
+        );
+      }
+
+      if (!existingEmployee.reconnect_expires_at) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "재연결 코드 만료시간이 없습니다. 다시 발급해주세요.",
+          },
+          { status: 400 }
+        );
+      }
+
+      const expiresAtTime = new Date(
+        existingEmployee.reconnect_expires_at
+      ).getTime();
+
+      if (Number.isNaN(expiresAtTime) || expiresAtTime < Date.now()) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "재연결 코드가 만료되었습니다. 관리자에게 다시 요청해주세요.",
+          },
+          { status: 400 }
+        );
+      }
+
+      const { data: updatedEmployee, error: updateError } = await supabase
+        .from("employees")
+        .update({
+          name: trimmedName,
+          phone: phoneDigits,
+          phone_last4: phoneLast4,
+          resident_number: residentDigits,
+          resident_number_masked: maskedResidentNumber,
+          birth_date: birthDate,
+          bank_name: trimmedBankName,
+          account_number: accountDigits,
+          reconnect_code: null,
+          reconnect_expires_at: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existingEmployee.id)
+        .select()
+        .single();
+
+      if (updateError) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "재연결 처리 실패",
+            debug: {
+              message: updateError.message,
+              details: updateError.details,
+              hint: updateError.hint,
+              code: updateError.code,
+            },
+          },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: "기기 재연결이 완료되었습니다.",
+        employee: {
+          id: updatedEmployee.id,
+          name: updatedEmployee.name,
+          phone: updatedEmployee.phone,
+          phoneLast4: updatedEmployee.phone_last4,
+          residentNumberMasked: updatedEmployee.resident_number_masked,
+          birthDate: updatedEmployee.birth_date,
+          bankName: updatedEmployee.bank_name,
+          accountNumber: updatedEmployee.account_number,
+        },
+        reconnected: true,
+      });
+    }
+
+    if (trimmedReconnectCode) {
       return NextResponse.json(
         {
           success: false,
-          message: "이미 등록된 회원입니다.",
-          employee: {
-            id: existingEmployee.id,
-            name: existingEmployee.name,
-            phone: existingEmployee.phone,
-            residentNumberMasked: existingEmployee.resident_number_masked,
-          },
+          message:
+            "재연결 대상 직원을 찾을 수 없습니다. 주민번호 또는 직원 정보를 다시 확인해주세요.",
         },
-        { status: 409 }
+        { status: 404 }
       );
     }
-
-    const maskedResidentNumber = maskResidentNumber(residentDigits);
 
     const { data, error } = await supabase
       .from("employees")
@@ -228,6 +367,7 @@ export async function POST(request: Request) {
         bankName: data.bank_name,
         accountNumber: data.account_number,
       },
+      reconnected: false,
     });
   } catch (error) {
     return NextResponse.json(

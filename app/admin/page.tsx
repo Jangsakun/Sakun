@@ -106,6 +106,18 @@ type ExpiringContractRow = Employee & {
   daysLeft: number;
 };
 
+type ReconnectIssueResponse = {
+  success: boolean;
+  reconnectCode?: string;
+  expiresAt?: string;
+  message?: string;
+};
+
+type ReconnectCodeInfo = {
+  code: string;
+  expiresAt: string;
+};
+
 export default function AdminPage() {
   const router = useRouter();
 
@@ -161,6 +173,13 @@ export default function AdminPage() {
     Record<number, string>
   >({});
   const [contractSavingId, setContractSavingId] = useState<number | null>(null);
+
+  const [reconnectLoadingId, setReconnectLoadingId] = useState<number | null>(
+    null
+  );
+  const [reconnectInfoMap, setReconnectInfoMap] = useState<
+    Record<number, ReconnectCodeInfo>
+  >({});
 
   const handleLogout = async () => {
     await fetch("/api/admin/logout", {
@@ -654,6 +673,68 @@ export default function AdminPage() {
     }
   };
 
+  const issueReconnectCode = async (employee: Employee) => {
+    const ok = window.confirm(
+      `${employee.name} 직원의 기기 재연결 코드를 발급할까요?\n\n발급 후 새 휴대폰에서 재연결 코드로 다시 등록할 수 있습니다.`
+    );
+
+    if (!ok) return;
+
+    try {
+      setReconnectLoadingId(employee.id);
+
+      const response = await fetch("/api/admin/employees/reconnect", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          employeeId: employee.id,
+        }),
+      });
+
+      const data: ReconnectIssueResponse = await response.json();
+
+      if (!data.success || !data.reconnectCode || !data.expiresAt) {
+        alert(data.message || "재연결 코드 발급 실패");
+        return;
+      }
+
+      setReconnectInfoMap((prev) => ({
+        ...prev,
+        [employee.id]: {
+          code: data.reconnectCode!,
+          expiresAt: data.expiresAt!,
+        },
+      }));
+
+      alert(
+        `${employee.name} 직원 재연결 코드가 발급되었습니다.\n코드: ${data.reconnectCode}`
+      );
+    } catch (error) {
+      console.error(error);
+      alert("재연결 코드 발급 중 오류 발생");
+    } finally {
+      setReconnectLoadingId(null);
+    }
+  };
+
+  const copyReconnectCode = async (employeeId: number) => {
+    const reconnectInfo = reconnectInfoMap[employeeId];
+    if (!reconnectInfo?.code) {
+      alert("복사할 재연결 코드가 없습니다.");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(reconnectInfo.code);
+      alert("재연결 코드가 복사되었습니다.");
+    } catch (error) {
+      console.error(error);
+      alert("코드 복사에 실패했습니다.");
+    }
+  };
+
   const startAttendanceEdit = (row: GroupedAttendanceRow) => {
     setEditingAttendanceKey(row.key);
     setEditCheckInTime(toDateTimeLocalValue(row.checkIn));
@@ -864,20 +945,20 @@ export default function AdminPage() {
     const rows = payrollRows.map((row) => {
       const employee = employeeMap.get(Number(row.employeeId));
 
-     return [
-  row.employeeName,
-  employee?.resident_number || "-",
-  employee?.bank_name || "-",
-  employee?.account_number || "-",
-  row.weekStart,
-  row.weekEnd,
-  row.totalHours.toFixed(2),
-  String(row.hourlyWage),
-  String(Math.round(row.basePay)),
-  String(Math.round(row.weeklyAllowance)),
-  String(Math.round(row.grossPay)),
-  String(Math.round(row.netPay)),
-];
+      return [
+        row.employeeName,
+        employee?.resident_number || "-",
+        employee?.bank_name || "-",
+        employee?.account_number || "-",
+        row.weekStart,
+        row.weekEnd,
+        row.totalHours.toFixed(2),
+        String(row.hourlyWage),
+        String(Math.round(row.basePay)),
+        String(Math.round(row.weeklyAllowance)),
+        String(Math.round(row.grossPay)),
+        String(Math.round(row.netPay)),
+      ];
     });
 
     const csvContent = [headers, ...rows]
@@ -1242,9 +1323,14 @@ export default function AdminPage() {
               <div>
                 <h2 style={sectionTitleStyle}>직원 관리</h2>
                 <p style={sectionDescriptionStyle}>
-                  직원 검색, 정보 수정, 활성/비활성 상태 변경, 시급 수정이 가능합니다.
+                  직원 검색, 정보 수정, 활성/비활성 상태 변경, 시급 수정, 기기 재연결 코드 발급이 가능합니다.
                 </p>
               </div>
+            </div>
+
+            <div style={reconnectGuideBoxStyle}>
+              휴대폰을 바꾼 직원이 있으면 <strong>기기 재연결</strong> 버튼을 눌러 코드를 발급한 뒤,
+              새 휴대폰에서 회원등록 화면에 재연결 코드를 입력하게 하면 됩니다.
             </div>
 
             <div style={filterRowStyle}>
@@ -1274,7 +1360,7 @@ export default function AdminPage() {
               <div style={emptyBoxStyle}>직원이 없습니다.</div>
             ) : (
               <div style={tableScrollStyle}>
-                <table style={tableStyle}>
+                <table style={employeeTableStyle}>
                   <thead>
                     <tr>
                       <th style={thStyle}>이름</th>
@@ -1284,12 +1370,14 @@ export default function AdminPage() {
                       <th style={thStyle}>계좌번호</th>
                       <th style={thStyle}>시급</th>
                       <th style={thStyle}>상태</th>
+                      <th style={thStyle}>기기 재연결</th>
                       <th style={thStyle}>관리</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredEmployees.map((employee) => {
                       const isEditing = editingEmployeeId === employee.id;
+                      const reconnectInfo = reconnectInfoMap[employee.id];
 
                       return (
                         <tr key={employee.id}>
@@ -1327,7 +1415,9 @@ export default function AdminPage() {
                                 value={editResidentNumber}
                                 onChange={(e) =>
                                   setEditResidentNumber(
-                                    e.target.value.replace(/[^0-9]/g, "").slice(0, 13)
+                                    e.target.value
+                                      .replace(/[^0-9]/g, "")
+                                      .slice(0, 13)
                                   )
                                 }
                                 style={smallInputStyle}
@@ -1400,6 +1490,41 @@ export default function AdminPage() {
                             >
                               {employee.is_active ? "활성" : "비활성"}
                             </span>
+                          </td>
+
+                          <td style={tdStyle}>
+                            <div style={reconnectCellStyle}>
+                              <button
+                                onClick={() => issueReconnectCode(employee)}
+                                style={reconnectButtonStyle}
+                                disabled={reconnectLoadingId === employee.id}
+                              >
+                                {reconnectLoadingId === employee.id
+                                  ? "발급중..."
+                                  : "기기 재연결"}
+                              </button>
+
+                              {reconnectInfo ? (
+                                <div style={reconnectInfoBoxStyle}>
+                                  <div style={reconnectCodeTextStyle}>
+                                    코드: <strong>{reconnectInfo.code}</strong>
+                                  </div>
+                                  <div style={reconnectExpireTextStyle}>
+                                    만료: {formatDateTime(reconnectInfo.expiresAt)}
+                                  </div>
+                                  <button
+                                    onClick={() => copyReconnectCode(employee.id)}
+                                    style={copyButtonStyle}
+                                  >
+                                    코드 복사
+                                  </button>
+                                </div>
+                              ) : (
+                                <div style={reconnectEmptyTextStyle}>
+                                  아직 발급된 코드 없음
+                                </div>
+                              )}
+                            </div>
                           </td>
 
                           <td style={tdStyle}>
@@ -1869,6 +1994,17 @@ function formatDate(value: string) {
   return `${year}.${month}.${day}`;
 }
 
+function formatDateTime(value: string) {
+  return new Date(value).toLocaleString("ko-KR", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function formatWorkMinutes(minutes: number | null) {
   if (minutes === null || minutes < 0) return "-";
 
@@ -2015,6 +2151,17 @@ const warningBoxStyle: CSSProperties = {
   backgroundColor: "#fff7ed",
   color: "#9a3412",
   border: "1px solid #fed7aa",
+};
+
+const reconnectGuideBoxStyle: CSSProperties = {
+  marginBottom: "18px",
+  padding: "14px 16px",
+  borderRadius: "14px",
+  backgroundColor: "#eff6ff",
+  color: "#1d4ed8",
+  border: "1px solid #bfdbfe",
+  lineHeight: 1.6,
+  fontSize: "14px",
 };
 
 const tabWrapStyle: CSSProperties = {
@@ -2278,6 +2425,13 @@ const tableStyle: CSSProperties = {
   minWidth: "1300px",
 };
 
+const employeeTableStyle: CSSProperties = {
+  width: "100%",
+  borderCollapse: "separate",
+  borderSpacing: 0,
+  minWidth: "1650px",
+};
+
 const thStyle: CSSProperties = {
   textAlign: "left",
   padding: "14px 16px",
@@ -2313,6 +2467,59 @@ const actionWrapStyle: CSSProperties = {
   display: "flex",
   gap: "8px",
   flexWrap: "wrap",
+};
+
+const reconnectCellStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "8px",
+  minWidth: "190px",
+};
+
+const reconnectInfoBoxStyle: CSSProperties = {
+  padding: "10px 12px",
+  borderRadius: "12px",
+  border: "1px solid #dbeafe",
+  backgroundColor: "#eff6ff",
+};
+
+const reconnectCodeTextStyle: CSSProperties = {
+  fontSize: "14px",
+  color: "#1e3a8a",
+  marginBottom: "4px",
+  wordBreak: "break-all",
+};
+
+const reconnectExpireTextStyle: CSSProperties = {
+  fontSize: "12px",
+  color: "#475569",
+  marginBottom: "8px",
+};
+
+const reconnectEmptyTextStyle: CSSProperties = {
+  fontSize: "12px",
+  color: "#94a3b8",
+};
+
+const reconnectButtonStyle: CSSProperties = {
+  padding: "8px 12px",
+  border: "none",
+  borderRadius: "10px",
+  cursor: "pointer",
+  backgroundColor: "#2563eb",
+  color: "#ffffff",
+  fontWeight: 700,
+};
+
+const copyButtonStyle: CSSProperties = {
+  padding: "7px 10px",
+  border: "none",
+  borderRadius: "8px",
+  cursor: "pointer",
+  backgroundColor: "#dbeafe",
+  color: "#1d4ed8",
+  fontWeight: 700,
+  fontSize: "12px",
 };
 
 const primarySmallButtonStyle: CSSProperties = {
