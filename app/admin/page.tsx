@@ -18,6 +18,8 @@ type AdminRecord = {
     phone_last4: string;
     is_active?: boolean;
     hourly_wage?: number;
+    contract_start_date?: string | null;
+    contract_end_date?: string | null;
   } | null;
 };
 
@@ -35,6 +37,8 @@ type Employee = {
   is_active: boolean;
   created_at?: string;
   hourly_wage?: number;
+  contract_start_date?: string | null;
+  contract_end_date?: string | null;
 };
 
 type EmployeeListResponse = {
@@ -85,12 +89,19 @@ type PayrollResponse = {
   message?: string;
 };
 
+type ContractUpdateResponse = {
+  success: boolean;
+  message?: string;
+  contractStartDate?: string;
+  contractEndDate?: string;
+};
+
 export default function AdminPage() {
   const router = useRouter();
 
-  const [tab, setTab] = useState<"attendance" | "employees" | "payroll">(
-    "attendance"
-  );
+  const [tab, setTab] = useState<
+    "attendance" | "employees" | "payroll" | "contracts"
+  >("attendance");
 
   const [startDate, setStartDate] = useState(() => {
     const today = new Date();
@@ -130,6 +141,14 @@ export default function AdminPage() {
   const [editCheckInTime, setEditCheckInTime] = useState("");
   const [editCheckOutTime, setEditCheckOutTime] = useState("");
   const [attendanceSaving, setAttendanceSaving] = useState(false);
+
+  const [contractStartDateMap, setContractStartDateMap] = useState<
+    Record<number, string>
+  >({});
+  const [contractEndDateMap, setContractEndDateMap] = useState<
+    Record<number, string>
+  >({});
+  const [contractSavingId, setContractSavingId] = useState<number | null>(null);
 
   const handleLogout = async () => {
     await fetch("/api/admin/logout", {
@@ -185,10 +204,18 @@ export default function AdminPage() {
         setEmployeeMessage("");
 
         const initialWages: { [key: number]: number } = {};
+        const initialContractStartMap: Record<number, string> = {};
+        const initialContractEndMap: Record<number, string> = {};
+
         data.employees.forEach((emp) => {
           initialWages[emp.id] = emp.hourly_wage || 0;
+          initialContractStartMap[emp.id] = emp.contract_start_date || "";
+          initialContractEndMap[emp.id] = emp.contract_end_date || "";
         });
+
         setWages(initialWages);
+        setContractStartDateMap(initialContractStartMap);
+        setContractEndDateMap(initialContractEndMap);
       } else {
         setEmployees([]);
         setEmployeeMessage(data.message || "직원 목록 조회 실패");
@@ -251,7 +278,7 @@ export default function AdminPage() {
   }, [startDate, endDate, tab]);
 
   useEffect(() => {
-    if (tab === "employees") {
+    if (tab === "employees" || tab === "contracts") {
       fetchEmployees();
     }
   }, [tab]);
@@ -342,21 +369,21 @@ export default function AdminPage() {
         const diffMs = checkOutDate.getTime() - workStartMs;
 
         if (diffMs >= 0) {
-  let calculatedMinutes = Math.floor(diffMs / 1000 / 60);
+          let calculatedMinutes = Math.floor(diffMs / 1000 / 60);
 
-  const lunchStart = new Date(`${dateKey}T12:30:00+09:00`);
-  const lunchEnd = new Date(`${dateKey}T13:30:00+09:00`);
+          const lunchStart = new Date(`${dateKey}T12:30:00+09:00`);
+          const lunchEnd = new Date(`${dateKey}T13:30:00+09:00`);
 
-  const includesFullLunch =
-    workStartMs <= lunchStart.getTime() &&
-    checkOutDate.getTime() >= lunchEnd.getTime();
+          const includesFullLunch =
+            workStartMs <= lunchStart.getTime() &&
+            checkOutDate.getTime() >= lunchEnd.getTime();
 
-  if (includesFullLunch) {
-    calculatedMinutes = Math.max(0, calculatedMinutes - 60);
-  }
+          if (includesFullLunch) {
+            calculatedMinutes = Math.max(0, calculatedMinutes - 60);
+          }
 
-  workMinutes = calculatedMinutes;
-}
+          workMinutes = calculatedMinutes;
+        }
       }
 
       const employee = employeeMap.get(employeeId);
@@ -640,6 +667,63 @@ export default function AdminPage() {
     }
   };
 
+  const saveContract = async (employeeId: number) => {
+    const contractStartDate = contractStartDateMap[employeeId] || "";
+    const contractEndDate = contractEndDateMap[employeeId] || "";
+
+    if (!contractStartDate || !contractEndDate) {
+      alert("계약 시작일과 계약 종료일을 입력해주세요.");
+      return;
+    }
+
+    if (contractStartDate > contractEndDate) {
+      alert("계약 시작일은 계약 종료일보다 늦을 수 없습니다.");
+      return;
+    }
+
+    try {
+      setContractSavingId(employeeId);
+
+      const response = await fetch("/api/admin/contracts", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          employeeId,
+          contractStartDate,
+          contractEndDate,
+        }),
+      });
+
+      const data: ContractUpdateResponse = await response.json();
+
+      if (!data.success) {
+        alert(data.message || "근로계약 기간 저장 실패");
+        return;
+      }
+
+      setEmployees((prev) =>
+        prev.map((emp) =>
+          emp.id === employeeId
+            ? {
+                ...emp,
+                contract_start_date: contractStartDate,
+                contract_end_date: contractEndDate,
+              }
+            : emp
+        )
+      );
+
+      alert("근로계약 기간이 저장되었습니다.");
+    } catch (error) {
+      console.error(error);
+      alert("근로계약 기간 저장 중 오류 발생");
+    } finally {
+      setContractSavingId(null);
+    }
+  };
+
   const downloadAttendanceCsv = () => {
     if (groupedAttendanceRows.length === 0) {
       alert("다운로드할 출퇴근 기록이 없습니다.");
@@ -756,7 +840,7 @@ export default function AdminPage() {
             <p style={eyebrowStyle}>Admin Dashboard</p>
             <h1 style={titleStyle}>장사꾼 관리자 대시보드</h1>
             <p style={descriptionStyle}>
-              직원 상태와 출퇴근 기록, 급여를 한 화면에서 관리할 수 있습니다.
+              직원 상태와 출퇴근 기록, 급여, 근로계약 기간을 한 화면에서 관리할 수 있습니다.
             </p>
           </div>
 
@@ -765,7 +849,7 @@ export default function AdminPage() {
               onClick={() => {
                 if (tab === "attendance") {
                   fetchRecords();
-                } else if (tab === "employees") {
+                } else if (tab === "employees" || tab === "contracts") {
                   fetchEmployees();
                 } else {
                   fetchPayroll();
@@ -845,16 +929,28 @@ export default function AdminPage() {
           >
             급여 관리
           </button>
+
           <button
-  onClick={() => router.push("/admin/weekly-allowance")}
-  style={{
-    ...tabButtonStyle,
-    backgroundColor: "#10b981",
-    color: "#ffffff",
-  }}
->
-  주휴수당 관리
-</button>
+            onClick={() => setTab("contracts")}
+            style={{
+              ...tabButtonStyle,
+              backgroundColor: tab === "contracts" ? "#111827" : "#f3f4f6",
+              color: tab === "contracts" ? "#ffffff" : "#111827",
+            }}
+          >
+            근로계약서
+          </button>
+
+          <button
+            onClick={() => router.push("/admin/weekly-allowance")}
+            style={{
+              ...tabButtonStyle,
+              backgroundColor: "#10b981",
+              color: "#ffffff",
+            }}
+          >
+            주휴수당 관리
+          </button>
         </div>
 
         {tab === "attendance" && (
@@ -863,8 +959,7 @@ export default function AdminPage() {
               <div>
                 <h2 style={sectionTitleStyle}>출퇴근 기록</h2>
                 <p style={sectionDescriptionStyle}>
-                  근무시간에 비례한 세전/세후 급여를 함께 확인하고 CSV로
-                  다운로드할 수 있습니다.
+                  근무시간에 비례한 세전/세후 급여를 함께 확인하고 CSV로 다운로드할 수 있습니다.
                 </p>
               </div>
 
@@ -1411,6 +1506,107 @@ export default function AdminPage() {
             )}
           </section>
         )}
+
+        {tab === "contracts" && (
+          <section style={cardStyle}>
+            <div style={sectionHeaderStyle}>
+              <div>
+                <h2 style={sectionTitleStyle}>근로계약서 관리</h2>
+                <p style={sectionDescriptionStyle}>
+                  직원별 계약 시작일과 계약 종료일을 직접 입력하고 저장할 수 있습니다.
+                </p>
+              </div>
+            </div>
+
+            <div style={filterRowStyle}>
+              <div style={fieldGroupStyle}>
+                <label style={labelStyle}>직원 이름 검색</label>
+                <input
+                  type="text"
+                  placeholder="직원 이름 입력"
+                  value={employeeSearch}
+                  onChange={(e) => setEmployeeSearch(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+
+              <div style={fieldButtonGroupStyle}>
+                <button onClick={fetchEmployees} style={primaryButtonStyle}>
+                  계약정보 새로고침
+                </button>
+              </div>
+            </div>
+
+            {employeeLoading ? (
+              <div style={emptyBoxStyle}>계약 정보를 불러오는 중입니다...</div>
+            ) : employeeMessage ? (
+              <div style={emptyBoxStyle}>{employeeMessage}</div>
+            ) : filteredEmployees.length === 0 ? (
+              <div style={emptyBoxStyle}>직원이 없습니다.</div>
+            ) : (
+              <div style={tableScrollStyle}>
+                <table style={tableStyle}>
+                  <thead>
+                    <tr>
+                      <th style={thStyle}>이름</th>
+                      <th style={thStyle}>생년월일</th>
+                      <th style={thStyle}>전화번호 끝 4자리</th>
+                      <th style={thStyle}>계약 시작일</th>
+                      <th style={thStyle}>계약 종료일</th>
+                      <th style={thStyle}>관리</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredEmployees.map((employee) => (
+                      <tr key={employee.id}>
+                        <td style={tdStyle}>
+                          <span style={nameTextStyle}>{employee.name}</span>
+                        </td>
+                        <td style={tdStyle}>{employee.birth_date}</td>
+                        <td style={tdStyle}>{employee.phone_last4}</td>
+                        <td style={tdStyle}>
+                          <input
+                            type="date"
+                            value={contractStartDateMap[employee.id] || ""}
+                            onChange={(e) =>
+                              setContractStartDateMap((prev) => ({
+                                ...prev,
+                                [employee.id]: e.target.value,
+                              }))
+                            }
+                            style={smallInputStyle}
+                          />
+                        </td>
+                        <td style={tdStyle}>
+                          <input
+                            type="date"
+                            value={contractEndDateMap[employee.id] || ""}
+                            onChange={(e) =>
+                              setContractEndDateMap((prev) => ({
+                                ...prev,
+                                [employee.id]: e.target.value,
+                              }))
+                            }
+                            style={smallInputStyle}
+                          />
+                        </td>
+                        <td style={tdStyle}>
+                          <button
+                            onClick={() => saveContract(employee.id)}
+                            style={primarySmallButtonStyle}
+                            disabled={contractSavingId === employee.id}
+                          >
+                            {contractSavingId === employee.id ? "저장중..." : "저장"}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )}
       </div>
     </main>
   );
@@ -1693,6 +1889,7 @@ const inputStyle: CSSProperties = {
   outline: "none",
   fontSize: "14px",
   backgroundColor: "#ffffff",
+  color: "#111827",
 };
 
 const smallInputStyle: CSSProperties = {
@@ -1703,6 +1900,8 @@ const smallInputStyle: CSSProperties = {
   border: "1px solid #d1d5db",
   outline: "none",
   fontSize: "14px",
+  backgroundColor: "#ffffff",
+  color: "#111827",
 };
 
 const dateTimeInputStyle: CSSProperties = {
@@ -1713,6 +1912,8 @@ const dateTimeInputStyle: CSSProperties = {
   border: "1px solid #d1d5db",
   outline: "none",
   fontSize: "14px",
+  backgroundColor: "#ffffff",
+  color: "#111827",
 };
 
 const wageWrapStyle: CSSProperties = {
@@ -1729,6 +1930,8 @@ const wageInputStyle: CSSProperties = {
   border: "1px solid #d1d5db",
   outline: "none",
   fontSize: "14px",
+  backgroundColor: "#ffffff",
+  color: "#111827",
 };
 
 const primaryButtonStyle: CSSProperties = {

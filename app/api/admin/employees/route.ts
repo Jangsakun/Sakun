@@ -18,7 +18,20 @@ export async function GET() {
     const { data, error } = await supabase
       .from("employees")
       .select(
-        "id, name, birth_date, phone_last4, hourly_wage, weekly_allowance_status, weekly_allowance_reason, weekly_allowance_note, created_at"
+        `
+        id,
+        name,
+        birth_date,
+        phone_last4,
+        is_active,
+        hourly_wage,
+        weekly_allowance_status,
+        weekly_allowance_reason,
+        weekly_allowance_note,
+        contract_start_date,
+        contract_end_date,
+        created_at
+        `
       )
       .order("created_at", { ascending: false });
 
