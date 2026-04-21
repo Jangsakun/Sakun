@@ -96,6 +96,10 @@ type ContractUpdateResponse = {
   contractEndDate?: string;
 };
 
+type ExpiringContractRow = Employee & {
+  daysLeft: number;
+};
+
 export default function AdminPage() {
   const router = useRouter();
 
@@ -295,6 +299,40 @@ export default function AdminPage() {
       map.set(employee.id, employee);
     });
     return map;
+  }, [employees]);
+
+  const expiringContracts = useMemo(() => {
+    const today = new Date();
+    const todayOnly = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate()
+    );
+
+    return employees
+      .map((employee) => {
+        if (!employee.contract_end_date) return null;
+
+        const endDate = new Date(`${employee.contract_end_date}T00:00:00`);
+        if (Number.isNaN(endDate.getTime())) return null;
+
+        const diffDays = Math.floor(
+          (endDate.getTime() - todayOnly.getTime()) / (1000 * 60 * 60 * 24)
+        );
+
+        if (diffDays < 0 || diffDays > 7) return null;
+
+        return {
+          ...employee,
+          daysLeft: diffDays,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => {
+        const aa = a as ExpiringContractRow;
+        const bb = b as ExpiringContractRow;
+        return aa.daysLeft - bb.daysLeft;
+      }) as ExpiringContractRow[];
   }, [employees]);
 
   const filteredRecords = useMemo(() => {
@@ -714,6 +752,16 @@ export default function AdminPage() {
             : emp
         )
       );
+
+      setContractStartDateMap((prev) => ({
+        ...prev,
+        [employeeId]: contractStartDate,
+      }));
+
+      setContractEndDateMap((prev) => ({
+        ...prev,
+        [employeeId]: contractEndDate,
+      }));
 
       alert("근로계약 기간이 저장되었습니다.");
     } catch (error) {
@@ -1508,104 +1556,192 @@ export default function AdminPage() {
         )}
 
         {tab === "contracts" && (
-          <section style={cardStyle}>
-            <div style={sectionHeaderStyle}>
-              <div>
-                <h2 style={sectionTitleStyle}>근로계약서 관리</h2>
-                <p style={sectionDescriptionStyle}>
-                  직원별 계약 시작일과 계약 종료일을 직접 입력하고 저장할 수 있습니다.
-                </p>
-              </div>
-            </div>
+          <>
+            <section style={contractAlertCardStyle}>
+              <div style={contractAlertHeaderStyle}>
+                <div>
+                  <div style={contractAlertTitleWrapStyle}>
+                    <span style={contractAlertIconStyle}>⚠️</span>
+                    <h2 style={contractAlertTitleStyle}>근로계약서 만료 임박</h2>
+                  </div>
+                  <p style={contractAlertDescriptionStyle}>
+                    근로계약서 만료까지 7일 이하로 남은 직원 목록입니다. 계약 갱신을 검토해주세요.
+                  </p>
+                </div>
 
-            <div style={filterRowStyle}>
-              <div style={fieldGroupStyle}>
-                <label style={labelStyle}>직원 이름 검색</label>
-                <input
-                  type="text"
-                  placeholder="직원 이름 입력"
-                  value={employeeSearch}
-                  onChange={(e) => setEmployeeSearch(e.target.value)}
-                  style={inputStyle}
-                />
-              </div>
-
-              <div style={fieldButtonGroupStyle}>
-                <button onClick={fetchEmployees} style={primaryButtonStyle}>
-                  계약정보 새로고침
+                <button
+                  onClick={() => setEmployeeSearch("")}
+                  style={contractAlertLinkButtonStyle}
+                >
+                  전체 근로계약서 보기
                 </button>
               </div>
-            </div>
 
-            {employeeLoading ? (
-              <div style={emptyBoxStyle}>계약 정보를 불러오는 중입니다...</div>
-            ) : employeeMessage ? (
-              <div style={emptyBoxStyle}>{employeeMessage}</div>
-            ) : filteredEmployees.length === 0 ? (
-              <div style={emptyBoxStyle}>직원이 없습니다.</div>
-            ) : (
-              <div style={tableScrollStyle}>
-                <table style={tableStyle}>
-                  <thead>
-                    <tr>
-                      <th style={thStyle}>이름</th>
-                      <th style={thStyle}>생년월일</th>
-                      <th style={thStyle}>전화번호 끝 4자리</th>
-                      <th style={thStyle}>계약 시작일</th>
-                      <th style={thStyle}>계약 종료일</th>
-                      <th style={thStyle}>관리</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredEmployees.map((employee) => (
-                      <tr key={employee.id}>
-                        <td style={tdStyle}>
-                          <span style={nameTextStyle}>{employee.name}</span>
-                        </td>
-                        <td style={tdStyle}>{employee.birth_date}</td>
-                        <td style={tdStyle}>{employee.phone_last4}</td>
-                        <td style={tdStyle}>
-                          <input
-                            type="date"
-                            value={contractStartDateMap[employee.id] || ""}
-                            onChange={(e) =>
-                              setContractStartDateMap((prev) => ({
-                                ...prev,
-                                [employee.id]: e.target.value,
-                              }))
-                            }
-                            style={smallInputStyle}
-                          />
-                        </td>
-                        <td style={tdStyle}>
-                          <input
-                            type="date"
-                            value={contractEndDateMap[employee.id] || ""}
-                            onChange={(e) =>
-                              setContractEndDateMap((prev) => ({
-                                ...prev,
-                                [employee.id]: e.target.value,
-                              }))
-                            }
-                            style={smallInputStyle}
-                          />
-                        </td>
-                        <td style={tdStyle}>
-                          <button
-                            onClick={() => saveContract(employee.id)}
-                            style={primarySmallButtonStyle}
-                            disabled={contractSavingId === employee.id}
-                          >
-                            {contractSavingId === employee.id ? "저장중..." : "저장"}
-                          </button>
-                        </td>
+              {employeeLoading ? (
+                <div style={emptyBoxStyle}>계약 정보를 불러오는 중입니다...</div>
+              ) : expiringContracts.length === 0 ? (
+                <div style={emptyBoxStyle}>
+                  현재 7일 이내 만료 예정인 근로계약서는 없습니다.
+                </div>
+              ) : (
+                <div style={tableScrollStyle}>
+                  <table style={contractAlertTableStyle}>
+                    <thead>
+                      <tr>
+                        <th style={thStyle}>이름</th>
+                        <th style={thStyle}>생년월일</th>
+                        <th style={thStyle}>전화번호 끝 4자리</th>
+                        <th style={thStyle}>계약 종료일</th>
+                        <th style={thStyle}>남은 기간</th>
+                        <th style={thStyle}>관리</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {expiringContracts.map((employee) => (
+                        <tr key={`expiring-${employee.id}`}>
+                          <td style={tdStyle}>
+                            <span style={nameTextStyle}>{employee.name}</span>
+                          </td>
+                          <td style={tdStyle}>{employee.birth_date}</td>
+                          <td style={tdStyle}>{employee.phone_last4}</td>
+                          <td style={tdStyle}>
+                            {employee.contract_end_date
+                              ? formatDate(employee.contract_end_date)
+                              : "-"}
+                          </td>
+                          <td style={tdStyle}>
+                            <span
+                              style={{
+                                ...badgeStyle,
+                                backgroundColor:
+                                  employee.daysLeft === 0 ? "#fee2e2" : "#ffedd5",
+                                color:
+                                  employee.daysLeft === 0 ? "#b91c1c" : "#c2410c",
+                                fontWeight: 800,
+                              }}
+                            >
+                              {employee.daysLeft === 0
+                                ? "D-Day"
+                                : `D-${employee.daysLeft}`}
+                            </span>
+                          </td>
+                          <td style={tdStyle}>
+                            <button
+                              onClick={() => {
+                                setEmployeeSearch(employee.name);
+                              }}
+                              style={primarySmallButtonStyle}
+                            >
+                              계약정보 보기
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+
+            <section style={cardStyle}>
+              <div style={sectionHeaderStyle}>
+                <div>
+                  <h2 style={sectionTitleStyle}>근로계약서 관리</h2>
+                  <p style={sectionDescriptionStyle}>
+                    직원별 계약 시작일과 계약 종료일을 직접 입력하고 저장할 수 있습니다.
+                  </p>
+                </div>
               </div>
-            )}
-          </section>
+
+              <div style={filterRowStyle}>
+                <div style={fieldGroupStyle}>
+                  <label style={labelStyle}>직원 이름 검색</label>
+                  <input
+                    type="text"
+                    placeholder="직원 이름 입력"
+                    value={employeeSearch}
+                    onChange={(e) => setEmployeeSearch(e.target.value)}
+                    style={inputStyle}
+                  />
+                </div>
+
+                <div style={fieldButtonGroupStyle}>
+                  <button onClick={fetchEmployees} style={primaryButtonStyle}>
+                    계약정보 새로고침
+                  </button>
+                </div>
+              </div>
+
+              {employeeLoading ? (
+                <div style={emptyBoxStyle}>계약 정보를 불러오는 중입니다...</div>
+              ) : employeeMessage ? (
+                <div style={emptyBoxStyle}>{employeeMessage}</div>
+              ) : filteredEmployees.length === 0 ? (
+                <div style={emptyBoxStyle}>직원이 없습니다.</div>
+              ) : (
+                <div style={tableScrollStyle}>
+                  <table style={tableStyle}>
+                    <thead>
+                      <tr>
+                        <th style={thStyle}>이름</th>
+                        <th style={thStyle}>생년월일</th>
+                        <th style={thStyle}>전화번호 끝 4자리</th>
+                        <th style={thStyle}>계약 시작일</th>
+                        <th style={thStyle}>계약 종료일</th>
+                        <th style={thStyle}>관리</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredEmployees.map((employee) => (
+                        <tr key={employee.id}>
+                          <td style={tdStyle}>
+                            <span style={nameTextStyle}>{employee.name}</span>
+                          </td>
+                          <td style={tdStyle}>{employee.birth_date}</td>
+                          <td style={tdStyle}>{employee.phone_last4}</td>
+                          <td style={tdStyle}>
+                            <input
+                              type="date"
+                              value={contractStartDateMap[employee.id] || ""}
+                              onChange={(e) =>
+                                setContractStartDateMap((prev) => ({
+                                  ...prev,
+                                  [employee.id]: e.target.value,
+                                }))
+                              }
+                              style={smallInputStyle}
+                            />
+                          </td>
+                          <td style={tdStyle}>
+                            <input
+                              type="date"
+                              value={contractEndDateMap[employee.id] || ""}
+                              onChange={(e) =>
+                                setContractEndDateMap((prev) => ({
+                                  ...prev,
+                                  [employee.id]: e.target.value,
+                                }))
+                              }
+                              style={smallInputStyle}
+                            />
+                          </td>
+                          <td style={tdStyle}>
+                            <button
+                              onClick={() => saveContract(employee.id)}
+                              style={primarySmallButtonStyle}
+                              disabled={contractSavingId === employee.id}
+                            >
+                              {contractSavingId === employee.id ? "저장중..." : "저장"}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          </>
         )}
       </div>
     </main>
@@ -1798,6 +1934,66 @@ const cardStyle: CSSProperties = {
   borderRadius: "20px",
   padding: "22px",
   boxShadow: "0 8px 24px rgba(15, 23, 42, 0.05)",
+};
+
+const contractAlertCardStyle: CSSProperties = {
+  backgroundColor: "#fffdf7",
+  border: "1px solid #f6c97a",
+  borderRadius: "20px",
+  padding: "22px",
+  boxShadow: "0 8px 24px rgba(15, 23, 42, 0.04)",
+  marginBottom: "20px",
+};
+
+const contractAlertHeaderStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: "12px",
+  flexWrap: "wrap",
+  marginBottom: "16px",
+};
+
+const contractAlertTitleWrapStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+};
+
+const contractAlertIconStyle: CSSProperties = {
+  fontSize: "28px",
+  lineHeight: 1,
+};
+
+const contractAlertTitleStyle: CSSProperties = {
+  margin: 0,
+  fontSize: "24px",
+  fontWeight: 800,
+  color: "#111827",
+};
+
+const contractAlertDescriptionStyle: CSSProperties = {
+  margin: "8px 0 0",
+  fontSize: "14px",
+  color: "#6b7280",
+};
+
+const contractAlertLinkButtonStyle: CSSProperties = {
+  padding: "10px 14px",
+  border: "none",
+  borderRadius: "12px",
+  cursor: "pointer",
+  backgroundColor: "transparent",
+  color: "#2563eb",
+  fontWeight: 700,
+  fontSize: "14px",
+};
+
+const contractAlertTableStyle: CSSProperties = {
+  width: "100%",
+  borderCollapse: "separate",
+  borderSpacing: 0,
+  minWidth: "1000px",
 };
 
 const sectionHeaderStyle: CSSProperties = {
