@@ -182,28 +182,45 @@ function buildDailyPayroll(records: AttendanceRecord[], hourlyWage: number) {
         isWorking = true;
       }
 
-      let paidMinutes = 0;
+     let paidMinutes = 0;
+let lunchDeducted = false;
 
-      if (paidEnd && paidEnd.getTime() > paidStart.getTime()) {
-        paidMinutes = Math.floor(
-          (paidEnd.getTime() - paidStart.getTime()) / (1000 * 60)
-        );
-      }
+if (paidEnd && paidEnd.getTime() > paidStart.getTime()) {
+  paidMinutes = Math.floor(
+    (paidEnd.getTime() - paidStart.getTime()) / (1000 * 60)
+  );
+}
 
-      const grossPay = roundToWon((paidMinutes / 60) * hourlyWage);
-      const netPay = roundToWon(grossPay * 0.967);
+// 점심시간(12:30~13:30) 전체 포함한 경우만 60분 차감
+if (paidEnd && paidMinutes > 0) {
+  const lunchStart = new Date(`${date}T12:30:00+09:00`);
+  const lunchEnd = new Date(`${date}T13:30:00+09:00`);
+
+  const includesFullLunch =
+    paidStart.getTime() <= lunchStart.getTime() &&
+    paidEnd.getTime() >= lunchEnd.getTime();
+
+  if (includesFullLunch) {
+    paidMinutes = Math.max(0, paidMinutes - 60);
+    lunchDeducted = true;
+  }
+}
+
+const grossPay = roundToWon((paidMinutes / 60) * hourlyWage);
+const netPay = roundToWon(grossPay * 0.967);
 
       return {
-        date,
-        checkIn: firstCheckIn ? firstCheckIn.checked_at : null,
-        checkOut: lastCheckOut ? lastCheckOut.checked_at : null,
-        paidMinutes,
-        grossPay,
-        netPay,
-        isWorking,
-        checkInRecordId: firstCheckIn?.id || null,
-        checkOutRecordId: lastCheckOut?.id || null,
-      };
+  date,
+  checkIn: firstCheckIn ? firstCheckIn.checked_at : null,
+  checkOut: lastCheckOut ? lastCheckOut.checked_at : null,
+  paidMinutes,
+  grossPay,
+  netPay,
+  isWorking,
+  lunchDeducted,
+  checkInRecordId: firstCheckIn?.id || null,
+  checkOutRecordId: lastCheckOut?.id || null,
+};
     });
 
   const totalMinutes = dailyRows.reduce((sum, row) => sum + row.paidMinutes, 0);
@@ -381,12 +398,13 @@ const { data: employee, error: employeeError } = await supabase
         totalGrossPay: payroll.totalGrossPay,
         totalNetPay: payroll.totalNetPay,
       },
-      dailyRows: payroll.dailyRows.map((row) => ({
-        ...row,
-        checkInText: row.checkIn ? getKSTTimeString(row.checkIn) : "-",
-        checkOutText: row.checkOut ? getKSTTimeString(row.checkOut) : "-",
-        workText: minutesToHourString(row.paidMinutes),
-      })),
+  dailyRows: payroll.dailyRows.map((row) => ({
+  ...row,
+  checkInText: row.checkIn ? getKSTTimeString(row.checkIn) : "-",
+  checkOutText: row.checkOut ? getKSTTimeString(row.checkOut) : "-",
+  workText: minutesToHourString(row.paidMinutes),
+  lunchText: row.lunchDeducted ? "점심 1시간 제외" : "-",
+})),
     };
 
     return NextResponse.json(response);

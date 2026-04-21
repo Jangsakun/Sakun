@@ -10,11 +10,13 @@ type PayrollRow = {
   grossPay: number;
   netPay: number;
   isWorking: boolean;
+  lunchDeducted?: boolean;
   checkInRecordId: string | null;
   checkOutRecordId: string | null;
   checkInText: string;
   checkOutText: string;
   workText: string;
+  lunchText?: string;
 };
 
 type PayrollResponse = {
@@ -533,6 +535,7 @@ export default function WorkerPayrollPage() {
                       <th className="px-3 py-3 text-sm font-semibold text-gray-700">출근</th>
                       <th className="px-3 py-3 text-sm font-semibold text-gray-700">퇴근</th>
                       <th className="px-3 py-3 text-sm font-semibold text-gray-700">근무시간</th>
+                      <th className="px-3 py-3 text-sm font-semibold text-gray-700">휴게 반영</th>
                       <th className="px-3 py-3 text-sm font-semibold text-gray-700">지급 급여</th>
                       <th className="px-3 py-3 text-sm font-semibold text-gray-700">세후 급여</th>
                       <th className="px-3 py-3 text-sm font-semibold text-gray-700">상태</th>
@@ -541,7 +544,10 @@ export default function WorkerPayrollPage() {
                   <tbody>
                     {(result.dailyRows || []).length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="px-3 py-6 text-center text-sm text-gray-500">
+                        <td
+colSpan={8}
+  className="px-3 py-6 text-center text-sm text-gray-500"
+>
                           조회된 출퇴근 기록이 없습니다.
                         </td>
                       </tr>
@@ -551,10 +557,21 @@ export default function WorkerPayrollPage() {
                           <td className="px-3 py-3 text-sm text-gray-900">{row.date}</td>
                           <td className="px-3 py-3 text-sm text-gray-900">{row.checkInText}</td>
                           <td className="px-3 py-3 text-sm text-gray-900">{row.checkOutText}</td>
-                          <td className="px-3 py-3 text-sm text-gray-900">{row.workText}</td>
-                          <td className="px-3 py-3 text-sm font-semibold text-gray-900">
-                            {formatWon(row.grossPay)}
-                          </td>
+                         <td className="px-3 py-3 text-sm text-gray-900">
+  {row.workText}
+</td>
+<td className="px-3 py-3 text-sm text-gray-900">
+  {row.lunchDeducted ? (
+    <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
+      점심 1시간 제외
+    </span>
+  ) : (
+    "-"
+  )}
+</td>
+<td className="px-3 py-3 text-sm font-semibold text-gray-900">
+  {formatWon(row.grossPay)}
+</td>
                           <td className="px-3 py-3 text-sm font-semibold text-blue-600">
                             {formatWon(row.netPay)}
                           </td>
@@ -632,9 +649,14 @@ export default function WorkerPayrollPage() {
                   </tbody>
                 </table>
 
-                <div className="foot">
-                  09:30 이전 출근은 09:30부터 급여 계산 / 세후 급여는 3.3% 공제 기준
-                </div>
+            👇 이걸로 교체
+<div className="foot">
+  09:30 이전 출근은 09:30부터 급여 계산
+  <br />
+  12:30 이전 출근하고 13:30 이후 퇴근한 경우 점심 1시간 자동 제외
+  <br />
+  세후 급여는 3.3% 공제 기준
+</div>
               </div>
             </div>
           </>
