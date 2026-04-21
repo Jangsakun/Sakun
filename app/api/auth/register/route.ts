@@ -268,7 +268,6 @@ export async function POST(request: Request) {
           account_number: accountDigits,
           reconnect_code: null,
           reconnect_expires_at: null,
-          updated_at: new Date().toISOString(),
         })
         .eq("id", existingEmployee.id)
         .select()

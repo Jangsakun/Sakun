@@ -70,7 +70,6 @@ export async function POST(request: Request) {
     }
 
     const reconnectCode = generateReconnectCode(6);
-
     const expiresAtDate = new Date(Date.now() + 1000 * 60 * 10);
     const expiresAt = expiresAtDate.toISOString();
 
@@ -79,7 +78,6 @@ export async function POST(request: Request) {
       .update({
         reconnect_code: reconnectCode,
         reconnect_expires_at: expiresAt,
-        updated_at: new Date().toISOString(),
       })
       .eq("id", employeeId);
 
