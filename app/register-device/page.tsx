@@ -11,6 +11,7 @@ export default function RegisterDevicePage() {
   const [residentNumber, setResidentNumber] = useState("");
   const [bankName, setBankName] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
+  const [reconnectCode, setReconnectCode] = useState("");
 
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -28,7 +29,7 @@ export default function RegisterDevicePage() {
     }
 
     setIsLoading(true);
-    setMessage("등록 중...");
+    setMessage("처리 중...");
 
     try {
       const response = await fetch("/api/auth/register", {
@@ -42,6 +43,7 @@ export default function RegisterDevicePage() {
           residentNumber,
           bankName,
           accountNumber,
+          reconnectCode, // 🔥 추가됨
         }),
       });
 
@@ -50,7 +52,12 @@ export default function RegisterDevicePage() {
       if (data.success) {
         localStorage.setItem("employee", JSON.stringify(data.employee));
         setIsSuccess(true);
-        setMessage("등록 완료!");
+
+        if (data.reconnected) {
+          setMessage("기기 재연결 완료!");
+        } else {
+          setMessage("등록 완료!");
+        }
 
         setTimeout(() => {
           router.push("/");
@@ -82,7 +89,7 @@ export default function RegisterDevicePage() {
 
           {isSuccess ? (
             <div className="py-10 text-center text-green-600">
-              등록 완료! 이동 중...
+              완료! 이동 중...
             </div>
           ) : (
             <>
@@ -129,6 +136,20 @@ export default function RegisterDevicePage() {
                   }
                   className="w-full h-12 border rounded px-3"
                 />
+
+                {/* 🔥 재연결 코드 입력칸 */}
+                <input
+                  placeholder="재연결 코드 (휴대폰 변경 시만 입력)"
+                  value={reconnectCode}
+                  onChange={(e) =>
+                    setReconnectCode(e.target.value.toUpperCase())
+                  }
+                  className="w-full h-12 border rounded px-3"
+                />
+
+                <p className="text-xs text-gray-400">
+                  휴대폰을 변경한 경우 관리자에게 받은 재연결 코드를 입력하세요
+                </p>
               </div>
 
               <button
