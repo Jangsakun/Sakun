@@ -709,6 +709,26 @@ export default function WorkerPayrollPage() {
                   주휴수당은 관리자 설정 기준에 따라 금액 또는 해당 없음으로 표시
                   <br />
                   세후 급여는 3.3% 공제 기준
+
+                  <div
+                    style={{
+                      marginTop: "30px",
+                      textAlign: "right",
+                    }}
+                  >
+                    <div style={{ fontSize: "14px", marginBottom: "8px" }}>
+                      (주)장사꾼을위한장사꾼
+                    </div>
+
+                    <img
+                      src="/stamp.png"
+                      alt="직인"
+                      style={{
+                        width: "120px",
+                        opacity: 0.9,
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
