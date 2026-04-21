@@ -11,6 +11,45 @@ function maskResidentNumber(value: string) {
   return `${digits.slice(0, 6)}-${digits.slice(6, 7)}******`;
 }
 
+function getBirthDateFromResidentNumber(residentNumber: string) {
+  const digits = residentNumber.replace(/[^0-9]/g, "");
+
+  if (digits.length !== 13) {
+    return null;
+  }
+
+  const yy = digits.slice(0, 2);
+  const mm = digits.slice(2, 4);
+  const dd = digits.slice(4, 6);
+  const genderCode = digits[6];
+
+  let century = "";
+
+  if (genderCode === "1" || genderCode === "2" || genderCode === "5" || genderCode === "6") {
+    century = "19";
+  } else if (
+    genderCode === "3" ||
+    genderCode === "4" ||
+    genderCode === "7" ||
+    genderCode === "8"
+  ) {
+    century = "20";
+  } else if (genderCode === "9" || genderCode === "0") {
+    century = "18";
+  } else {
+    return null;
+  }
+
+  const birthDate = `${century}${yy}-${mm}-${dd}`;
+
+  const date = new Date(birthDate);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return birthDate;
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -52,6 +91,18 @@ export async function POST(request: Request) {
       );
     }
 
+    const birthDate = getBirthDateFromResidentNumber(residentDigits);
+
+    if (!birthDate) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "주민번호에서 생년월일을 추출할 수 없습니다.",
+        },
+        { status: 400 }
+      );
+    }
+
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -71,7 +122,6 @@ export async function POST(request: Request) {
       serviceRoleKey || anonKey || ""
     );
 
-    // 1) 동일 주민번호 존재 여부 확인
     const { data: existingEmployee, error: findError } = await supabase
       .from("employees")
       .select("id, name, phone, resident_number, resident_number_masked")
@@ -94,7 +144,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2) 이미 있으면 신규 등록 막기
     if (existingEmployee) {
       return NextResponse.json(
         {
@@ -113,7 +162,6 @@ export async function POST(request: Request) {
 
     const maskedResidentNumber = maskResidentNumber(residentDigits);
 
-    // 3) 신규 등록
     const { data, error } = await supabase
       .from("employees")
       .insert([
@@ -122,6 +170,7 @@ export async function POST(request: Request) {
           phone: phoneDigits,
           resident_number: residentDigits,
           resident_number_masked: maskedResidentNumber,
+          birth_date: birthDate,
           bank_name: trimmedBankName,
           account_number: accountDigits,
           hourly_wage: 10320,
@@ -156,6 +205,7 @@ export async function POST(request: Request) {
         name: data.name,
         phone: data.phone,
         residentNumberMasked: data.resident_number_masked,
+        birthDate: data.birth_date,
         bankName: data.bank_name,
         accountNumber: data.account_number,
       },
