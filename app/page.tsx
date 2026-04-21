@@ -37,6 +37,16 @@ type TodayAttendanceResponse = {
   message?: string;
 };
 
+type ValidateEmployeeResponse = {
+  success: boolean;
+  exists: boolean;
+  message?: string;
+  employee?: {
+    id?: string;
+    name?: string;
+  };
+};
+
 export default function Home() {
   const router = useRouter();
 
@@ -56,24 +66,66 @@ export default function Home() {
     }[]
   >([]);
 
+  const clearEmployeeStorage = () => {
+    localStorage.removeItem("employee");
+  };
+
   useEffect(() => {
-    const savedEmployee = localStorage.getItem("employee");
+    const initializeEmployee = async () => {
+      const savedEmployee = localStorage.getItem("employee");
 
-    if (!savedEmployee || savedEmployee === "undefined") {
-      localStorage.removeItem("employee");
-      router.push("/register-device");
-      return;
-    }
+      if (!savedEmployee || savedEmployee === "undefined") {
+        clearEmployeeStorage();
+        router.push("/register-device");
+        return;
+      }
 
-    try {
-      const parsedEmployee = JSON.parse(savedEmployee);
-      setEmployee(parsedEmployee);
-      fetchTodayAttendance(parsedEmployee);
-    } catch (error) {
-      console.error("employee 파싱 에러:", error);
-      localStorage.removeItem("employee");
-      router.push("/register-device");
-    }
+      try {
+        const parsedEmployee: Employee = JSON.parse(savedEmployee);
+
+        if (
+          !parsedEmployee?.name ||
+          !parsedEmployee?.birthDate ||
+          !parsedEmployee?.phoneLast4
+        ) {
+          clearEmployeeStorage();
+          router.push("/register-device");
+          return;
+        }
+
+        const validateResponse = await fetch("/api/auth/validate-employee", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          cache: "no-store",
+          body: JSON.stringify({
+            name: parsedEmployee.name,
+            birthDate: parsedEmployee.birthDate,
+            phoneLast4: parsedEmployee.phoneLast4,
+          }),
+        });
+
+        const validateData: ValidateEmployeeResponse =
+          await validateResponse.json();
+
+        if (!validateData.success || !validateData.exists) {
+          clearEmployeeStorage();
+          alert("등록된 직원 정보가 삭제되어 다시 등록이 필요합니다.");
+          router.push("/register-device");
+          return;
+        }
+
+        setEmployee(parsedEmployee);
+        fetchTodayAttendance(parsedEmployee);
+      } catch (error) {
+        console.error("employee 파싱 또는 검증 에러:", error);
+        clearEmployeeStorage();
+        router.push("/register-device");
+      }
+    };
+
+    initializeEmployee();
   }, [router]);
 
   const fetchTodayAttendance = async (currentEmployee: Employee) => {
@@ -112,7 +164,9 @@ export default function Home() {
 
   const sendAttendance = async (type: "check-in" | "check-out") => {
     if (!employee) {
-      alert("직원 정보가 없습니다. 다시 로그인해주세요.");
+      alert("직원 정보가 없습니다. 다시 등록해주세요.");
+      clearEmployeeStorage();
+      router.push("/register-device");
       return;
     }
 
@@ -131,12 +185,36 @@ export default function Home() {
         const accuracy = position.coords.accuracy;
         const checkedAt = new Date().toISOString();
 
-        // 기능은 유지, 화면에는 렌더링 안 함
         setLocation(
           `위도: ${lat}, 경도: ${lng}, 정확도: ${Math.round(accuracy)}m`
         );
 
         try {
+          const validateResponse = await fetch("/api/auth/validate-employee", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            cache: "no-store",
+            body: JSON.stringify({
+              name: employee.name,
+              birthDate: employee.birthDate,
+              phoneLast4: employee.phoneLast4,
+            }),
+          });
+
+          const validateData: ValidateEmployeeResponse =
+            await validateResponse.json();
+
+          if (!validateData.success || !validateData.exists) {
+            clearEmployeeStorage();
+            alert("등록된 직원 정보가 삭제되어 다시 등록이 필요합니다.");
+            setMessage("등록 정보가 없어 다시 등록이 필요합니다.");
+            setIsLoading(false);
+            router.push("/register-device");
+            return;
+          }
+
           const response = await fetch(`/api/attendance/${type}`, {
             method: "POST",
             headers: {
