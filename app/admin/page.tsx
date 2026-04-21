@@ -864,20 +864,20 @@ export default function AdminPage() {
     const rows = payrollRows.map((row) => {
       const employee = employeeMap.get(Number(row.employeeId));
 
-      return [
-        row.employeeName,
-        getMaskedResidentNumber(employee),
-        employee?.bank_name || "-",
-        employee?.account_number || "-",
-        row.weekStart,
-        row.weekEnd,
-        row.totalHours.toFixed(2),
-        String(row.hourlyWage),
-        String(Math.round(row.basePay)),
-        String(Math.round(row.weeklyAllowance)),
-        String(Math.round(row.grossPay)),
-        String(Math.round(row.netPay)),
-      ];
+     return [
+  row.employeeName,
+  employee?.resident_number || "-",
+  employee?.bank_name || "-",
+  employee?.account_number || "-",
+  row.weekStart,
+  row.weekEnd,
+  row.totalHours.toFixed(2),
+  String(row.hourlyWage),
+  String(Math.round(row.basePay)),
+  String(Math.round(row.weeklyAllowance)),
+  String(Math.round(row.grossPay)),
+  String(Math.round(row.netPay)),
+];
     });
 
     const csvContent = [headers, ...rows]
