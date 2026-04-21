@@ -1,25 +1,62 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+function maskResidentNumber(value: string) {
+  const digits = value.replace(/[^0-9]/g, "");
+
+  if (digits.length !== 13) {
+    return value;
+  }
+
+  return `${digits.slice(0, 6)}-${digits.slice(6, 7)}******`;
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, birthDate, phoneLast4 } = body;
+    const { name, phone, residentNumber, bankName, accountNumber } = body;
 
-    if (!name || !birthDate || !phoneLast4) {
+    const trimmedName = String(name || "").trim();
+    const trimmedPhone = String(phone || "").trim();
+    const trimmedResidentNumber = String(residentNumber || "").trim();
+    const trimmedBankName = String(bankName || "").trim();
+    const trimmedAccountNumber = String(accountNumber || "").trim();
+
+    const phoneDigits = trimmedPhone.replace(/[^0-9]/g, "");
+    const residentDigits = trimmedResidentNumber.replace(/[^0-9]/g, "");
+    const accountDigits = trimmedAccountNumber.replace(/[^0-9]/g, "");
+
+    if (
+      !trimmedName ||
+      !trimmedPhone ||
+      !trimmedResidentNumber ||
+      !trimmedBankName ||
+      !trimmedAccountNumber
+    ) {
       return NextResponse.json(
         {
           success: false,
-          message: "이름, 생년월일, 휴대폰 끝 4자리를 모두 입력해주세요.",
+          message: "이름, 휴대폰번호, 주민번호, 은행명, 계좌번호를 모두 입력해주세요.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (residentDigits.length !== 13) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "주민번호는 숫자 기준 13자리여야 합니다.",
         },
         { status: 400 }
       );
     }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-    if (!supabaseUrl || !supabaseAnonKey) {
+    if (!supabaseUrl || (!serviceRoleKey && !anonKey)) {
       return NextResponse.json(
         {
           success: false,
@@ -29,15 +66,16 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    const supabase = createClient(
+      supabaseUrl,
+      serviceRoleKey || anonKey || ""
+    );
 
-    // 1) 먼저 동일 인원 존재 여부 확인
+    // 1) 동일 주민번호 존재 여부 확인
     const { data: existingEmployee, error: findError } = await supabase
       .from("employees")
-      .select("id, name, birth_date, phone_last4")
-      .eq("name", name)
-      .eq("birth_date", birthDate)
-      .eq("phone_last4", phoneLast4)
+      .select("id, name, phone, resident_number, resident_number_masked")
+      .eq("resident_number", residentDigits)
       .maybeSingle();
 
     if (findError) {
@@ -56,7 +94,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2) 이미 있으면 새로 등록하지 않고 막기
+    // 2) 이미 있으면 신규 등록 막기
     if (existingEmployee) {
       return NextResponse.json(
         {
@@ -65,26 +103,32 @@ export async function POST(request: Request) {
           employee: {
             id: existingEmployee.id,
             name: existingEmployee.name,
-            birthDate: existingEmployee.birth_date,
-            phoneLast4: existingEmployee.phone_last4,
+            phone: existingEmployee.phone,
+            residentNumberMasked: existingEmployee.resident_number_masked,
           },
         },
         { status: 409 }
       );
     }
 
-    // 3) 없으면 신규 등록
+    const maskedResidentNumber = maskResidentNumber(residentDigits);
+
+    // 3) 신규 등록
     const { data, error } = await supabase
       .from("employees")
-     .insert([
-  {
-    name,
-    birth_date: birthDate,
-    phone_last4: phoneLast4,
-    hourly_wage: 10320,
-    weekly_allowance_status: "비대상",
-  },
-])
+      .insert([
+        {
+          name: trimmedName,
+          phone: phoneDigits,
+          resident_number: residentDigits,
+          resident_number_masked: maskedResidentNumber,
+          bank_name: trimmedBankName,
+          account_number: accountDigits,
+          hourly_wage: 10320,
+          weekly_allowance_status: "비대상",
+          is_active: true,
+        },
+      ])
       .select()
       .single();
 
@@ -110,8 +154,10 @@ export async function POST(request: Request) {
       employee: {
         id: data.id,
         name: data.name,
-        birthDate: data.birth_date,
-        phoneLast4: data.phone_last4,
+        phone: data.phone,
+        residentNumberMasked: data.resident_number_masked,
+        bankName: data.bank_name,
+        accountNumber: data.account_number,
       },
     });
   } catch (error) {

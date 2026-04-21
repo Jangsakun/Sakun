@@ -14,8 +14,11 @@ type AdminRecord = {
   employees: {
     id: number;
     name: string;
-    birth_date: string;
-    phone_last4: string;
+    phone?: string;
+    resident_number?: string;
+    resident_number_masked?: string;
+    bank_name?: string;
+    account_number?: string;
     is_active?: boolean;
     hourly_wage?: number;
     contract_start_date?: string | null;
@@ -32,8 +35,11 @@ type AdminAttendanceResponse = {
 type Employee = {
   id: number;
   name: string;
-  birth_date: string;
-  phone_last4: string;
+  phone: string;
+  resident_number: string;
+  resident_number_masked?: string;
+  bank_name: string;
+  account_number: string;
   is_active: boolean;
   created_at?: string;
   hourly_wage?: number;
@@ -136,8 +142,10 @@ export default function AdminPage() {
     null
   );
   const [editName, setEditName] = useState("");
-  const [editBirthDate, setEditBirthDate] = useState("");
-  const [editPhoneLast4, setEditPhoneLast4] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editResidentNumber, setEditResidentNumber] = useState("");
+  const [editBankName, setEditBankName] = useState("");
+  const [editAccountNumber, setEditAccountNumber] = useState("");
 
   const [editingAttendanceKey, setEditingAttendanceKey] = useState<
     string | null
@@ -527,15 +535,19 @@ export default function AdminPage() {
   const startEdit = (employee: Employee) => {
     setEditingEmployeeId(employee.id);
     setEditName(employee.name);
-    setEditBirthDate(employee.birth_date);
-    setEditPhoneLast4(employee.phone_last4);
+    setEditPhone(employee.phone || "");
+    setEditResidentNumber(employee.resident_number || "");
+    setEditBankName(employee.bank_name || "");
+    setEditAccountNumber(employee.account_number || "");
   };
 
   const cancelEdit = () => {
     setEditingEmployeeId(null);
     setEditName("");
-    setEditBirthDate("");
-    setEditPhoneLast4("");
+    setEditPhone("");
+    setEditResidentNumber("");
+    setEditBankName("");
+    setEditAccountNumber("");
   };
 
   const updateEmployee = async (employeeId: number) => {
@@ -547,8 +559,10 @@ export default function AdminPage() {
         },
         body: JSON.stringify({
           name: editName,
-          birth_date: editBirthDate,
-          phone_last4: editPhoneLast4,
+          phone: editPhone,
+          resident_number: editResidentNumber,
+          bank_name: editBankName,
+          account_number: editAccountNumber,
         }),
       });
 
@@ -834,6 +848,9 @@ export default function AdminPage() {
 
     const headers = [
       "이름",
+      "주민번호",
+      "은행",
+      "계좌번호",
       "주 시작",
       "주 종료",
       "총 근무시간",
@@ -844,17 +861,24 @@ export default function AdminPage() {
       "세후 급여",
     ];
 
-    const rows = payrollRows.map((row) => [
-      row.employeeName,
-      row.weekStart,
-      row.weekEnd,
-      row.totalHours.toFixed(2),
-      String(row.hourlyWage),
-      String(Math.round(row.basePay)),
-      String(Math.round(row.weeklyAllowance)),
-      String(Math.round(row.grossPay)),
-      String(Math.round(row.netPay)),
-    ]);
+    const rows = payrollRows.map((row) => {
+      const employee = employeeMap.get(Number(row.employeeId));
+
+      return [
+        row.employeeName,
+        getMaskedResidentNumber(employee),
+        employee?.bank_name || "-",
+        employee?.account_number || "-",
+        row.weekStart,
+        row.weekEnd,
+        row.totalHours.toFixed(2),
+        String(row.hourlyWage),
+        String(Math.round(row.basePay)),
+        String(Math.round(row.weeklyAllowance)),
+        String(Math.round(row.grossPay)),
+        String(Math.round(row.netPay)),
+      ];
+    });
 
     const csvContent = [headers, ...rows]
       .map((line) =>
@@ -1254,8 +1278,10 @@ export default function AdminPage() {
                   <thead>
                     <tr>
                       <th style={thStyle}>이름</th>
-                      <th style={thStyle}>생년월일</th>
-                      <th style={thStyle}>전화번호 끝 4자리</th>
+                      <th style={thStyle}>휴대폰번호</th>
+                      <th style={thStyle}>주민번호</th>
+                      <th style={thStyle}>은행</th>
+                      <th style={thStyle}>계좌번호</th>
                       <th style={thStyle}>시급</th>
                       <th style={thStyle}>상태</th>
                       <th style={thStyle}>관리</th>
@@ -1282,28 +1308,60 @@ export default function AdminPage() {
                           <td style={tdStyle}>
                             {isEditing ? (
                               <input
-                                type="date"
-                                value={editBirthDate}
-                                onChange={(e) => setEditBirthDate(e.target.value)}
+                                value={editPhone}
+                                onChange={(e) =>
+                                  setEditPhone(
+                                    e.target.value.replace(/[^0-9]/g, "")
+                                  )
+                                }
                                 style={smallInputStyle}
                               />
                             ) : (
-                              employee.birth_date
+                              formatPhone(employee.phone)
                             )}
                           </td>
 
                           <td style={tdStyle}>
                             {isEditing ? (
                               <input
-                                value={editPhoneLast4}
+                                value={editResidentNumber}
                                 onChange={(e) =>
-                                  setEditPhoneLast4(e.target.value)
+                                  setEditResidentNumber(
+                                    e.target.value.replace(/[^0-9]/g, "").slice(0, 13)
+                                  )
                                 }
-                                maxLength={4}
                                 style={smallInputStyle}
                               />
                             ) : (
-                              employee.phone_last4
+                              getMaskedResidentNumber(employee)
+                            )}
+                          </td>
+
+                          <td style={tdStyle}>
+                            {isEditing ? (
+                              <input
+                                value={editBankName}
+                                onChange={(e) => setEditBankName(e.target.value)}
+                                style={smallInputStyle}
+                              />
+                            ) : (
+                              employee.bank_name || "-"
+                            )}
+                          </td>
+
+                          <td style={tdStyle}>
+                            {isEditing ? (
+                              <input
+                                value={editAccountNumber}
+                                onChange={(e) =>
+                                  setEditAccountNumber(
+                                    e.target.value.replace(/[^0-9-]/g, "")
+                                  )
+                                }
+                                style={smallInputStyle}
+                              />
+                            ) : (
+                              employee.account_number || "-"
                             )}
                           </td>
 
@@ -1502,6 +1560,9 @@ export default function AdminPage() {
                   <thead>
                     <tr>
                       <th style={thStyle}>이름</th>
+                      <th style={thStyle}>주민번호</th>
+                      <th style={thStyle}>은행</th>
+                      <th style={thStyle}>계좌번호</th>
                       <th style={thStyle}>주 시작</th>
                       <th style={thStyle}>주 종료</th>
                       <th style={thStyle}>총 근무시간</th>
@@ -1513,41 +1574,52 @@ export default function AdminPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {payrollRows.map((row, index) => (
-                      <tr key={`${row.employeeId}-${row.weekStart}-${index}`}>
-                        <td style={tdStyle}>
-                          <span style={nameTextStyle}>{row.employeeName}</span>
-                        </td>
-                        <td style={tdStyle}>{formatDate(row.weekStart)}</td>
-                        <td style={tdStyle}>{formatDate(row.weekEnd)}</td>
-                        <td style={tdStyle}>{row.totalHours.toFixed(2)}시간</td>
-                        <td style={tdStyle}>{formatCurrency(row.hourlyWage)}</td>
-                        <td style={tdStyle}>
-                          {formatCurrency(Math.round(row.basePay))}
-                        </td>
-                        <td
-                          style={{
-                            ...tdStyle,
-                            color: "#2563eb",
-                            fontWeight: 700,
-                          }}
-                        >
-                          {formatCurrency(Math.round(row.weeklyAllowance))}
-                        </td>
-                        <td style={tdStyle}>
-                          {formatCurrency(Math.round(row.grossPay))}
-                        </td>
-                        <td
-                          style={{
-                            ...tdStyle,
-                            color: "#059669",
-                            fontWeight: 700,
-                          }}
-                        >
-                          {formatCurrency(Math.round(row.netPay))}
-                        </td>
-                      </tr>
-                    ))}
+                    {payrollRows.map((row, index) => {
+                      const employee = employeeMap.get(Number(row.employeeId));
+
+                      return (
+                        <tr key={`${row.employeeId}-${row.weekStart}-${index}`}>
+                          <td style={tdStyle}>
+                            <span style={nameTextStyle}>{row.employeeName}</span>
+                          </td>
+                          <td style={tdStyle}>
+                            {getMaskedResidentNumber(employee)}
+                          </td>
+                          <td style={tdStyle}>{employee?.bank_name || "-"}</td>
+                          <td style={tdStyle}>
+                            {employee?.account_number || "-"}
+                          </td>
+                          <td style={tdStyle}>{formatDate(row.weekStart)}</td>
+                          <td style={tdStyle}>{formatDate(row.weekEnd)}</td>
+                          <td style={tdStyle}>{row.totalHours.toFixed(2)}시간</td>
+                          <td style={tdStyle}>{formatCurrency(row.hourlyWage)}</td>
+                          <td style={tdStyle}>
+                            {formatCurrency(Math.round(row.basePay))}
+                          </td>
+                          <td
+                            style={{
+                              ...tdStyle,
+                              color: "#2563eb",
+                              fontWeight: 700,
+                            }}
+                          >
+                            {formatCurrency(Math.round(row.weeklyAllowance))}
+                          </td>
+                          <td style={tdStyle}>
+                            {formatCurrency(Math.round(row.grossPay))}
+                          </td>
+                          <td
+                            style={{
+                              ...tdStyle,
+                              color: "#059669",
+                              fontWeight: 700,
+                            }}
+                          >
+                            {formatCurrency(Math.round(row.netPay))}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -1589,8 +1661,8 @@ export default function AdminPage() {
                     <thead>
                       <tr>
                         <th style={thStyle}>이름</th>
-                        <th style={thStyle}>생년월일</th>
-                        <th style={thStyle}>전화번호 끝 4자리</th>
+                        <th style={thStyle}>휴대폰번호</th>
+                        <th style={thStyle}>주민번호</th>
                         <th style={thStyle}>계약 종료일</th>
                         <th style={thStyle}>남은 기간</th>
                         <th style={thStyle}>관리</th>
@@ -1602,8 +1674,10 @@ export default function AdminPage() {
                           <td style={tdStyle}>
                             <span style={nameTextStyle}>{employee.name}</span>
                           </td>
-                          <td style={tdStyle}>{employee.birth_date}</td>
-                          <td style={tdStyle}>{employee.phone_last4}</td>
+                          <td style={tdStyle}>{formatPhone(employee.phone)}</td>
+                          <td style={tdStyle}>
+                            {getMaskedResidentNumber(employee)}
+                          </td>
                           <td style={tdStyle}>
                             {employee.contract_end_date
                               ? formatDate(employee.contract_end_date)
@@ -1684,8 +1758,8 @@ export default function AdminPage() {
                     <thead>
                       <tr>
                         <th style={thStyle}>이름</th>
-                        <th style={thStyle}>생년월일</th>
-                        <th style={thStyle}>전화번호 끝 4자리</th>
+                        <th style={thStyle}>휴대폰번호</th>
+                        <th style={thStyle}>주민번호</th>
                         <th style={thStyle}>계약 시작일</th>
                         <th style={thStyle}>계약 종료일</th>
                         <th style={thStyle}>관리</th>
@@ -1697,8 +1771,10 @@ export default function AdminPage() {
                           <td style={tdStyle}>
                             <span style={nameTextStyle}>{employee.name}</span>
                           </td>
-                          <td style={tdStyle}>{employee.birth_date}</td>
-                          <td style={tdStyle}>{employee.phone_last4}</td>
+                          <td style={tdStyle}>{formatPhone(employee.phone)}</td>
+                          <td style={tdStyle}>
+                            {getMaskedResidentNumber(employee)}
+                          </td>
                           <td style={tdStyle}>
                             <input
                               type="date"
@@ -1817,6 +1893,35 @@ function toDateTimeLocalValue(value: string | null) {
   const kstDate = new Date(kstMs);
 
   return kstDate.toISOString().slice(0, 16);
+}
+
+function getMaskedResidentNumber(
+  employee?: Pick<Employee, "resident_number" | "resident_number_masked"> | null
+) {
+  if (!employee) return "-";
+
+  if (employee.resident_number_masked) {
+    return employee.resident_number_masked;
+  }
+
+  const digits = String(employee.resident_number || "").replace(/[^0-9]/g, "");
+  if (digits.length !== 13) return "-";
+
+  return `${digits.slice(0, 6)}-${digits.slice(6, 7)}******`;
+}
+
+function formatPhone(phone?: string | null) {
+  const digits = String(phone || "").replace(/[^0-9]/g, "");
+
+  if (digits.length === 11) {
+    return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+  }
+
+  if (digits.length === 10) {
+    return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+
+  return phone || "-";
 }
 
 const pageStyle: CSSProperties = {

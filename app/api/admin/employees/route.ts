@@ -21,8 +21,10 @@ export async function GET() {
         `
         id,
         name,
-        birth_date,
-        phone_last4,
+        phone,
+        resident_number,
+        bank_name,
+        account_number,
         is_active,
         hourly_wage,
         weekly_allowance_status,
@@ -42,9 +44,25 @@ export async function GET() {
       );
     }
 
+    // 🔥 주민번호 마스킹 추가 (앞6 + 뒤1만 노출)
+    const maskedData = (data || []).map((emp) => {
+      const digits = (emp.resident_number || "").replace(/[^0-9]/g, "");
+
+      let resident_number_masked = "-";
+
+      if (digits.length === 13) {
+        resident_number_masked = `${digits.slice(0, 6)}-${digits.slice(6, 7)}******`;
+      }
+
+      return {
+        ...emp,
+        resident_number_masked,
+      };
+    });
+
     return NextResponse.json({
       success: true,
-      employees: data || [],
+      employees: maskedData,
     });
   } catch (error) {
     const message =
