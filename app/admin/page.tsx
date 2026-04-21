@@ -342,8 +342,21 @@ export default function AdminPage() {
         const diffMs = checkOutDate.getTime() - workStartMs;
 
         if (diffMs >= 0) {
-          workMinutes = Math.floor(diffMs / 1000 / 60);
-        }
+  let calculatedMinutes = Math.floor(diffMs / 1000 / 60);
+
+  const lunchStart = new Date(`${dateKey}T12:30:00+09:00`);
+  const lunchEnd = new Date(`${dateKey}T13:30:00+09:00`);
+
+  const includesFullLunch =
+    workStartMs <= lunchStart.getTime() &&
+    checkOutDate.getTime() >= lunchEnd.getTime();
+
+  if (includesFullLunch) {
+    calculatedMinutes = Math.max(0, calculatedMinutes - 60);
+  }
+
+  workMinutes = calculatedMinutes;
+}
       }
 
       const employee = employeeMap.get(employeeId);
