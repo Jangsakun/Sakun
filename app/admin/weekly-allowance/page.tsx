@@ -206,20 +206,18 @@ function EmployeeAllowanceCard({
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div>
-          <label className="mb-2 block text-sm font-medium text-gray-700">
-            시급
-          </label>
-          <input
-            type="text"
-            value={hourlyWage}
-            onChange={(e) =>
-              setHourlyWage(e.target.value.replace(/[^0-9]/g, ""))
-            }
-            className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-black"
-            placeholder="10320"
-          />
-        </div>
+       <div>
+  <label className="mb-2 block text-sm font-medium text-gray-700">
+    시급
+  </label>
+  <input
+    type="text"
+    value={hourlyWage}
+    readOnly
+    className="w-full rounded-xl border border-gray-300 bg-gray-100 px-4 py-3 outline-none cursor-not-allowed"
+    placeholder="10320"
+  />
+</div>
 
         <div>
           <label className="mb-2 block text-sm font-medium text-gray-700">
