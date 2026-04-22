@@ -53,6 +53,14 @@ type CheckoutAvailability = {
   nextAvailableLabel: string;
 };
 
+type TodayRecord = {
+  id: number;
+  record_type: string;
+  checked_at: string;
+  lat: number;
+  lng: number;
+};
+
 function getKstParts(date = new Date()) {
   const formatter = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Seoul",
@@ -121,6 +129,130 @@ function getCheckoutAvailability(date = new Date()): CheckoutAvailability {
   };
 }
 
+function getSeoulDateKey(value: string | Date) {
+  const date = typeof value === "string" ? new Date(value) : value;
+
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function getSeoulHourMinute(value: string | Date) {
+  const date = typeof value === "string" ? new Date(value) : value;
+
+  const hhmm = date.toLocaleTimeString("en-GB", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+
+  const [hourText, minuteText] = hhmm.split(":");
+
+  return {
+    hour: Number(hourText),
+    minute: Number(minuteText),
+    totalMinutes: Number(hourText) * 60 + Number(minuteText),
+  };
+}
+
+function createSeoulDateTime(dateKey: string, hour: number, minute: number) {
+  return new Date(
+    `${dateKey}T${String(hour).padStart(2, "0")}:${String(minute).padStart(
+      2,
+      "0"
+    )}:00+09:00`
+  );
+}
+
+function isCheckInType(value: string) {
+  const normalized = String(value || "").toLowerCase().trim();
+  return (
+    normalized === "check_in" ||
+    normalized === "checkin" ||
+    normalized === "in" ||
+    normalized === "출근"
+  );
+}
+
+function isCheckOutType(value: string) {
+  const normalized = String(value || "").toLowerCase().trim();
+  return (
+    normalized === "check_out" ||
+    normalized === "checkout" ||
+    normalized === "out" ||
+    normalized === "퇴근"
+  );
+}
+
+function normalizeDisplayCheckIn(value: string) {
+  const source = new Date(value);
+  const dateKey = getSeoulDateKey(source);
+  const { totalMinutes } = getSeoulHourMinute(source);
+
+  const start0900Window = 8 * 60 + 45;
+  const end0910Window = 9 * 60 + 10;
+  const start0930Window = 9 * 60 + 11;
+  const end0930Window = 9 * 60 + 30;
+
+  if (totalMinutes >= start0900Window && totalMinutes <= end0910Window) {
+    return createSeoulDateTime(dateKey, 9, 0);
+  }
+
+  if (totalMinutes >= start0930Window && totalMinutes <= end0930Window) {
+    return createSeoulDateTime(dateKey, 9, 30);
+  }
+
+  return source;
+}
+
+function normalizeDisplayCheckOut(value: string) {
+  const source = new Date(value);
+  const dateKey = getSeoulDateKey(source);
+  const { hour, minute } = getSeoulHourMinute(source);
+
+  if (hour >= 18) {
+    if (minute <= 10) {
+      return createSeoulDateTime(dateKey, hour, 0);
+    }
+
+    if (minute <= 40) {
+      return createSeoulDateTime(dateKey, hour, 30);
+    }
+
+    return createSeoulDateTime(dateKey, hour + 1, 0);
+  }
+
+  return source;
+}
+
+function formatDisplayDateTime(value: string) {
+  return new Date(value).toLocaleString("ko-KR", {
+    timeZone: "Asia/Seoul",
+  });
+}
+
+function formatDisplayAttendanceTime(
+  value: string,
+  recordType: string,
+  shouldNormalize = true
+) {
+  const normalizedDate = shouldNormalize
+    ? isCheckInType(recordType)
+      ? normalizeDisplayCheckIn(value)
+      : isCheckOutType(recordType)
+      ? normalizeDisplayCheckOut(value)
+      : new Date(value)
+    : new Date(value);
+
+  return normalizedDate.toLocaleString("ko-KR", {
+    timeZone: "Asia/Seoul",
+  });
+}
+
 export default function Home() {
   const router = useRouter();
 
@@ -130,15 +262,7 @@ export default function Home() {
   const [lastCheckInTime, setLastCheckInTime] = useState("");
   const [lastCheckOutTime, setLastCheckOutTime] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [todayRecords, setTodayRecords] = useState<
-    {
-      id: number;
-      record_type: string;
-      checked_at: string;
-      lat: number;
-      lng: number;
-    }[]
-  >([]);
+  const [todayRecords, setTodayRecords] = useState<TodayRecord[]>([]);
   const [now, setNow] = useState(new Date());
 
   const clearEmployeeStorage = () => {
@@ -234,12 +358,12 @@ export default function Home() {
       if (data.success && data.today) {
         setLastCheckInTime(
           data.today.checkIn
-            ? new Date(data.today.checkIn).toLocaleString("ko-KR")
+            ? formatDisplayAttendanceTime(data.today.checkIn, "check_in", true)
             : ""
         );
         setLastCheckOutTime(
           data.today.checkOut
-            ? new Date(data.today.checkOut).toLocaleString("ko-KR")
+            ? formatDisplayAttendanceTime(data.today.checkOut, "check_out", true)
             : ""
         );
         setTodayRecords(data.today.records || []);
@@ -332,10 +456,14 @@ export default function Home() {
           if (data.success) {
             if (type === "check-in") {
               setMessage("출근이 정상 처리되었습니다.");
-              setLastCheckInTime(new Date(checkedAt).toLocaleString("ko-KR"));
+              setLastCheckInTime(
+                formatDisplayAttendanceTime(checkedAt, "check_in", true)
+              );
             } else {
               setMessage("퇴근이 정상 처리되었습니다.");
-              setLastCheckOutTime(new Date(checkedAt).toLocaleString("ko-KR"));
+              setLastCheckOutTime(
+                formatDisplayAttendanceTime(checkedAt, "check_out", true)
+              );
             }
 
             fetchTodayAttendance(employee);
@@ -476,7 +604,7 @@ export default function Home() {
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
               {todayRecords.map((record) => {
-                const isCheckIn = record.record_type === "check_in";
+                const isCheckIn = isCheckInType(record.record_type);
 
                 return (
                   <div key={record.id} style={recordItemStyle}>
@@ -491,7 +619,11 @@ export default function Home() {
                     </div>
 
                     <div style={recordTimeStyle}>
-                      {new Date(record.checked_at).toLocaleString("ko-KR")}
+                      {formatDisplayAttendanceTime(
+                        record.checked_at,
+                        record.record_type,
+                        true
+                      )}
                     </div>
                   </div>
                 );
