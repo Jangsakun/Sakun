@@ -118,6 +118,93 @@ function normalizeResidentNumber(value: string) {
   return String(value || "").replace(/[^0-9]/g, "");
 }
 
+function createKSTDateTime(dateKey: string, hour: number, minute: number) {
+  return new Date(
+    `${dateKey}T${String(hour).padStart(2, "0")}:${String(minute).padStart(
+      2,
+      "0"
+    )}:00+09:00`
+  );
+}
+
+function getKSTHourMinute(date: Date) {
+  const hhmm = date.toLocaleTimeString("en-GB", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+
+  const [hourText, minuteText] = hhmm.split(":");
+
+  return {
+    hour: Number(hourText),
+    minute: Number(minuteText),
+    totalMinutes: Number(hourText) * 60 + Number(minuteText),
+  };
+}
+
+function normalizePaidCheckIn(isoString: string) {
+  const source = new Date(isoString);
+  const dateKey = getKSTDateKey(isoString);
+  const { totalMinutes } = getKSTHourMinute(source);
+
+  const start0900Window = 8 * 60 + 45;
+  const end0910Window = 9 * 60 + 10;
+  const start0930Window = 9 * 60 + 11;
+  const end0930Window = 9 * 60 + 30;
+
+  if (totalMinutes >= start0900Window && totalMinutes <= end0910Window) {
+    return createKSTDateTime(dateKey, 9, 0);
+  }
+
+  if (totalMinutes >= start0930Window && totalMinutes <= end0930Window) {
+    return createKSTDateTime(dateKey, 9, 30);
+  }
+
+  return source;
+}
+
+function normalizePaidCheckOut(isoString: string) {
+  const source = new Date(isoString);
+  const dateKey = getKSTDateKey(isoString);
+  const { hour, minute } = getKSTHourMinute(source);
+
+  if (hour >= 18) {
+    if (minute <= 10) {
+      return createKSTDateTime(dateKey, hour, 0);
+    }
+
+    if (minute <= 40) {
+      return createKSTDateTime(dateKey, hour, 30);
+    }
+
+    return createKSTDateTime(dateKey, hour + 1, 0);
+  }
+
+  return source;
+}
+
+function formatDisplayCheckInText(isoString: string) {
+  const normalized = normalizePaidCheckIn(isoString);
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(normalized);
+}
+
+function formatDisplayCheckOutText(isoString: string) {
+  const normalized = normalizePaidCheckOut(isoString);
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(normalized);
+}
+
 function buildDailyPayroll(
   records: AttendanceRecord[],
   hourlyWage: number
@@ -188,16 +275,10 @@ function buildDailyPayroll(
         };
       }
 
-      const actualStart = new Date(firstCheckIn.checked_at);
-
-      const workStartBase = new Date(`${date}T09:30:00+09:00`);
-      const paidStart =
-        actualStart.getTime() < workStartBase.getTime()
-          ? workStartBase
-          : actualStart;
+      const paidStart = normalizePaidCheckIn(firstCheckIn.checked_at);
 
       let paidEnd: Date | null = lastCheckOut
-        ? new Date(lastCheckOut.checked_at)
+        ? normalizePaidCheckOut(lastCheckOut.checked_at)
         : null;
 
       let isWorking = false;
@@ -457,8 +538,8 @@ export async function POST(request: Request) {
       },
       dailyRows: payroll.dailyRows.map((row) => ({
         ...row,
-        checkInText: row.checkIn ? getKSTTimeString(row.checkIn) : "-",
-        checkOutText: row.checkOut ? getKSTTimeString(row.checkOut) : "-",
+        checkInText: row.checkIn ? formatDisplayCheckInText(row.checkIn) : "-",
+        checkOutText: row.checkOut ? formatDisplayCheckOutText(row.checkOut) : "-",
         workText: minutesToHourString(row.paidMinutes),
         lunchText: row.lunchDeducted ? "점심 1시간 제외" : "-",
       })),

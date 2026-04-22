@@ -606,20 +606,6 @@ export default function WorkerPayrollPage() {
                 </table>
               </div>
 
-              <div className="mt-5 rounded-2xl bg-gray-50 p-4 text-sm text-gray-600">
-                기준:
-                <br />
-                - 08:45~09:10 출근은 09:00 기준으로 반영
-                <br />
-                - 09:11~09:30 출근은 09:30 기준으로 반영
-                <br />
-                - 12:30 이전 출근하고 13:30 이후 퇴근한 경우 점심 1시간 자동 제외
-                <br />
-                - 주휴수당은 관리자 설정 기준에 따라 금액 또는 해당 없음으로 표시
-                <br />
-                - 세후 급여는 3.3% 공제 기준
-                <br />- 오늘 출근 후 퇴근 전이면 현재 시각 기준으로 실시간 계산
-              </div>
             </div>
 
             <div className="mt-6 hidden">
@@ -683,36 +669,26 @@ export default function WorkerPayrollPage() {
                 </table>
 
                 <div className="foot">
-                  08:45~09:10 출근은 09:00 기준으로 반영
-                  <br />
-                  09:11~09:30 출근은 09:30 기준으로 반영
-                  <br />
-                  12:30 이전 출근하고 13:30 이후 퇴근한 경우 점심 1시간 자동 제외
-                  <br />
-                  주휴수당은 관리자 설정 기준에 따라 금액 또는 해당 없음으로 표시
-                  <br />
-                  세후 급여는 3.3% 공제 기준
+  <div
+    style={{
+      marginTop: "30px",
+      textAlign: "right",
+    }}
+  >
+    <div style={{ fontSize: "14px", marginBottom: "8px" }}>
+      (주)장사꾼을위한장사꾼
+    </div>
 
-                  <div
-                    style={{
-                      marginTop: "30px",
-                      textAlign: "right",
-                    }}
-                  >
-                    <div style={{ fontSize: "14px", marginBottom: "8px" }}>
-                      (주)장사꾼을위한장사꾼
-                    </div>
-
-                    <img
-                      src="/stamp.png"
-                      alt="직인"
-                      style={{
-                        width: "120px",
-                        opacity: 0.9,
-                      }}
-                    />
-                  </div>
-                </div>
+    <img
+      src="/stamp.png"
+      alt="직인"
+      style={{
+        width: "120px",
+        opacity: 0.9,
+      }}
+    />
+  </div>
+</div>
               </div>
             </div>
           </>
