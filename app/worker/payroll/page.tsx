@@ -25,8 +25,7 @@ type PayrollResponse = {
   employee?: {
     id: string;
     name: string;
-    birthDate: string;
-    phoneLast4: string;
+    residentNumber: string;
     hourlyWage: number;
   };
   range?: {
@@ -80,8 +79,7 @@ export default function WorkerPayrollPage() {
   const statementRef = useRef<HTMLDivElement | null>(null);
 
   const [name, setName] = useState("");
-  const [birthDate, setBirthDate] = useState("");
-  const [phoneLast4, setPhoneLast4] = useState("");
+  const [residentNumber, setResidentNumber] = useState("");
 
   const [activeTab, setActiveTab] = useState<
     "currentWeek" | "byDate" | "weeklyStatement"
@@ -107,35 +105,29 @@ export default function WorkerPayrollPage() {
     try {
       const parsed = JSON.parse(saved);
       setName(parsed.name || "");
-      setBirthDate(parsed.birthDate || "");
-      setPhoneLast4(parsed.phoneLast4 || "");
+      setResidentNumber(parsed.residentNumber || "");
     } catch {}
   }, []);
 
   useEffect(() => {
-    if (!name && !birthDate && !phoneLast4) return;
+    if (!name && !residentNumber) return;
 
     localStorage.setItem(
       "workerPayrollAuth",
       JSON.stringify({
         name,
-        birthDate,
-        phoneLast4,
+        residentNumber,
       })
     );
-  }, [name, birthDate, phoneLast4]);
+  }, [name, residentNumber]);
 
   const canSearch = useMemo(() => {
-    return (
-      name.trim().length > 0 &&
-      (birthDate.trim().length === 6 || birthDate.trim().length === 8) &&
-      phoneLast4.trim().length === 4
-    );
-  }, [name, birthDate, phoneLast4]);
+    return name.trim().length > 0 && residentNumber.trim().length === 13;
+  }, [name, residentNumber]);
 
   const fetchPayroll = async () => {
     if (!canSearch) {
-      setMessage("이름, 생년월일(6자리 또는 8자리), 전화번호 뒤 4자리를 입력해주세요.");
+      setMessage("이름과 주민번호 13자리를 입력해주세요.");
       return;
     }
 
@@ -147,8 +139,7 @@ export default function WorkerPayrollPage() {
       const body: Record<string, string> = {
         action: activeTab,
         name: name.trim(),
-        birthDate: birthDate.trim(),
-        phoneLast4: phoneLast4.trim(),
+        residentNumber: residentNumber.trim(),
       };
 
       if (activeTab === "byDate") {
@@ -190,9 +181,17 @@ export default function WorkerPayrollPage() {
   const handleResetSavedInfo = () => {
     localStorage.removeItem("workerPayrollAuth");
     setName("");
-    setBirthDate("");
-    setPhoneLast4("");
+    setResidentNumber("");
+    setResult(null);
     setMessage("저장된 본인 확인 정보가 삭제되었습니다.");
+  };
+
+  const handleTabChange = (
+    tab: "currentWeek" | "byDate" | "weeklyStatement"
+  ) => {
+    setActiveTab(tab);
+    setMessage("");
+    setResult(null);
   };
 
   const handleDownloadPDF = () => {
@@ -286,7 +285,7 @@ export default function WorkerPayrollPage() {
             <div>
               <h1 className="text-2xl font-bold text-gray-900">근로자 급여 조회</h1>
               <p className="mt-2 text-sm text-gray-600">
-                이름, 생년월일, 전화번호 뒤 4자리로 본인 급여를 조회할 수 있습니다.
+                이름과 주민번호로 본인 급여를 조회할 수 있습니다.
               </p>
             </div>
             <button
@@ -301,7 +300,7 @@ export default function WorkerPayrollPage() {
         <div className="mb-6 rounded-2xl bg-white p-5 shadow-sm">
           <h2 className="mb-4 text-lg font-semibold text-gray-900">본인 확인</h2>
 
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2">
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700">
                 이름
@@ -320,40 +319,20 @@ export default function WorkerPayrollPage() {
 
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700">
-                생년월일 (숫자만 입력)
+                주민번호 (숫자만 입력)
               </label>
               <input
                 type="text"
-                value={birthDate}
+                value={residentNumber}
                 onChange={(e) => {
                   let onlyNumber = e.target.value.replace(/[^0-9]/g, "");
-                  if (onlyNumber.length > 8) {
-                    onlyNumber = onlyNumber.slice(0, 8);
+                  if (onlyNumber.length > 13) {
+                    onlyNumber = onlyNumber.slice(0, 13);
                   }
-                  setBirthDate(onlyNumber);
+                  setResidentNumber(onlyNumber);
                 }}
-                placeholder="예: 971108 또는 19971108"
-                maxLength={8}
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-black bg-white placeholder-gray-400 outline-none focus:border-black"
-                style={iosInputStyle}
-                autoCapitalize="off"
-                autoCorrect="off"
-                inputMode="numeric"
-              />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
-                전화번호 뒤 4자리
-              </label>
-              <input
-                type="text"
-                maxLength={4}
-                value={phoneLast4}
-                onChange={(e) =>
-                  setPhoneLast4(e.target.value.replace(/[^0-9]/g, ""))
-                }
-                placeholder="1234"
+                placeholder="예: 9711081234567"
+                maxLength={13}
                 className="w-full rounded-xl border border-gray-300 px-4 py-3 text-black bg-white placeholder-gray-400 outline-none focus:border-black"
                 style={iosInputStyle}
                 autoCapitalize="off"
@@ -367,7 +346,7 @@ export default function WorkerPayrollPage() {
         <div className="mb-6 rounded-2xl bg-white p-5 shadow-sm">
           <div className="mb-4 flex flex-wrap gap-2">
             <button
-              onClick={() => setActiveTab("currentWeek")}
+              onClick={() => handleTabChange("currentWeek")}
               className={`rounded-xl px-4 py-2 text-sm font-semibold ${
                 activeTab === "currentWeek"
                   ? "bg-black text-white"
@@ -378,7 +357,7 @@ export default function WorkerPayrollPage() {
             </button>
 
             <button
-              onClick={() => setActiveTab("byDate")}
+              onClick={() => handleTabChange("byDate")}
               className={`rounded-xl px-4 py-2 text-sm font-semibold ${
                 activeTab === "byDate"
                   ? "bg-black text-white"
@@ -389,7 +368,7 @@ export default function WorkerPayrollPage() {
             </button>
 
             <button
-              onClick={() => setActiveTab("weeklyStatement")}
+              onClick={() => handleTabChange("weeklyStatement")}
               className={`rounded-xl px-4 py-2 text-sm font-semibold ${
                 activeTab === "weeklyStatement"
                   ? "bg-black text-white"
@@ -630,7 +609,9 @@ export default function WorkerPayrollPage() {
               <div className="mt-5 rounded-2xl bg-gray-50 p-4 text-sm text-gray-600">
                 기준:
                 <br />
-                - 09:30 이전 출근은 09:30부터 급여 계산
+                - 08:45~09:10 출근은 09:00 기준으로 반영
+                <br />
+                - 09:11~09:30 출근은 09:30 기준으로 반영
                 <br />
                 - 12:30 이전 출근하고 13:30 이후 퇴근한 경우 점심 1시간 자동 제외
                 <br />
@@ -702,7 +683,9 @@ export default function WorkerPayrollPage() {
                 </table>
 
                 <div className="foot">
-                  09:30 이전 출근은 09:30부터 급여 계산
+                  08:45~09:10 출근은 09:00 기준으로 반영
+                  <br />
+                  09:11~09:30 출근은 09:30 기준으로 반영
                   <br />
                   12:30 이전 출근하고 13:30 이후 퇴근한 경우 점심 1시간 자동 제외
                   <br />

@@ -12,8 +12,7 @@ type AttendanceRecord = {
 type Employee = {
   id: string;
   name: string;
-  birth_date: string;
-  phone_last4: string;
+  resident_number: string;
   hourly_wage?: number | null;
   weekly_allowance_status?: string | null;
   weekly_allowance_reason?: string | null;
@@ -115,14 +114,8 @@ function minutesToHourString(totalMinutes: number) {
   return `${hours}시간 ${minutes}분`;
 }
 
-function normalizeBirthDateForCompare(value: string) {
-  const onlyNumber = value.replace(/[^0-9]/g, "");
-
-  if (onlyNumber.length === 8) {
-    return onlyNumber.slice(2);
-  }
-
-  return onlyNumber;
+function normalizeResidentNumber(value: string) {
+  return String(value || "").replace(/[^0-9]/g, "");
 }
 
 function buildDailyPayroll(
@@ -274,8 +267,7 @@ export async function POST(request: Request) {
     const {
       action,
       name,
-      birthDate,
-      phoneLast4,
+      residentNumber,
       date,
       startDate,
       endDate,
@@ -295,11 +287,23 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!action || !name || !birthDate || !phoneLast4) {
+    if (!action || !name || !residentNumber) {
       return NextResponse.json(
         {
           success: false,
-          message: "action, 이름, 생년월일, 전화번호 뒤 4자리가 필요합니다.",
+          message: "action, 이름, 주민번호가 필요합니다.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const normalizedResidentNumber = normalizeResidentNumber(residentNumber);
+
+    if (normalizedResidentNumber.length !== 13) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "주민번호 13자리를 정확히 입력해주세요.",
         },
         { status: 400 }
       );
@@ -307,17 +311,12 @@ export async function POST(request: Request) {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    const normalizedBirthDate = normalizeBirthDateForCompare(birthDate);
-
-    const { data: employee, error: employeeError } = await supabase
+    const { data: employees, error: employeeError } = await supabase
       .from("employees")
       .select(
-        "id, name, birth_date, phone_last4, hourly_wage, weekly_allowance_status, weekly_allowance_reason, weekly_allowance_note"
+        "id, name, resident_number, hourly_wage, weekly_allowance_status, weekly_allowance_reason, weekly_allowance_note"
       )
-      .eq("name", String(name).trim())
-      .eq("birth_date", normalizedBirthDate)
-      .eq("phone_last4", String(phoneLast4).trim())
-      .maybeSingle<Employee>();
+      .eq("name", String(name).trim());
 
     if (employeeError) {
       return NextResponse.json(
@@ -329,6 +328,11 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
+
+    const employee = (employees || []).find(
+      (item: Employee) =>
+        normalizeResidentNumber(item.resident_number) === normalizedResidentNumber
+    ) as Employee | undefined;
 
     if (!employee) {
       return NextResponse.json(
@@ -402,43 +406,38 @@ export async function POST(request: Request) {
 
     const payroll = buildDailyPayroll(records || [], hourlyWage);
 
- const weeklyAllowanceStatus =
-  employee.weekly_allowance_status || "검토필요";
+    const weeklyAllowanceStatus =
+      employee.weekly_allowance_status || "검토필요";
 
-let weeklyAllowanceAmount = 0;
-let weeklyAllowanceDisplayText = "해당 없음";
+    let weeklyAllowanceAmount = 0;
+    let weeklyAllowanceDisplayText = "해당 없음";
 
-// 👉 주휴수당 계산 (예: 하루 평균 근무시간 기준)
-if (weeklyAllowanceStatus === "대상") {
-  const totalMinutes = payroll.totalMinutes;
+    if (weeklyAllowanceStatus === "대상") {
+      const totalMinutes = payroll.totalMinutes;
+      const totalHours = totalMinutes / 60;
 
-  const totalHours = totalMinutes / 60;
+      if (totalHours >= 15) {
+        const dailyAvgHours = totalHours / 5;
+        weeklyAllowanceAmount = Math.round(dailyAvgHours * hourlyWage);
+      } else {
+        weeklyAllowanceAmount = 0;
+      }
 
-  // 👉 기준: 주 15시간 이상일 때만 (한국 기준)
-  if (totalHours >= 15) {
-    const dailyAvgHours = totalHours / 5; // 주5일 기준
-    weeklyAllowanceAmount = Math.round(dailyAvgHours * hourlyWage);
-  } else {
-    weeklyAllowanceAmount = 0;
-  }
-
-  weeklyAllowanceDisplayText =
-    weeklyAllowanceAmount > 0
-      ? `${weeklyAllowanceAmount.toLocaleString("ko-KR")}원`
-      : "해당 없음";
-} else {
-  // 👉 비대상 / 검토필요
-  weeklyAllowanceAmount = 0;
-  weeklyAllowanceDisplayText = "해당 없음";
-}
+      weeklyAllowanceDisplayText =
+        weeklyAllowanceAmount > 0
+          ? `${weeklyAllowanceAmount.toLocaleString("ko-KR")}원`
+          : "해당 없음";
+    } else {
+      weeklyAllowanceAmount = 0;
+      weeklyAllowanceDisplayText = "해당 없음";
+    }
 
     const response = {
       success: true,
       employee: {
         id: employee.id,
         name: employee.name,
-        birthDate: employee.birth_date,
-        phoneLast4: employee.phone_last4,
+        residentNumber: employee.resident_number,
         hourlyWage,
       },
       range: {
