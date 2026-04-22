@@ -2,6 +2,82 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getDistanceInMeters } from "@/app/lib/geo";
 
+function getKstDateParts(date: Date) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+
+  const parts = formatter.formatToParts(date);
+
+  const getPart = (type: string) =>
+    parts.find((part) => part.type === type)?.value || "00";
+
+  return {
+    year: Number(getPart("year")),
+    month: Number(getPart("month")),
+    day: Number(getPart("day")),
+    hour: Number(getPart("hour")),
+    minute: Number(getPart("minute")),
+    second: Number(getPart("second")),
+  };
+}
+
+function getKstDayRangeFromIso(isoString: string) {
+  const date = new Date(isoString);
+  const { year, month, day } = getKstDateParts(date);
+
+  const monthText = String(month).padStart(2, "0");
+  const dayText = String(day).padStart(2, "0");
+  const kstDateOnly = `${year}-${monthText}-${dayText}`;
+
+  return {
+    dateOnly: kstDateOnly,
+    startUtc: `${kstDateOnly}T00:00:00+09:00`,
+    endUtc: `${kstDateOnly}T23:59:59.999+09:00`,
+  };
+}
+
+function toKstDateFromParts(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  second: number
+) {
+  const utcMillis = Date.UTC(year, month - 1, day, hour - 9, minute, second, 0);
+  return new Date(utcMillis);
+}
+
+function normalizeCheckInTime(checkedAt: string): Date {
+  const originalDate = new Date(checkedAt);
+  const { year, month, day, hour, minute } = getKstDateParts(originalDate);
+
+  const totalMinutes = hour * 60 + minute;
+
+  const nineStart = 8 * 60 + 45;     // 08:45
+  const nineEnd = 9 * 60 + 10;       // 09:10
+  const nineThirtyStart = 9 * 60 + 11; // 09:11
+  const nineThirtyEnd = 9 * 60 + 30;   // 09:30
+
+  if (totalMinutes >= nineStart && totalMinutes <= nineEnd) {
+    return toKstDateFromParts(year, month, day, 9, 0, 0);
+  }
+
+  if (totalMinutes >= nineThirtyStart && totalMinutes <= nineThirtyEnd) {
+    return toKstDateFromParts(year, month, day, 9, 30, 0);
+  }
+
+  return originalDate;
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -13,7 +89,14 @@ export async function POST(request: Request) {
     console.log("사용자 위치 타입:", typeof lat, typeof lng);
     console.log("checkedAt:", checkedAt);
 
-    if (!name || !birthDate || !phoneLast4 || !lat || !lng || !checkedAt) {
+    if (
+      !name ||
+      !birthDate ||
+      !phoneLast4 ||
+      lat === undefined ||
+      lng === undefined ||
+      !checkedAt
+    ) {
       console.log("필수값 누락:", {
         name,
         birthDate,
@@ -25,6 +108,15 @@ export async function POST(request: Request) {
 
       return NextResponse.json(
         { success: false, message: "필수값 누락" },
+        { status: 400 }
+      );
+    }
+
+    const checkedDate = new Date(checkedAt);
+
+    if (Number.isNaN(checkedDate.getTime())) {
+      return NextResponse.json(
+        { success: false, message: "checkedAt 값이 올바르지 않습니다." },
         { status: 400 }
       );
     }
@@ -85,16 +177,24 @@ export async function POST(request: Request) {
       );
     }
 
-    const dateOnly = checkedAt.slice(0, 10);
-    console.log("dateOnly:", dateOnly);
+    const normalizedCheckedAt = normalizeCheckInTime(checkedAt);
+    const normalizedCheckedAtIso = normalizedCheckedAt.toISOString();
+
+    console.log("보정 전 checkedAt:", checkedAt);
+    console.log("보정 후 checkedAt:", normalizedCheckedAtIso);
+
+    const { startUtc, endUtc, dateOnly } = getKstDayRangeFromIso(checkedAt);
+    console.log("KST dateOnly:", dateOnly);
+    console.log("KST startUtc:", startUtc);
+    console.log("KST endUtc:", endUtc);
 
     const { data: existingCheckIn, error: existingError } = await supabase
       .from("attendance_records")
       .select("*")
       .eq("employee_id", employee.id)
       .eq("record_type", "check_in")
-      .gte("checked_at", `${dateOnly}T00:00:00.000Z`)
-      .lte("checked_at", `${dateOnly}T23:59:59.999Z`)
+      .gte("checked_at", startUtc)
+      .lte("checked_at", endUtc)
       .limit(1);
 
     console.log("existingCheckIn:", existingCheckIn);
@@ -123,7 +223,7 @@ export async function POST(request: Request) {
           record_type: "check_in",
           lat,
           lng,
-          checked_at: checkedAt,
+          checked_at: normalizedCheckedAtIso,
         },
       ]);
 
@@ -145,6 +245,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       message: `출근 기록 저장 성공 (회사와 거리 ${Math.round(distance)}m)`,
+      normalizedCheckedAt: normalizedCheckedAtIso,
     });
   } catch (error) {
     console.error("check-in API catch error:", error);

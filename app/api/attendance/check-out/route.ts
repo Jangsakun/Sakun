@@ -2,14 +2,128 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getDistanceInMeters } from "@/app/lib/geo";
 
+function getKstDateParts(date: Date) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  const parts = formatter.formatToParts(date);
+
+  const getPart = (type: string) =>
+    parts.find((part) => part.type === type)?.value || "00";
+
+  return {
+    year: Number(getPart("year")),
+    month: Number(getPart("month")),
+    day: Number(getPart("day")),
+    hour: Number(getPart("hour")),
+    minute: Number(getPart("minute")),
+  };
+}
+
+function formatTimeLabel(hour: number, minute: number) {
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function getNextCheckoutWindowLabel(hour: number, minute: number) {
+  let nextHour = hour;
+  let nextMinute = 0;
+
+  if (minute >= 11 && minute <= 29) {
+    nextMinute = 30;
+  } else if (minute >= 41) {
+    nextHour += 1;
+    nextMinute = 0;
+  }
+
+  return formatTimeLabel(nextHour, nextMinute);
+}
+
+function isCheckoutAllowedAtKst(date: Date) {
+  const { hour, minute } = getKstDateParts(date);
+
+  if (hour < 18) {
+    return {
+      allowed: true,
+      message: "",
+    };
+  }
+
+  const isAllowedWindow =
+    (minute >= 0 && minute <= 10) || (minute >= 30 && minute <= 40);
+
+  if (isAllowedWindow) {
+    return {
+      allowed: true,
+      message: "",
+    };
+  }
+
+  const nextAvailable = getNextCheckoutWindowLabel(hour, minute);
+
+  return {
+    allowed: false,
+    message: `지금은 퇴근 가능한 시간이 아닙니다. 18시 이후에는 30분 단위 10분 동안만 퇴근할 수 있습니다. 다음 퇴근 가능 시간: ${nextAvailable}`,
+  };
+}
+
+function getKstDayRangeFromIso(isoString: string) {
+  const date = new Date(isoString);
+  const { year, month, day } = getKstDateParts(date);
+
+  const monthText = String(month).padStart(2, "0");
+  const dayText = String(day).padStart(2, "0");
+  const kstDateOnly = `${year}-${monthText}-${dayText}`;
+
+  return {
+    dateOnly: kstDateOnly,
+    startUtc: `${kstDateOnly}T00:00:00+09:00`,
+    endUtc: `${kstDateOnly}T23:59:59.999+09:00`,
+  };
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { name, birthDate, phoneLast4, lat, lng, checkedAt } = body;
 
-    if (!name || !birthDate || !phoneLast4 || !lat || !lng || !checkedAt) {
+    if (
+      !name ||
+      !birthDate ||
+      !phoneLast4 ||
+      lat === undefined ||
+      lng === undefined ||
+      !checkedAt
+    ) {
       return NextResponse.json(
         { success: false, message: "필수값 누락" },
+        { status: 400 }
+      );
+    }
+
+    const checkedDate = new Date(checkedAt);
+
+    if (Number.isNaN(checkedDate.getTime())) {
+      return NextResponse.json(
+        { success: false, message: "checkedAt 값이 올바르지 않습니다." },
+        { status: 400 }
+      );
+    }
+
+    const checkoutRule = isCheckoutAllowedAtKst(checkedDate);
+
+    if (!checkoutRule.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: checkoutRule.message,
+        },
         { status: 400 }
       );
     }
@@ -59,15 +173,15 @@ export async function POST(request: Request) {
       );
     }
 
-    const dateOnly = checkedAt.slice(0, 10);
+    const { startUtc, endUtc } = getKstDayRangeFromIso(checkedAt);
 
     const { data: existingCheckOut, error: existingError } = await supabase
       .from("attendance_records")
       .select("*")
       .eq("employee_id", employee.id)
       .eq("record_type", "check_out")
-      .gte("checked_at", `${dateOnly}T00:00:00.000Z`)
-      .lte("checked_at", `${dateOnly}T23:59:59.999Z`)
+      .gte("checked_at", startUtc)
+      .lte("checked_at", endUtc)
       .limit(1);
 
     if (existingError) {

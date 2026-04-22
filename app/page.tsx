@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -47,6 +47,80 @@ type ValidateEmployeeResponse = {
   };
 };
 
+type CheckoutAvailability = {
+  enabled: boolean;
+  notice: string;
+  nextAvailableLabel: string;
+};
+
+function getKstParts(date = new Date()) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  const parts = formatter.formatToParts(date);
+
+  const getPart = (type: string) =>
+    parts.find((part) => part.type === type)?.value || "00";
+
+  return {
+    year: Number(getPart("year")),
+    month: Number(getPart("month")),
+    day: Number(getPart("day")),
+    hour: Number(getPart("hour")),
+    minute: Number(getPart("minute")),
+  };
+}
+
+function formatTimeLabel(hour: number, minute: number) {
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function getCheckoutAvailability(date = new Date()): CheckoutAvailability {
+  const { hour, minute } = getKstParts(date);
+
+  if (hour < 18) {
+    return {
+      enabled: true,
+      notice: "18시 이후 퇴근은 30분 단위로 10분 동안만 가능합니다.",
+      nextAvailableLabel: "",
+    };
+  }
+
+  const isOpenWindow =
+    (minute >= 0 && minute <= 10) || (minute >= 30 && minute <= 40);
+
+  if (isOpenWindow) {
+    return {
+      enabled: true,
+      notice: "지금은 퇴근 가능한 시간입니다.",
+      nextAvailableLabel: "",
+    };
+  }
+
+  let nextHour = hour;
+  let nextMinute = 0;
+
+  if (minute >= 11 && minute <= 29) {
+    nextMinute = 30;
+  } else if (minute >= 41) {
+    nextHour = hour + 1;
+    nextMinute = 0;
+  }
+
+  return {
+    enabled: false,
+    notice: "18시 이후 퇴근은 30분 단위로 10분 동안만 가능합니다.",
+    nextAvailableLabel: formatTimeLabel(nextHour, nextMinute),
+  };
+}
+
 export default function Home() {
   const router = useRouter();
 
@@ -65,6 +139,7 @@ export default function Home() {
       lng: number;
     }[]
   >([]);
+  const [now, setNow] = useState(new Date());
 
   const clearEmployeeStorage = () => {
     localStorage.removeItem("employee");
@@ -128,6 +203,18 @@ export default function Home() {
     initializeEmployee();
   }, [router]);
 
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(new Date());
+    }, 30000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  const checkoutAvailability = useMemo(() => {
+    return getCheckoutAvailability(now);
+  }, [now]);
+
   const fetchTodayAttendance = async (currentEmployee: Employee) => {
     try {
       const response = await fetch("/api/attendance/today", {
@@ -167,6 +254,16 @@ export default function Home() {
       alert("직원 정보가 없습니다. 다시 등록해주세요.");
       clearEmployeeStorage();
       router.push("/register-device");
+      return;
+    }
+
+    if (type === "check-out" && !checkoutAvailability.enabled) {
+      const blockedMessage = checkoutAvailability.nextAvailableLabel
+        ? `지금은 퇴근 가능한 시간이 아닙니다. 다음 퇴근 가능 시간: ${checkoutAvailability.nextAvailableLabel}`
+        : "지금은 퇴근 가능한 시간이 아닙니다.";
+
+      alert(blockedMessage);
+      setMessage(blockedMessage);
       return;
     }
 
@@ -310,15 +407,33 @@ export default function Home() {
 
           <button
             onClick={() => sendAttendance("check-out")}
-            disabled={isLoading}
+            disabled={isLoading || !checkoutAvailability.enabled}
             style={{
               ...secondaryButtonStyle,
-              opacity: isLoading ? 0.6 : 1,
-              cursor: isLoading ? "not-allowed" : "pointer",
+              opacity: isLoading || !checkoutAvailability.enabled ? 0.6 : 1,
+              cursor:
+                isLoading || !checkoutAvailability.enabled
+                  ? "not-allowed"
+                  : "pointer",
             }}
           >
             {isLoading ? "처리 중..." : "퇴근하기"}
           </button>
+        </div>
+
+        <div style={noticeBoxStyle}>
+          <div style={noticeTitleStyle}>퇴근 안내</div>
+          <div style={noticeTextStyle}>
+            {checkoutAvailability.notice}
+            {!checkoutAvailability.enabled &&
+              checkoutAvailability.nextAvailableLabel && (
+                <>
+                  <br />
+                  다음 퇴근 가능 시간:{" "}
+                  <strong>{checkoutAvailability.nextAvailableLabel}</strong>
+                </>
+              )}
+          </div>
         </div>
 
         <Link href="/worker/payroll" style={payrollLinkStyle}>
@@ -334,6 +449,7 @@ export default function Home() {
         <div style={statusBoxStyle}>
           <div style={statusHeaderStyle}>현재 상태</div>
           <p style={statusTextStyle}>{message || "대기 중"}</p>
+          {location ? <p style={locationTextStyle}>{location}</p> : null}
         </div>
 
         <div style={summaryGridStyle}>
@@ -424,7 +540,7 @@ const subtitleStyle: React.CSSProperties = {
 const buttonRowStyle: React.CSSProperties = {
   display: "flex",
   gap: "12px",
-  marginBottom: "16px",
+  marginBottom: "12px",
 };
 
 const primaryButtonStyle: React.CSSProperties = {
@@ -447,6 +563,27 @@ const secondaryButtonStyle: React.CSSProperties = {
   color: "#111827",
   fontSize: "17px",
   fontWeight: 700,
+};
+
+const noticeBoxStyle: React.CSSProperties = {
+  backgroundColor: "#fff7ed",
+  border: "1px solid #fed7aa",
+  borderRadius: "14px",
+  padding: "14px 16px",
+  marginBottom: "16px",
+};
+
+const noticeTitleStyle: React.CSSProperties = {
+  fontSize: "13px",
+  fontWeight: 700,
+  color: "#9a3412",
+  marginBottom: "4px",
+};
+
+const noticeTextStyle: React.CSSProperties = {
+  fontSize: "14px",
+  color: "#7c2d12",
+  lineHeight: 1.6,
 };
 
 const payrollLinkStyle: React.CSSProperties = {
@@ -506,6 +643,15 @@ const statusTextStyle: React.CSSProperties = {
   fontSize: "16px",
   color: "#111827",
   fontWeight: 600,
+};
+
+const locationTextStyle: React.CSSProperties = {
+  marginTop: "8px",
+  marginBottom: 0,
+  fontSize: "12px",
+  color: "#6b7280",
+  lineHeight: 1.5,
+  wordBreak: "break-all",
 };
 
 const summaryGridStyle: React.CSSProperties = {
