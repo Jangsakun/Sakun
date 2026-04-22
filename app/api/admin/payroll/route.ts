@@ -57,6 +57,69 @@ function formatKST(date: Date) {
   }).format(date);
 }
 
+function getKSTHourMinute(date: Date) {
+  const hhmm = date.toLocaleTimeString("en-GB", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+
+  const [hourText, minuteText] = hhmm.split(":");
+  return {
+    hour: Number(hourText),
+    minute: Number(minuteText),
+    totalMinutes: Number(hourText) * 60 + Number(minuteText),
+  };
+}
+
+function createKSTDateTime(dateKey: string, hour: number, minute: number) {
+  const safeHour = String(hour).padStart(2, "0");
+  const safeMinute = String(minute).padStart(2, "0");
+  return new Date(`${dateKey}T${safeHour}:${safeMinute}:00+09:00`);
+}
+
+function normalizeCheckInTime(value: string) {
+  const source = new Date(value);
+  const dateKey = formatKST(source);
+  const { totalMinutes } = getKSTHourMinute(source);
+
+  const start0900Window = 8 * 60 + 45;
+  const end0910Window = 9 * 60 + 10;
+  const start0911Window = 9 * 60 + 11;
+  const end0930Window = 9 * 60 + 30;
+
+  if (totalMinutes >= start0900Window && totalMinutes <= end0910Window) {
+    return createKSTDateTime(dateKey, 9, 0);
+  }
+
+  if (totalMinutes >= start0911Window && totalMinutes <= end0930Window) {
+    return createKSTDateTime(dateKey, 9, 30);
+  }
+
+  return source;
+}
+
+function normalizeCheckOutTime(value: string) {
+  const source = new Date(value);
+  const dateKey = formatKST(source);
+  const { hour, minute } = getKSTHourMinute(source);
+
+  if (hour >= 18) {
+    if (minute <= 10) {
+      return createKSTDateTime(dateKey, hour, 0);
+    }
+
+    if (minute <= 40) {
+      return createKSTDateTime(dateKey, hour, 30);
+    }
+
+    return createKSTDateTime(dateKey, hour + 1, 0);
+  }
+
+  return source;
+}
+
 function isCheckInType(value: string) {
   const normalized = String(value || "").toLowerCase().trim();
   return (
@@ -122,10 +185,10 @@ function calculateDailyWorkedMinutes(date: string, sessions: WorkSession[]) {
   let totalMinutes = 0;
 
   for (const session of sessions) {
-    const inTime = new Date(session.checkIn.checked_at);
-    const outTime = new Date(session.checkOut.checked_at);
+    const normalizedIn = normalizeCheckInTime(session.checkIn.checked_at);
+    const normalizedOut = normalizeCheckOutTime(session.checkOut.checked_at);
 
-    const diffMs = outTime.getTime() - inTime.getTime();
+    const diffMs = normalizedOut.getTime() - normalizedIn.getTime();
 
     if (diffMs > 0) {
       totalMinutes += Math.floor(diffMs / 1000 / 60);
@@ -136,17 +199,17 @@ function calculateDailyWorkedMinutes(date: string, sessions: WorkSession[]) {
     return 0;
   }
 
-  const lunchStart = new Date(`${date}T12:30:00+09:00`);
-  const lunchEnd = new Date(`${date}T13:30:00+09:00`);
-
-  const firstCheckIn = new Date(sessions[0].checkIn.checked_at);
-  const lastCheckOut = new Date(
+  const firstNormalizedIn = normalizeCheckInTime(sessions[0].checkIn.checked_at);
+  const lastNormalizedOut = normalizeCheckOutTime(
     sessions[sessions.length - 1].checkOut.checked_at
   );
 
+  const lunchStart = new Date(`${date}T12:30:00+09:00`);
+  const lunchEnd = new Date(`${date}T13:30:00+09:00`);
+
   const includesFullLunch =
-    firstCheckIn.getTime() <= lunchStart.getTime() &&
-    lastCheckOut.getTime() >= lunchEnd.getTime();
+    firstNormalizedIn.getTime() <= lunchStart.getTime() &&
+    lastNormalizedOut.getTime() >= lunchEnd.getTime();
 
   if (includesFullLunch) {
     totalMinutes = Math.max(0, totalMinutes - 60);

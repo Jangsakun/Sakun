@@ -421,27 +421,25 @@ export default function AdminPage() {
       let workMinutes: number | null = null;
 
       if (checkInRecord && checkOutRecord) {
-        const checkInDate = new Date(checkInRecord.checked_at);
-        const checkOutDate = new Date(checkOutRecord.checked_at);
+        const normalizedCheckIn = normalizeAttendanceCheckIn(
+          checkInRecord.checked_at
+        );
+        const normalizedCheckOut = normalizeAttendanceCheckOut(
+          checkOutRecord.checked_at
+        );
 
-        const dateKey = toSeoulDateKey(checkInRecord.checked_at);
-        const standardStart = new Date(`${dateKey}T09:30:00+09:00`);
-
-        const actualStartMs = checkInDate.getTime();
-        const standardStartMs = standardStart.getTime();
-        const workStartMs = Math.max(actualStartMs, standardStartMs);
-
-        const diffMs = checkOutDate.getTime() - workStartMs;
+        const diffMs =
+          normalizedCheckOut.getTime() - normalizedCheckIn.getTime();
 
         if (diffMs >= 0) {
           let calculatedMinutes = Math.floor(diffMs / 1000 / 60);
 
-          const lunchStart = new Date(`${dateKey}T12:30:00+09:00`);
-          const lunchEnd = new Date(`${dateKey}T13:30:00+09:00`);
+          const lunchStart = createSeoulDateTime(date, 12, 30);
+          const lunchEnd = createSeoulDateTime(date, 13, 30);
 
           const includesFullLunch =
-            workStartMs <= lunchStart.getTime() &&
-            checkOutDate.getTime() >= lunchEnd.getTime();
+            normalizedCheckIn.getTime() <= lunchStart.getTime() &&
+            normalizedCheckOut.getTime() >= lunchEnd.getTime();
 
           if (includesFullLunch) {
             calculatedMinutes = Math.max(0, calculatedMinutes - 60);
@@ -1117,7 +1115,10 @@ export default function AdminPage() {
               </div>
 
               <div style={sectionHeaderButtonWrapStyle}>
-                <button onClick={downloadAttendanceCsv} style={primaryButtonStyle}>
+                <button
+                  onClick={downloadAttendanceCsv}
+                  style={primaryButtonStyle}
+                >
                   엑셀 다운로드
                 </button>
               </div>
@@ -1329,8 +1330,9 @@ export default function AdminPage() {
             </div>
 
             <div style={reconnectGuideBoxStyle}>
-              휴대폰을 바꾼 직원이 있으면 <strong>기기 재연결</strong> 버튼을 눌러 코드를 발급한 뒤,
-              새 휴대폰에서 회원등록 화면에 재연결 코드를 입력하게 하면 됩니다.
+              휴대폰을 바꾼 직원이 있으면 <strong>기기 재연결</strong> 버튼을
+              눌러 코드를 발급한 뒤, 새 휴대폰에서 회원등록 화면에 재연결
+              코드를 입력하게 하면 됩니다.
             </div>
 
             <div style={filterRowStyle}>
@@ -1431,7 +1433,9 @@ export default function AdminPage() {
                             {isEditing ? (
                               <input
                                 value={editBankName}
-                                onChange={(e) => setEditBankName(e.target.value)}
+                                onChange={(e) =>
+                                  setEditBankName(e.target.value)
+                                }
                                 style={smallInputStyle}
                               />
                             ) : (
@@ -1485,7 +1489,9 @@ export default function AdminPage() {
                                 backgroundColor: employee.is_active
                                   ? "#e8f5e9"
                                   : "#ffebee",
-                                color: employee.is_active ? "#2e7d32" : "#c62828",
+                                color: employee.is_active
+                                  ? "#2e7d32"
+                                  : "#c62828",
                               }}
                             >
                               {employee.is_active ? "활성" : "비활성"}
@@ -1510,10 +1516,13 @@ export default function AdminPage() {
                                     코드: <strong>{reconnectInfo.code}</strong>
                                   </div>
                                   <div style={reconnectExpireTextStyle}>
-                                    만료: {formatDateTime(reconnectInfo.expiresAt)}
+                                    만료:{" "}
+                                    {formatDateTime(reconnectInfo.expiresAt)}
                                   </div>
                                   <button
-                                    onClick={() => copyReconnectCode(employee.id)}
+                                    onClick={() =>
+                                      copyReconnectCode(employee.id)
+                                    }
                                     style={copyButtonStyle}
                                   >
                                     코드 복사
@@ -1582,7 +1591,8 @@ export default function AdminPage() {
               <div>
                 <h2 style={sectionTitleStyle}>급여 관리</h2>
                 <p style={sectionDescriptionStyle}>
-                  기간을 직접 선택해서 직원별 주차 합산 급여와 주휴수당을 확인할 수 있습니다.
+                  기간을 직접 선택해서 직원별 주차 합산 급여와 주휴수당을 확인할
+                  수 있습니다.
                 </p>
               </div>
 
@@ -1716,8 +1726,12 @@ export default function AdminPage() {
                           </td>
                           <td style={tdStyle}>{formatDate(row.weekStart)}</td>
                           <td style={tdStyle}>{formatDate(row.weekEnd)}</td>
-                          <td style={tdStyle}>{row.totalHours.toFixed(2)}시간</td>
-                          <td style={tdStyle}>{formatCurrency(row.hourlyWage)}</td>
+                          <td style={tdStyle}>
+                            {row.totalHours.toFixed(2)}시간
+                          </td>
+                          <td style={tdStyle}>
+                            {formatCurrency(row.hourlyWage)}
+                          </td>
                           <td style={tdStyle}>
                             {formatCurrency(Math.round(row.basePay))}
                           </td>
@@ -1762,7 +1776,8 @@ export default function AdminPage() {
                     <h2 style={contractAlertTitleStyle}>근로계약서 만료 임박</h2>
                   </div>
                   <p style={contractAlertDescriptionStyle}>
-                    근로계약서 만료까지 7일 이하로 남은 직원 목록입니다. 계약 갱신을 검토해주세요.
+                    근로계약서 만료까지 7일 이하로 남은 직원 목록입니다. 계약
+                    갱신을 검토해주세요.
                   </p>
                 </div>
 
@@ -1847,7 +1862,8 @@ export default function AdminPage() {
                 <div>
                   <h2 style={sectionTitleStyle}>근로계약서 관리</h2>
                   <p style={sectionDescriptionStyle}>
-                    직원별 계약 시작일과 계약 종료일을 직접 입력하고 저장할 수 있습니다.
+                    직원별 계약 시작일과 계약 종료일을 직접 입력하고 저장할 수
+                    있습니다.
                   </p>
                 </div>
               </div>
@@ -1979,6 +1995,75 @@ function toSeoulDateKey(value: string) {
   return formatter.format(date);
 }
 
+function createSeoulDateTime(dateKey: string, hour: number, minute: number) {
+  return new Date(
+    `${dateKey}T${String(hour).padStart(2, "0")}:${String(minute).padStart(
+      2,
+      "0"
+    )}:00+09:00`
+  );
+}
+
+function normalizeAttendanceCheckIn(value: string) {
+  const source = new Date(value);
+  const dateKey = toSeoulDateKey(value);
+
+  const hourMinute = source.toLocaleTimeString("en-GB", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+
+  const [hourText, minuteText] = hourMinute.split(":");
+  const minutes = Number(hourText) * 60 + Number(minuteText);
+
+  const start0900Window = 8 * 60 + 45;
+  const end0910Window = 9 * 60 + 10;
+  const start0911Window = 9 * 60 + 11;
+  const end0930Window = 9 * 60 + 30;
+
+  if (minutes >= start0900Window && minutes <= end0910Window) {
+    return createSeoulDateTime(dateKey, 9, 0);
+  }
+
+  if (minutes >= start0911Window && minutes <= end0930Window) {
+    return createSeoulDateTime(dateKey, 9, 30);
+  }
+
+  return source;
+}
+
+function normalizeAttendanceCheckOut(value: string) {
+  const source = new Date(value);
+  const dateKey = toSeoulDateKey(value);
+
+  const hourMinute = source.toLocaleTimeString("en-GB", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+
+  const [hourText, minuteText] = hourMinute.split(":");
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+
+  if (hour >= 18) {
+    if (minute <= 10) {
+      return createSeoulDateTime(dateKey, hour, 0);
+    }
+
+    if (minute <= 40) {
+      return createSeoulDateTime(dateKey, hour, 30);
+    }
+
+    return createSeoulDateTime(dateKey, hour + 1, 0);
+  }
+
+  return source;
+}
+
 function formatTime(value: string | null) {
   if (!value) return "-";
 
@@ -2025,10 +2110,29 @@ function toDateTimeLocalValue(value: string | null) {
   if (!value) return "";
 
   const date = new Date(value);
-  const kstMs = date.getTime() + 9 * 60 * 60 * 1000;
-  const kstDate = new Date(kstMs);
+  const year = date.toLocaleString("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+  });
+  const month = date.toLocaleString("en-CA", {
+    timeZone: "Asia/Seoul",
+    month: "2-digit",
+  });
+  const day = date.toLocaleString("en-CA", {
+    timeZone: "Asia/Seoul",
+    day: "2-digit",
+  });
+  const hour = date.toLocaleString("en-GB", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    hour12: false,
+  });
+  const minute = date.toLocaleString("en-GB", {
+    timeZone: "Asia/Seoul",
+    minute: "2-digit",
+  });
 
-  return kstDate.toISOString().slice(0, 16);
+  return `${year}-${month}-${day}T${hour}:${minute}`;
 }
 
 function getMaskedResidentNumber(
@@ -2446,80 +2550,31 @@ const tdStyle: CSSProperties = {
   padding: "14px 16px",
   fontSize: "14px",
   color: "#111827",
-  borderBottom: "1px solid #f1f5f9",
+  borderBottom: "1px solid #e5e7eb",
   verticalAlign: "middle",
-};
-
-const badgeStyle: CSSProperties = {
-  display: "inline-block",
-  padding: "6px 10px",
-  borderRadius: "999px",
-  fontWeight: 700,
-  fontSize: "13px",
+  backgroundColor: "#ffffff",
 };
 
 const nameTextStyle: CSSProperties = {
   fontWeight: 700,
-  color: "#0f172a",
+  color: "#111827",
+};
+
+const badgeStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "6px 10px",
+  borderRadius: "999px",
+  fontSize: "12px",
+  fontWeight: 700,
+  whiteSpace: "nowrap",
 };
 
 const actionWrapStyle: CSSProperties = {
   display: "flex",
   gap: "8px",
   flexWrap: "wrap",
-};
-
-const reconnectCellStyle: CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "8px",
-  minWidth: "190px",
-};
-
-const reconnectInfoBoxStyle: CSSProperties = {
-  padding: "10px 12px",
-  borderRadius: "12px",
-  border: "1px solid #dbeafe",
-  backgroundColor: "#eff6ff",
-};
-
-const reconnectCodeTextStyle: CSSProperties = {
-  fontSize: "14px",
-  color: "#1e3a8a",
-  marginBottom: "4px",
-  wordBreak: "break-all",
-};
-
-const reconnectExpireTextStyle: CSSProperties = {
-  fontSize: "12px",
-  color: "#475569",
-  marginBottom: "8px",
-};
-
-const reconnectEmptyTextStyle: CSSProperties = {
-  fontSize: "12px",
-  color: "#94a3b8",
-};
-
-const reconnectButtonStyle: CSSProperties = {
-  padding: "8px 12px",
-  border: "none",
-  borderRadius: "10px",
-  cursor: "pointer",
-  backgroundColor: "#2563eb",
-  color: "#ffffff",
-  fontWeight: 700,
-};
-
-const copyButtonStyle: CSSProperties = {
-  padding: "7px 10px",
-  border: "none",
-  borderRadius: "8px",
-  cursor: "pointer",
-  backgroundColor: "#dbeafe",
-  color: "#1d4ed8",
-  fontWeight: 700,
-  fontSize: "12px",
 };
 
 const primarySmallButtonStyle: CSSProperties = {
@@ -2530,22 +2585,79 @@ const primarySmallButtonStyle: CSSProperties = {
   backgroundColor: "#111827",
   color: "#ffffff",
   fontWeight: 700,
+  fontSize: "13px",
 };
 
 const secondarySmallButtonStyle: CSSProperties = {
   padding: "8px 12px",
+  border: "1px solid #d1d5db",
+  borderRadius: "10px",
+  cursor: "pointer",
+  backgroundColor: "#ffffff",
+  color: "#111827",
+  fontWeight: 700,
+  fontSize: "13px",
+};
+
+const reconnectCellStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "8px",
+  minWidth: "190px",
+};
+
+const reconnectButtonStyle: CSSProperties = {
+  padding: "8px 12px",
   border: "none",
   borderRadius: "10px",
   cursor: "pointer",
-  backgroundColor: "#f3f4f6",
+  backgroundColor: "#2563eb",
+  color: "#ffffff",
+  fontWeight: 700,
+  fontSize: "13px",
+};
+
+const reconnectInfoBoxStyle: CSSProperties = {
+  backgroundColor: "#f8fafc",
+  border: "1px solid #e5e7eb",
+  borderRadius: "12px",
+  padding: "10px",
+  display: "flex",
+  flexDirection: "column",
+  gap: "6px",
+};
+
+const reconnectCodeTextStyle: CSSProperties = {
+  fontSize: "13px",
+  color: "#111827",
+};
+
+const reconnectExpireTextStyle: CSSProperties = {
+  fontSize: "12px",
+  color: "#6b7280",
+};
+
+const copyButtonStyle: CSSProperties = {
+  padding: "6px 10px",
+  border: "1px solid #d1d5db",
+  borderRadius: "8px",
+  cursor: "pointer",
+  backgroundColor: "#ffffff",
   color: "#111827",
   fontWeight: 700,
+  fontSize: "12px",
+};
+
+const reconnectEmptyTextStyle: CSSProperties = {
+  fontSize: "12px",
+  color: "#94a3b8",
 };
 
 const emptyBoxStyle: CSSProperties = {
-  padding: "24px",
-  borderRadius: "14px",
-  backgroundColor: "#f8fafc",
-  color: "#475569",
+  padding: "28px 20px",
   textAlign: "center",
+  color: "#6b7280",
+  backgroundColor: "#f8fafc",
+  border: "1px solid #e5e7eb",
+  borderRadius: "16px",
 };
