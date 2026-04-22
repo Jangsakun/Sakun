@@ -43,6 +43,11 @@ type WeeklyPayrollRow = {
   weeklyAllowanceStatus: string;
 };
 
+type WorkSession = {
+  checkIn: AttendanceRecord;
+  checkOut: AttendanceRecord;
+};
+
 function formatKST(date: Date) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Seoul",
@@ -79,6 +84,75 @@ function roundToWon(value: number) {
 function getEmployeeObject(rawEmployee: EmployeeNested) {
   if (!rawEmployee) return null;
   return Array.isArray(rawEmployee) ? rawEmployee[0] || null : rawEmployee;
+}
+
+function pairSessions(items: AttendanceRecord[]) {
+  const sessions: WorkSession[] = [];
+  let openCheckIn: AttendanceRecord | null = null;
+
+  for (const item of items) {
+    if (isCheckInType(item.record_type)) {
+      if (!openCheckIn) {
+        openCheckIn = item;
+      }
+      continue;
+    }
+
+    if (isCheckOutType(item.record_type)) {
+      if (openCheckIn) {
+        const inTime = new Date(openCheckIn.checked_at).getTime();
+        const outTime = new Date(item.checked_at).getTime();
+
+        if (outTime > inTime) {
+          sessions.push({
+            checkIn: openCheckIn,
+            checkOut: item,
+          });
+        }
+
+        openCheckIn = null;
+      }
+    }
+  }
+
+  return sessions;
+}
+
+function calculateDailyWorkedMinutes(date: string, sessions: WorkSession[]) {
+  let totalMinutes = 0;
+
+  for (const session of sessions) {
+    const inTime = new Date(session.checkIn.checked_at);
+    const outTime = new Date(session.checkOut.checked_at);
+
+    const diffMs = outTime.getTime() - inTime.getTime();
+
+    if (diffMs > 0) {
+      totalMinutes += Math.floor(diffMs / 1000 / 60);
+    }
+  }
+
+  if (sessions.length === 0) {
+    return 0;
+  }
+
+  const lunchStart = new Date(`${date}T12:30:00+09:00`);
+  const lunchEnd = new Date(`${date}T13:30:00+09:00`);
+
+  const firstCheckIn = new Date(sessions[0].checkIn.checked_at);
+  const lastCheckOut = new Date(
+    sessions[sessions.length - 1].checkOut.checked_at
+  );
+
+  const includesFullLunch =
+    firstCheckIn.getTime() <= lunchStart.getTime() &&
+    lastCheckOut.getTime() >= lunchEnd.getTime();
+
+  if (includesFullLunch) {
+    totalMinutes = Math.max(0, totalMinutes - 60);
+  }
+
+  return totalMinutes;
 }
 
 export async function POST(request: Request) {
@@ -186,47 +260,9 @@ export async function POST(request: Request) {
 
       const date = formatKST(new Date(items[0].checked_at));
 
-      const checkIn = items.find((i) => isCheckInType(i.record_type)) || null;
-
-      const checkOutCandidates = items.filter((i) =>
-        isCheckOutType(i.record_type)
-      );
-
-      const checkOut =
-        checkOutCandidates.length > 0
-          ? checkOutCandidates[checkOutCandidates.length - 1]
-          : null;
-
-      let hours = 0;
-
-      if (checkIn && checkOut) {
-        const inTime = new Date(checkIn.checked_at);
-        const outTime = new Date(checkOut.checked_at);
-
-        const standardStart = new Date(`${date}T09:30:00+09:00`);
-        const paidStart =
-          inTime.getTime() > standardStart.getTime() ? inTime : standardStart;
-
-        let minutes = 0;
-        const diffMs = outTime.getTime() - paidStart.getTime();
-
-        if (diffMs > 0) {
-          minutes = Math.floor(diffMs / 1000 / 60);
-        }
-
-        const lunchStart = new Date(`${date}T12:30:00+09:00`);
-        const lunchEnd = new Date(`${date}T13:30:00+09:00`);
-
-        const includesFullLunch =
-          paidStart.getTime() <= lunchStart.getTime() &&
-          outTime.getTime() >= lunchEnd.getTime();
-
-        if (includesFullLunch) {
-          minutes = Math.max(0, minutes - 60);
-        }
-
-        hours = minutes / 60;
-      }
+      const sessions = pairSessions(items);
+      const workedMinutes = calculateDailyWorkedMinutes(date, sessions);
+      const hours = workedMinutes / 60;
 
       dailyWorks.push({
         employeeId,
