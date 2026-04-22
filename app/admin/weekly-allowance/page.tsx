@@ -99,7 +99,7 @@ export default function AdminWeeklyAllowancePage() {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="이름 / 생년월일 / 전화번호 뒤 4자리 검색"
+              placeholder="직원 이름 검색"
               className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-black"
             />
           </div>
@@ -199,10 +199,6 @@ function EmployeeAllowanceCard({
     <div className="rounded-2xl bg-white p-5 shadow-sm">
       <div className="mb-4">
         <h2 className="text-lg font-bold text-gray-900">{employee.name}</h2>
-        <p className="mt-1 text-sm text-gray-500">
-          생년월일: {employee.birth_date} / 전화번호 뒤 4자리:{" "}
-          {employee.phone_last4}
-        </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
