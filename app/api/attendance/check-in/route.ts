@@ -147,7 +147,7 @@ export async function POST(request: Request) {
         {
           success: false,
           message:
-            "GPS 정확도가 낮습니다. 건물 밖이나 창가에서 다시 시도해주세요.",
+            "GPS 정확도가 낮습니다. 다시 시도해주세요.",
         },
         { status: 400 }
       );

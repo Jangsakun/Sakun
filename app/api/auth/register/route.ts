@@ -65,6 +65,7 @@ export async function POST(request: Request) {
       bankName,
       accountNumber,
       reconnectCode,
+      deviceId,
     } = body;
 
     const trimmedName = String(name || "").trim();
@@ -75,6 +76,7 @@ export async function POST(request: Request) {
     const trimmedReconnectCode = String(reconnectCode || "")
       .trim()
       .toUpperCase();
+    const trimmedDeviceId = String(deviceId || "").trim();
 
     const phoneDigits = trimmedPhone.replace(/[^0-9]/g, "");
     const residentDigits = trimmedResidentNumber.replace(/[^0-9]/g, "");
@@ -93,6 +95,16 @@ export async function POST(request: Request) {
           success: false,
           message:
             "이름, 휴대폰번호, 주민번호, 은행명, 계좌번호를 모두 입력해주세요.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!trimmedDeviceId) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "기기 정보가 없습니다. 다시 시도해주세요.",
         },
         { status: 400 }
       );
@@ -289,6 +301,52 @@ export async function POST(request: Request) {
         );
       }
 
+      const { error: deleteDeviceError } = await supabase
+        .from("employee_devices")
+        .delete()
+        .eq("employee_id", existingEmployee.id);
+
+      if (deleteDeviceError) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "기존 기기 정보 삭제 중 오류가 발생했습니다.",
+            debug: {
+              message: deleteDeviceError.message,
+              details: deleteDeviceError.details,
+              hint: deleteDeviceError.hint,
+              code: deleteDeviceError.code,
+            },
+          },
+          { status: 500 }
+        );
+      }
+
+      const { error: insertDeviceError } = await supabase
+        .from("employee_devices")
+        .insert([
+          {
+            employee_id: existingEmployee.id,
+            device_id: trimmedDeviceId,
+          },
+        ]);
+
+      if (insertDeviceError) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "새 기기 정보 저장 중 오류가 발생했습니다.",
+            debug: {
+              message: insertDeviceError.message,
+              details: insertDeviceError.details,
+              hint: insertDeviceError.hint,
+              code: insertDeviceError.code,
+            },
+          },
+          { status: 500 }
+        );
+      }
+
       return NextResponse.json({
         success: true,
         message: "기기 재연결이 완료되었습니다.",
@@ -347,6 +405,31 @@ export async function POST(request: Request) {
             details: error.details,
             hint: error.hint,
             code: error.code,
+          },
+        },
+        { status: 500 }
+      );
+    }
+
+    const { error: deviceInsertError } = await supabase
+      .from("employee_devices")
+      .insert([
+        {
+          employee_id: data.id,
+          device_id: trimmedDeviceId,
+        },
+      ]);
+
+    if (deviceInsertError) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "기기 정보 저장 실패",
+          debug: {
+            message: deviceInsertError.message,
+            details: deviceInsertError.details,
+            hint: deviceInsertError.hint,
+            code: deviceInsertError.code,
           },
         },
         { status: 500 }

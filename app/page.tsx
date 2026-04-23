@@ -51,6 +51,18 @@ type ValidateEmployeeResponse = {
   };
 };
 
+type DeviceStatusResponse = {
+  success: boolean;
+  exists: boolean;
+  message?: string;
+  employee?: {
+    id?: string;
+    name?: string;
+    birthDate?: string;
+    phoneLast4?: string;
+  };
+};
+
 type CheckoutAvailability = {
   enabled: boolean;
   notice: string;
@@ -64,6 +76,17 @@ type TodayRecord = {
   lat: number;
   lng: number;
 };
+
+function getOrCreateDeviceId() {
+  let deviceId = localStorage.getItem("device_id");
+
+  if (!deviceId) {
+    deviceId = crypto.randomUUID();
+    localStorage.setItem("device_id", deviceId);
+  }
+
+  return deviceId;
+}
 
 function getKstParts(date = new Date()) {
   const formatter = new Intl.DateTimeFormat("en-CA", {
@@ -269,54 +292,46 @@ export default function Home() {
 
   useEffect(() => {
     const initializeEmployee = async () => {
-      const savedEmployee = localStorage.getItem("employee");
-
-      if (!savedEmployee || savedEmployee === "undefined") {
-        clearEmployeeStorage();
-        router.push("/register-device");
-        return;
-      }
+      const deviceId = getOrCreateDeviceId();
 
       try {
-        const parsedEmployee: Employee = JSON.parse(savedEmployee);
-
-        if (
-          !parsedEmployee?.name ||
-          !parsedEmployee?.birthDate ||
-          !parsedEmployee?.phoneLast4
-        ) {
-          clearEmployeeStorage();
-          router.push("/register-device");
-          return;
-        }
-
-        const validateResponse = await fetch("/api/auth/validate-employee", {
+        const deviceResponse = await fetch("/api/device/status", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
           cache: "no-store",
           body: JSON.stringify({
-            name: parsedEmployee.name,
-            birthDate: parsedEmployee.birthDate,
-            phoneLast4: parsedEmployee.phoneLast4,
+            deviceId,
           }),
         });
 
-        const validateData: ValidateEmployeeResponse =
-          await validateResponse.json();
+        const deviceData: DeviceStatusResponse = await deviceResponse.json();
 
-        if (!validateData.success || !validateData.exists) {
-          clearEmployeeStorage();
-          alert("등록된 직원 정보가 삭제되어 다시 등록이 필요합니다.");
-          router.push("/register-device");
+        if (
+          deviceData.success &&
+          deviceData.exists &&
+          deviceData.employee?.name &&
+          deviceData.employee?.birthDate &&
+          deviceData.employee?.phoneLast4
+        ) {
+          const connectedEmployee: Employee = {
+            id: deviceData.employee.id,
+            name: deviceData.employee.name,
+            birthDate: deviceData.employee.birthDate,
+            phoneLast4: deviceData.employee.phoneLast4,
+          };
+
+          localStorage.setItem("employee", JSON.stringify(connectedEmployee));
+          setEmployee(connectedEmployee);
+          fetchTodayAttendance(connectedEmployee);
           return;
         }
 
-        setEmployee(parsedEmployee);
-        fetchTodayAttendance(parsedEmployee);
+        clearEmployeeStorage();
+        router.push("/register-device");
       } catch (error) {
-        console.error("employee 파싱 또는 검증 에러:", error);
+        console.error("device status 확인 에러:", error);
         clearEmployeeStorage();
         router.push("/register-device");
       }

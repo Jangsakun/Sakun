@@ -3,6 +3,17 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+function getOrCreateDeviceId() {
+  let deviceId = localStorage.getItem("device_id");
+
+  if (!deviceId) {
+    deviceId = crypto.randomUUID();
+    localStorage.setItem("device_id", deviceId);
+  }
+
+  return deviceId;
+}
+
 export default function RegisterDevicePage() {
   const router = useRouter();
 
@@ -28,6 +39,8 @@ export default function RegisterDevicePage() {
       return;
     }
 
+    const deviceId = getOrCreateDeviceId();
+
     setIsLoading(true);
     setMessage("처리 중...");
 
@@ -43,7 +56,8 @@ export default function RegisterDevicePage() {
           residentNumber,
           bankName,
           accountNumber,
-          reconnectCode, // 🔥 추가됨
+          reconnectCode,
+          deviceId,
         }),
       });
 
@@ -137,7 +151,6 @@ export default function RegisterDevicePage() {
                   className="w-full h-12 border rounded px-3"
                 />
 
-                {/* 🔥 재연결 코드 입력칸 */}
                 <input
                   placeholder="재연결 코드 (휴대폰 변경 시만 입력)"
                   value={reconnectCode}
