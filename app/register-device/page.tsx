@@ -23,6 +23,7 @@ export default function RegisterDevicePage() {
   const [bankName, setBankName] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [reconnectCode, setReconnectCode] = useState("");
+  const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
 
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -36,6 +37,11 @@ export default function RegisterDevicePage() {
 
     if (residentNumber.replace(/[^0-9]/g, "").length !== 13) {
       setMessage("주민번호 13자리를 정확히 입력해주세요.");
+      return;
+    }
+
+    if (!agreedToPrivacy) {
+      setMessage("개인정보 수집 및 이용 동의가 필요합니다.");
       return;
     }
 
@@ -163,6 +169,40 @@ export default function RegisterDevicePage() {
                 <p className="text-xs text-gray-400">
                   휴대폰을 변경한 경우 관리자에게 받은 재연결 코드를 입력하세요
                 </p>
+
+                <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-4">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={agreedToPrivacy}
+                      onChange={(e) => setAgreedToPrivacy(e.target.checked)}
+                      className="mt-1 h-4 w-4"
+                    />
+                    <div className="text-sm text-gray-700">
+                      <p className="font-medium text-gray-900">
+                        개인정보 수집 및 이용에 동의합니다.
+                      </p>
+                      <ul className="mt-2 space-y-1 text-xs text-gray-600">
+                        <li>
+                          - 수집항목: 이름, 휴대전화번호, 주민등록번호,
+                          은행명, 계좌번호
+                        </li>
+                        <li>
+                          - 이용목적: 근태관리, 급여 지급 및 관련 법적 의무
+                          이행
+                        </li>
+                        <li>
+                          - 보유기간: 퇴사 후 3년 (관련 법령에 따라 보관이
+                          필요한 경우 해당 기간까지 보관)
+                        </li>
+                        <li>
+                          - 동의 거부 시 서비스 이용(회원 등록)이 제한될 수
+                          있습니다.
+                        </li>
+                      </ul>
+                    </div>
+                  </label>
+                </div>
               </div>
 
               <button
