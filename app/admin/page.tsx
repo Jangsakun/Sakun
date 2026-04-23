@@ -2,6 +2,7 @@
 
 import { CSSProperties, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import ScheduleTab from "./components/ScheduleTab";
 
 type AdminRecord = {
   id: number;
@@ -122,7 +123,7 @@ export default function AdminPage() {
   const router = useRouter();
 
   const [tab, setTab] = useState<
-    "attendance" | "employees" | "payroll" | "contracts"
+    "attendance" | "employees" | "payroll" | "contracts" | "schedule"
   >("attendance");
 
   const [startDate, setStartDate] = useState(() => {
@@ -1002,7 +1003,7 @@ export default function AdminPage() {
                   fetchRecords();
                 } else if (tab === "employees" || tab === "contracts") {
                   fetchEmployees();
-                } else {
+                } else if (tab === "payroll") {
                   fetchPayroll();
                 }
               }}
@@ -1090,6 +1091,17 @@ export default function AdminPage() {
             }}
           >
             근로계약서
+          </button>
+
+          <button
+            onClick={() => setTab("schedule")}
+            style={{
+              ...tabButtonStyle,
+              backgroundColor: tab === "schedule" ? "#111827" : "#f3f4f6",
+              color: tab === "schedule" ? "#ffffff" : "#111827",
+            }}
+          >
+            스케줄 조회
           </button>
 
           <button
@@ -1960,6 +1972,22 @@ export default function AdminPage() {
             </section>
           </>
         )}
+        {tab === "schedule" && (
+          <section style={cardStyle}>
+            <div style={sectionHeaderStyle}>
+              <div>
+                <h2 style={sectionTitleStyle}>스케줄 조회</h2>
+                <p style={sectionDescriptionStyle}>
+                  이번 주 요일별 출근 가능 / 출근 안함 / 미제출 인원을 확인할 수 있습니다.
+                </p>
+              </div>
+            </div>
+
+            <ScheduleTab />
+          </section>
+        )}
+
+
       </div>
     </main>
   );
