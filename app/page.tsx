@@ -536,7 +536,7 @@ export default function Home() {
     <main style={pageStyle}>
       <section style={cardStyle}>
         <div style={{ marginBottom: "24px" }}>
-          <h1 style={titleStyle}>근태관리 시스템</h1>
+          <h1 style={titleStyle}>통합 관리 시스템</h1>
           <p style={subtitleStyle}>
             <strong>{employee.name}</strong>님, 오늘도 좋은 하루 되세요.
           </p>
