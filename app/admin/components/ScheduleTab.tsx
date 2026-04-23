@@ -129,20 +129,7 @@ export default function ScheduleTab() {
 
   return (
     <div style={{ marginTop: "20px" }}>
-      <h2 style={{ fontSize: "20px", fontWeight: 700, marginBottom: "10px" }}>
-        스케줄 조회
-      </h2>
-
-      <p
-        style={{
-          marginTop: 0,
-          marginBottom: "16px",
-          color: "#6b7280",
-          fontSize: "14px",
-        }}
-      >
-        이번 주 요일별 출근 가능 인원을 확인할 수 있습니다.
-      </p>
+      {/* 👉 여기부터 바로 시작 (제목 제거됨) */}
 
       <div
         style={{
@@ -186,6 +173,7 @@ export default function ScheduleTab() {
 
       {!loading && data && (
         <>
+          {/* 출근 가능 */}
           <div
             style={{
               border: "1px solid #16a34a",
@@ -199,31 +187,26 @@ export default function ScheduleTab() {
               🟢 출근 가능 {data.summary.available}명
             </div>
 
-            {data.available.length === 0 ? (
-              <div style={{ color: "#6b7280", fontSize: "14px" }}>
-                출근 가능 인원이 없습니다.
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                {data.available.map((emp, index) => (
-                  <span
-                    key={`${emp.id ?? emp.name}-${index}`}
-                    style={{
-                      padding: "6px 10px",
-                      borderRadius: "999px",
-                      background: "#dcfce7",
-                      fontSize: "13px",
-                      color: "#166534",
-                      fontWeight: 600,
-                    }}
-                  >
-                    {emp.name}
-                  </span>
-                ))}
-              </div>
-            )}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+              {data.available.map((emp, index) => (
+                <span
+                  key={`${emp.id ?? emp.name}-${index}`}
+                  style={{
+                    padding: "6px 10px",
+                    borderRadius: "999px",
+                    background: "#dcfce7",
+                    fontSize: "13px",
+                    color: "#166534",
+                    fontWeight: 600,
+                  }}
+                >
+                  {emp.name}
+                </span>
+              ))}
+            </div>
           </div>
 
+          {/* 출근 안함 */}
           <div
             style={{
               border: "1px solid #ef4444",
@@ -234,50 +217,40 @@ export default function ScheduleTab() {
             }}
           >
             <div
-              onClick={() => setShowUnavailable((prev) => !prev)}
+              onClick={() => setShowUnavailable(!showUnavailable)}
               style={{
                 fontWeight: 700,
                 cursor: "pointer",
-                marginBottom: showUnavailable ? "10px" : "0",
                 display: "flex",
-                alignItems: "center",
                 justifyContent: "space-between",
-                gap: "12px",
               }}
             >
-              <span>🔴 출근 안함 {data.summary.unavailable}명</span>
-              <span>{showUnavailable ? "▲" : "▼"}</span>
+              🔴 출근 안함 {data.summary.unavailable}명{" "}
+              {showUnavailable ? "▲" : "▼"}
             </div>
 
             {showUnavailable && (
-              <>
-                {data.unavailable.length === 0 ? (
-                  <div style={{ color: "#6b7280", fontSize: "14px" }}>
-                    출근 안함 인원이 없습니다.
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                    {data.unavailable.map((emp, index) => (
-                      <span
-                        key={`${emp.id ?? emp.name}-${index}`}
-                        style={{
-                          padding: "6px 10px",
-                          borderRadius: "999px",
-                          background: "#fee2e2",
-                          fontSize: "13px",
-                          color: "#991b1b",
-                          fontWeight: 600,
-                        }}
-                      >
-                        {emp.name}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "10px" }}>
+                {data.unavailable.map((emp, index) => (
+                  <span
+                    key={`${emp.id ?? emp.name}-${index}`}
+                    style={{
+                      padding: "6px 10px",
+                      borderRadius: "999px",
+                      background: "#fee2e2",
+                      fontSize: "13px",
+                      color: "#991b1b",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {emp.name}
+                  </span>
+                ))}
+              </div>
             )}
           </div>
 
+          {/* 미제출 */}
           <div
             style={{
               border: "1px solid #9ca3af",
@@ -287,64 +260,39 @@ export default function ScheduleTab() {
             }}
           >
             <div
-              onClick={() => setShowNotSubmitted((prev) => !prev)}
+              onClick={() => setShowNotSubmitted(!showNotSubmitted)}
               style={{
                 fontWeight: 700,
                 cursor: "pointer",
-                marginBottom: showNotSubmitted ? "10px" : "0",
                 display: "flex",
-                alignItems: "center",
                 justifyContent: "space-between",
-                gap: "12px",
               }}
             >
-              <span>⚪ 미제출 {data.summary.notSubmitted}명</span>
-              <span>{showNotSubmitted ? "▲" : "▼"}</span>
+              ⚪ 미제출 {data.summary.notSubmitted}명{" "}
+              {showNotSubmitted ? "▲" : "▼"}
             </div>
 
             {showNotSubmitted && (
-              <>
-                {data.notSubmitted.length === 0 ? (
-                  <div style={{ color: "#6b7280", fontSize: "14px" }}>
-                    미제출 인원이 없습니다.
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                    {data.notSubmitted.map((emp, index) => (
-                      <span
-                        key={`${emp.id ?? emp.name}-${index}`}
-                        style={{
-                          padding: "6px 10px",
-                          borderRadius: "999px",
-                          background: "#e5e7eb",
-                          fontSize: "13px",
-                          color: "#374151",
-                          fontWeight: 600,
-                        }}
-                      >
-                        {emp.name}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "10px" }}>
+                {data.notSubmitted.map((emp, index) => (
+                  <span
+                    key={`${emp.id ?? emp.name}-${index}`}
+                    style={{
+                      padding: "6px 10px",
+                      borderRadius: "999px",
+                      background: "#e5e7eb",
+                      fontSize: "13px",
+                      color: "#374151",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {emp.name}
+                  </span>
+                ))}
+              </div>
             )}
           </div>
         </>
-      )}
-
-      {!loading && !data && (
-        <div
-          style={{
-            border: "1px solid #e5e7eb",
-            borderRadius: "12px",
-            padding: "16px",
-            background: "#ffffff",
-            color: "#6b7280",
-          }}
-        >
-          조회된 데이터가 없습니다.
-        </div>
       )}
     </div>
   );
