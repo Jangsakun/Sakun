@@ -192,7 +192,7 @@ export default function RegisterDevicePage() {
                           이행
                         </li>
                         <li>
-                          - 보유기간: 퇴사 후 3년 (관련 법령에 따라 보관이
+                          - 보유기간: 퇴사 후 5년 (관련 법령에 따라 보관이
                           필요한 경우 해당 기간까지 보관)
                         </li>
                         <li>
