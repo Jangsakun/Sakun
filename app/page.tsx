@@ -584,7 +584,6 @@ export default function Home() {
         <div style={statusBoxStyle}>
           <div style={statusHeaderStyle}>현재 상태</div>
           <p style={statusTextStyle}>{message || "대기 중"}</p>
-          {location ? <p style={locationTextStyle}>{location}</p> : null}
         </div>
 
         <div style={summaryGridStyle}>
@@ -782,15 +781,6 @@ const statusTextStyle: React.CSSProperties = {
   fontSize: "16px",
   color: "#111827",
   fontWeight: 600,
-};
-
-const locationTextStyle: React.CSSProperties = {
-  marginTop: "8px",
-  marginBottom: 0,
-  fontSize: "12px",
-  color: "#6b7280",
-  lineHeight: 1.5,
-  wordBreak: "break-all",
 };
 
 const summaryGridStyle: React.CSSProperties = {
