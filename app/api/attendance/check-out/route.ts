@@ -91,7 +91,14 @@ function getKstDayRangeFromIso(isoString: string) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, birthDate, phoneLast4, lat, lng, checkedAt } = body;
+    const { name, birthDate, phoneLast4, lat, lng, checkedAt, accuracy } = body;
+
+    console.log("=== check-out 요청 시작 ===");
+    console.log("받은 body:", body);
+    console.log("사용자 위치:", lat, lng);
+    console.log("사용자 위치 타입:", typeof lat, typeof lng);
+    console.log("checkedAt:", checkedAt);
+    console.log("accuracy:", accuracy);
 
     if (
       !name ||
@@ -103,6 +110,27 @@ export async function POST(request: Request) {
     ) {
       return NextResponse.json(
         { success: false, message: "필수값 누락" },
+        { status: 400 }
+      );
+    }
+
+    const parsedLat = Number(lat);
+    const parsedLng = Number(lng);
+    const parsedAccuracy =
+      accuracy === undefined || accuracy === null || accuracy === ""
+        ? null
+        : Number(accuracy);
+
+    if (Number.isNaN(parsedLat) || Number.isNaN(parsedLng)) {
+      return NextResponse.json(
+        { success: false, message: "위치값이 올바르지 않습니다." },
+        { status: 400 }
+      );
+    }
+
+    if (parsedAccuracy !== null && Number.isNaN(parsedAccuracy)) {
+      return NextResponse.json(
+        { success: false, message: "GPS 정확도값이 올바르지 않습니다." },
         { status: 400 }
       );
     }
@@ -142,15 +170,72 @@ export async function POST(request: Request) {
 
     const companyLat = 35.85925533483926;
     const companyLng = 127.1046071646124;
+
+    // 기본 허용 반경
     const allowedRadiusM = 150;
 
-    const distance = getDistanceInMeters(lat, lng, companyLat, companyLng);
+    // GPS 오차를 조금 감안한 예외 허용 반경
+    const bufferRadiusM = 200;
 
-    if (distance > allowedRadiusM) {
+    // accuracy 기준
+    const maxAllowedAccuracyM = 80;
+    const hardBlockAccuracyM = 120;
+
+    console.log("회사 위치:", companyLat, companyLng);
+    console.log("허용 반경:", allowedRadiusM);
+    console.log("버퍼 반경:", bufferRadiusM);
+    console.log("정확도 통과 기준:", maxAllowedAccuracyM);
+    console.log("정확도 강제 차단 기준:", hardBlockAccuracyM);
+
+    const distance = getDistanceInMeters(
+      parsedLat,
+      parsedLng,
+      companyLat,
+      companyLng
+    );
+
+    console.log("계산된 거리:", distance);
+
+    if (parsedAccuracy !== null && parsedAccuracy > hardBlockAccuracyM) {
+      console.log("GPS 정확도 너무 낮음:", parsedAccuracy);
+
       return NextResponse.json(
         {
           success: false,
-          message: `회사 반경 밖입니다. 현재 거리: ${Math.round(distance)}m`,
+          message:
+            "GPS 정확도가 낮습니다. 건물 밖이나 창가에서 다시 시도해주세요.",
+        },
+        { status: 400 }
+      );
+    }
+
+    let isAllowed = false;
+
+    if (distance <= allowedRadiusM) {
+      isAllowed = true;
+      console.log("기본 반경 통과");
+    } else if (
+      distance <= bufferRadiusM &&
+      parsedAccuracy !== null &&
+      parsedAccuracy <= maxAllowedAccuracyM
+    ) {
+      isAllowed = true;
+      console.log("버퍼 반경 + 정확도 조건으로 통과");
+    }
+
+    if (!isAllowed) {
+      console.log("반경 밖으로 판단됨:", {
+        distance: Math.round(distance),
+        accuracy: parsedAccuracy,
+      });
+
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            parsedAccuracy === null
+              ? `회사 반경 밖입니다. 현재 거리: ${Math.round(distance)}m`
+              : `회사 반경 밖입니다. 현재 거리: ${Math.round(distance)}m / GPS 정확도: ${Math.round(parsedAccuracy)}m`,
         },
         { status: 400 }
       );
@@ -198,17 +283,22 @@ export async function POST(request: Request) {
       );
     }
 
+    const insertPayload: Record<string, unknown> = {
+      employee_id: employee.id,
+      record_type: "check_out",
+      lat: parsedLat,
+      lng: parsedLng,
+      checked_at: checkedAt,
+    };
+
+    // attendance_records 테이블에 accuracy / distance 컬럼이 있으면 같이 저장됨
+    // 아직 컬럼이 없으면 아래 2줄은 주석 처리하고 먼저 배포해도 됨
+    insertPayload.accuracy = parsedAccuracy;
+    insertPayload.distance = Math.round(distance);
+
     const { error: insertError } = await supabase
       .from("attendance_records")
-      .insert([
-        {
-          employee_id: employee.id,
-          record_type: "check_out",
-          lat,
-          lng,
-          checked_at: checkedAt,
-        },
-      ]);
+      .insert([insertPayload]);
 
     if (insertError) {
       return NextResponse.json(
@@ -220,11 +310,21 @@ export async function POST(request: Request) {
       );
     }
 
+    console.log("퇴근 기록 저장 성공");
+    console.log("=== check-out 요청 끝 ===");
+
     return NextResponse.json({
       success: true,
-      message: `퇴근 기록 저장 성공 (회사와 거리 ${Math.round(distance)}m)`,
+      message:
+        parsedAccuracy === null
+          ? `퇴근 기록 저장 성공 (회사와 거리 ${Math.round(distance)}m)`
+          : `퇴근 기록 저장 성공 (회사와 거리 ${Math.round(distance)}m / GPS 정확도 ${Math.round(parsedAccuracy)}m)`,
+      distance: Math.round(distance),
+      accuracy: parsedAccuracy,
     });
   } catch (error) {
+    console.error("check-out API catch error:", error);
+
     return NextResponse.json(
       {
         success: false,

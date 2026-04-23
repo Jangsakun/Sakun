@@ -18,7 +18,11 @@ type AttendanceResponse = {
     lat: number;
     lng: number;
     checkedAt: string;
+    accuracy?: number;
   };
+  distance?: number;
+  accuracy?: number | null;
+  normalizedCheckedAt?: string;
 };
 
 type TodayAttendanceResponse = {
@@ -229,12 +233,6 @@ function normalizeDisplayCheckOut(value: string) {
   return source;
 }
 
-function formatDisplayDateTime(value: string) {
-  return new Date(value).toLocaleString("ko-KR", {
-    timeZone: "Asia/Seoul",
-  });
-}
-
 function formatDisplayAttendanceTime(
   value: string,
   recordType: string,
@@ -407,7 +405,7 @@ export default function Home() {
         const checkedAt = new Date().toISOString();
 
         setLocation(
-          `위도: ${lat}, 경도: ${lng}, 정확도: ${Math.round(accuracy)}m`
+          `위도: ${lat}, 경도: ${lng}, GPS 정확도: ${Math.round(accuracy)}m`
         );
 
         try {
@@ -447,6 +445,7 @@ export default function Home() {
               phoneLast4: employee.phoneLast4,
               lat,
               lng,
+              accuracy,
               checkedAt,
             }),
           });
@@ -455,14 +454,22 @@ export default function Home() {
 
           if (data.success) {
             if (type === "check-in") {
-              setMessage("출근이 정상 처리되었습니다.");
+              setMessage(data.message || "출근이 정상 처리되었습니다.");
               setLastCheckInTime(
-                formatDisplayAttendanceTime(checkedAt, "check_in", true)
+                formatDisplayAttendanceTime(
+                  data.normalizedCheckedAt || checkedAt,
+                  "check_in",
+                  true
+                )
               );
             } else {
-              setMessage("퇴근이 정상 처리되었습니다.");
+              setMessage(data.message || "퇴근이 정상 처리되었습니다.");
               setLastCheckOutTime(
-                formatDisplayAttendanceTime(checkedAt, "check_out", true)
+                formatDisplayAttendanceTime(
+                  data.normalizedCheckedAt || checkedAt,
+                  "check_out",
+                  true
+                )
               );
             }
 
