@@ -38,7 +38,6 @@ function getKstDayRangeFromIso(isoString: string) {
   const kstDateOnly = `${year}-${monthText}-${dayText}`;
 
   return {
-    dateOnly: kstDateOnly,
     startUtc: `${kstDateOnly}T00:00:00+09:00`,
     endUtc: `${kstDateOnly}T23:59:59.999+09:00`,
   };
@@ -62,16 +61,11 @@ function normalizeCheckInTime(checkedAt: string): Date {
 
   const totalMinutes = hour * 60 + minute;
 
-  const nineStart = 8 * 60 + 45; // 08:45
-  const nineEnd = 9 * 60 + 10; // 09:10
-  const nineThirtyStart = 9 * 60 + 11; // 09:11
-  const nineThirtyEnd = 9 * 60 + 30; // 09:30
-
-  if (totalMinutes >= nineStart && totalMinutes <= nineEnd) {
+  if (totalMinutes >= 8 * 60 + 45 && totalMinutes <= 9 * 60 + 10) {
     return toKstDateFromParts(year, month, day, 9, 0, 0);
   }
 
-  if (totalMinutes >= nineThirtyStart && totalMinutes <= nineThirtyEnd) {
+  if (totalMinutes >= 9 * 60 + 11 && totalMinutes <= 9 * 60 + 30) {
     return toKstDateFromParts(year, month, day, 9, 30, 0);
   }
 
@@ -83,13 +77,6 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { name, birthDate, phoneLast4, lat, lng, checkedAt, accuracy } = body;
 
-    console.log("=== check-in 요청 시작 ===");
-    console.log("받은 body:", body);
-    console.log("사용자 위치:", lat, lng);
-    console.log("사용자 위치 타입:", typeof lat, typeof lng);
-    console.log("checkedAt:", checkedAt);
-    console.log("accuracy:", accuracy);
-
     if (
       !name ||
       !birthDate ||
@@ -98,16 +85,6 @@ export async function POST(request: Request) {
       lng === undefined ||
       !checkedAt
     ) {
-      console.log("필수값 누락:", {
-        name,
-        birthDate,
-        phoneLast4,
-        lat,
-        lng,
-        checkedAt,
-        accuracy,
-      });
-
       return NextResponse.json(
         { success: false, message: "필수값 누락" },
         { status: 400 }
@@ -136,7 +113,6 @@ export async function POST(request: Request) {
     }
 
     const checkedDate = new Date(checkedAt);
-
     if (Number.isNaN(checkedDate.getTime())) {
       return NextResponse.json(
         { success: false, message: "checkedAt 값이 올바르지 않습니다." },
@@ -144,37 +120,13 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseAnonKey) {
-      console.log("환경변수 없음");
-      return NextResponse.json(
-        { success: false, message: "환경변수 없음" },
-        { status: 500 }
-      );
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
 
     const companyLat = 35.85925533483926;
     const companyLng = 127.1046071646124;
-
-    // 기본 허용 반경
-    const allowedRadiusM = 150;
-
-    // GPS 오차를 조금 감안한 예외 허용 반경
-    const bufferRadiusM = 200;
-
-    // accuracy 기준
-    const maxAllowedAccuracyM = 80;
-    const hardBlockAccuracyM = 120;
-
-    console.log("회사 위치:", companyLat, companyLng);
-    console.log("허용 반경:", allowedRadiusM);
-    console.log("버퍼 반경:", bufferRadiusM);
-    console.log("정확도 통과 기준:", maxAllowedAccuracyM);
-    console.log("정확도 강제 차단 기준:", hardBlockAccuracyM);
 
     const distance = getDistanceInMeters(
       parsedLat,
@@ -183,11 +135,14 @@ export async function POST(request: Request) {
       companyLng
     );
 
-    console.log("계산된 거리:", distance);
+    // GPS 기준
+    const MAX_DISTANCE = 150;
+    const BUFFER_DISTANCE = 200;
+    const MAX_ACCURACY = 80;
+    const BLOCK_ACCURACY = 120;
 
-    if (parsedAccuracy !== null && parsedAccuracy > hardBlockAccuracyM) {
-      console.log("GPS 정확도 너무 낮음:", parsedAccuracy);
-
+    // 정확도 너무 낮으면 차단
+    if (parsedAccuracy !== null && parsedAccuracy > BLOCK_ACCURACY) {
       return NextResponse.json(
         {
           success: false,
@@ -200,37 +155,30 @@ export async function POST(request: Request) {
 
     let isAllowed = false;
 
-    if (distance <= allowedRadiusM) {
+    if (distance <= MAX_DISTANCE) {
       isAllowed = true;
-      console.log("기본 반경 통과");
     } else if (
-      distance <= bufferRadiusM &&
+      distance <= BUFFER_DISTANCE &&
       parsedAccuracy !== null &&
-      parsedAccuracy <= maxAllowedAccuracyM
+      parsedAccuracy <= MAX_ACCURACY
     ) {
       isAllowed = true;
-      console.log("버퍼 반경 + 정확도 조건으로 통과");
     }
 
     if (!isAllowed) {
-      console.log("반경 밖으로 판단됨:", {
-        distance: Math.round(distance),
-        accuracy: parsedAccuracy,
-      });
-
       return NextResponse.json(
         {
           success: false,
           message:
             parsedAccuracy === null
-              ? `회사 반경 밖입니다. 현재 거리: ${Math.round(distance)}m`
-              : `회사 반경 밖입니다. 현재 거리: ${Math.round(distance)}m / GPS 정확도: ${Math.round(parsedAccuracy)}m`,
+              ? `회사 반경 밖입니다. (${Math.round(distance)}m)`
+              : `회사 반경 밖입니다. (${Math.round(distance)}m / 정확도 ${Math.round(parsedAccuracy)}m)`,
         },
         { status: 400 }
       );
     }
 
-    const { data: employee, error: employeeError } = await supabase
+    const { data: employee } = await supabase
       .from("employees")
       .select("*")
       .eq("name", name)
@@ -240,28 +188,18 @@ export async function POST(request: Request) {
       .limit(1)
       .single();
 
-    console.log("조회된 employee:", employee);
-    console.log("employeeError:", employeeError);
-
-    if (employeeError || !employee) {
+    if (!employee) {
       return NextResponse.json(
         { success: false, message: "직원 정보를 찾을 수 없습니다." },
         { status: 404 }
       );
     }
 
-    const normalizedCheckedAt = normalizeCheckInTime(checkedAt);
-    const normalizedCheckedAtIso = normalizedCheckedAt.toISOString();
+    const normalizedCheckedAt = normalizeCheckInTime(checkedAt).toISOString();
 
-    console.log("보정 전 checkedAt:", checkedAt);
-    console.log("보정 후 checkedAt:", normalizedCheckedAtIso);
+    const { startUtc, endUtc } = getKstDayRangeFromIso(checkedAt);
 
-    const { startUtc, endUtc, dateOnly } = getKstDayRangeFromIso(checkedAt);
-    console.log("KST dateOnly:", dateOnly);
-    console.log("KST startUtc:", startUtc);
-    console.log("KST endUtc:", endUtc);
-
-    const { data: existingCheckIn, error: existingError } = await supabase
+    const { data: existing } = await supabase
       .from("attendance_records")
       .select("*")
       .eq("employee_id", employee.id)
@@ -270,69 +208,43 @@ export async function POST(request: Request) {
       .lte("checked_at", endUtc)
       .limit(1);
 
-    console.log("existingCheckIn:", existingCheckIn);
-    console.log("existingError:", existingError);
-
-    if (existingError) {
-      return NextResponse.json(
-        { success: false, message: "기존 출근 기록 확인 실패" },
-        { status: 500 }
-      );
-    }
-
-    if (existingCheckIn && existingCheckIn.length > 0) {
-      console.log("이미 출근 처리된 상태");
+    if (existing && existing.length > 0) {
       return NextResponse.json(
         { success: false, message: "오늘은 이미 출근 처리되었습니다." },
         { status: 400 }
       );
     }
 
-    const insertPayload: Record<string, unknown> = {
+    const payload: any = {
       employee_id: employee.id,
       record_type: "check_in",
       lat: parsedLat,
       lng: parsedLng,
-      checked_at: normalizedCheckedAtIso,
+      checked_at: normalizedCheckedAt,
     };
 
-    // attendance_records 테이블에 accuracy / distance 컬럼이 있으면 같이 저장됨
-    // 아직 컬럼이 없으면 아래 2줄은 주석 처리하고 먼저 배포해도 됨
-    insertPayload.accuracy = parsedAccuracy;
-    insertPayload.distance = Math.round(distance);
+    payload.accuracy = parsedAccuracy;
+    payload.distance = Math.round(distance);
 
-    const { error: insertError } = await supabase
+    const { error } = await supabase
       .from("attendance_records")
-      .insert([insertPayload]);
+      .insert([payload]);
 
-    console.log("insertError:", insertError);
-
-    if (insertError) {
+    if (error) {
       return NextResponse.json(
-        {
-          success: false,
-          message: `출근 기록 저장 실패: ${insertError.message}`,
-        },
+        { success: false, message: error.message },
         { status: 500 }
       );
     }
 
-    console.log("출근 기록 저장 성공");
-    console.log("=== check-in 요청 끝 ===");
-
     return NextResponse.json({
       success: true,
-      message:
-        parsedAccuracy === null
-          ? `출근 기록 저장 성공 (회사와 거리 ${Math.round(distance)}m)`
-          : `출근 기록 저장 성공 (회사와 거리 ${Math.round(distance)}m / GPS 정확도 ${Math.round(parsedAccuracy)}m)`,
-      normalizedCheckedAt: normalizedCheckedAtIso,
+      message: `출근 완료 (${Math.round(distance)}m)`,
       distance: Math.round(distance),
       accuracy: parsedAccuracy,
+      normalizedCheckedAt,
     });
   } catch (error) {
-    console.error("check-in API catch error:", error);
-
     return NextResponse.json(
       {
         success: false,
