@@ -685,46 +685,66 @@ export default function Home() {
     );
   };
 
-  const handleSubmitSchedule = async () => {
-    if (scheduleStatus === "submitted") {
+const handleSubmitSchedule = async () => {
+  if (!employee) return;
+
+  if (scheduleStatus === "submitted") {
+    return;
+  }
+
+  const activeDays = weeklySchedule.filter(
+    (day) => !day.isHoliday && day.available
+  );
+
+  if (activeDays.length === 0) {
+    alert("최소 1일 이상 출근 가능으로 선택해주세요.");
+    return;
+  }
+
+  const invalidDay = activeDays.find(
+    (day) => !day.startTime || !day.endTime || day.startTime >= day.endTime
+  );
+
+  if (invalidDay) {
+    alert(`${invalidDay.dayLabel}요일 시간을 다시 확인해주세요.`);
+    return;
+  }
+
+  try {
+    setIsScheduleSaving(true);
+
+    const response = await fetch("/api/worker/schedule", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: employee.name,
+        birthDate: employee.birthDate,
+        phoneLast4: employee.phoneLast4,
+        weekStartDate: "2026-04-20",
+        weekEndDate: "2026-04-24",
+        schedule: activeDays,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!data.success) {
+      alert(data.message || "스케줄 제출에 실패했습니다.");
       return;
     }
 
-    const activeDays = weeklySchedule.filter(
-      (day) => !day.isHoliday && day.available
-    );
-
-    if (activeDays.length === 0) {
-      alert("최소 1일 이상 출근 가능으로 선택해주세요.");
-      return;
-    }
-
-    const invalidDay = activeDays.find(
-      (day) => !day.startTime || !day.endTime || day.startTime >= day.endTime
-    );
-
-    if (invalidDay) {
-      alert(`${invalidDay.dayLabel}요일 시간을 다시 확인해주세요.`);
-      return;
-    }
-
-    try {
-      setIsScheduleSaving(true);
-
-      // TODO:
-      // 여기서 나중에 /api/worker/schedule/submit 호출해서 DB 저장
-      await new Promise((resolve) => setTimeout(resolve, 600));
-
-      setScheduleStatus("submitted");
-      setScheduleOpen(false);
-      setMessage("이번 주 스케줄 제출이 완료되었습니다.");
-    } catch (error) {
-      console.error(error);
-      alert("스케줄 제출 중 오류가 발생했습니다.");
-    } finally {
-      setIsScheduleSaving(false);
-    }
-  };
+    setScheduleStatus("submitted");
+    setScheduleOpen(false);
+    setMessage("이번 주 스케줄 제출이 완료되었습니다.");
+  } catch (error) {
+    console.error(error);
+    alert("스케줄 제출 중 오류가 발생했습니다.");
+  } finally {
+    setIsScheduleSaving(false);
+  }
+};
 
   if (!employee) {
     return (
