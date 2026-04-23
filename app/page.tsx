@@ -95,6 +95,29 @@ type WeeklyScheduleInput = {
   available: boolean;
 };
 
+type SubmittedScheduleDay = {
+  dayLabel?: string;
+  dateLabel?: string;
+  fullDate?: string;
+  available?: boolean;
+};
+
+type WeeklyScheduleStatusResponse = {
+  success: boolean;
+  submitted: boolean;
+  message?: string;
+  schedule?: {
+    id?: string;
+    employee_id?: string | null;
+    name?: string;
+    birth_date?: string;
+    phone_last4?: string;
+    week_start_date?: string;
+    week_end_date?: string;
+    schedule?: SubmittedScheduleDay[];
+  } | null;
+};
+
 function getOrCreateDeviceId() {
   let deviceId = localStorage.getItem("device_id");
 
@@ -395,6 +418,30 @@ function createWeekdaysWithHolidayInfo(holidays: HolidayItem[]) {
   });
 }
 
+function applySubmittedScheduleToWeek(
+  baseWeek: WeeklyScheduleInput[],
+  submittedDays?: SubmittedScheduleDay[]
+) {
+  if (!Array.isArray(submittedDays) || submittedDays.length === 0) {
+    return baseWeek;
+  }
+
+  return baseWeek.map((day) => {
+    if (day.isHoliday) {
+      return day;
+    }
+
+    const matched = submittedDays.find(
+      (item) => item.fullDate === day.fullDate && item.available
+    );
+
+    return {
+      ...day,
+      available: Boolean(matched),
+    };
+  });
+}
+
 export default function Home() {
   const router = useRouter();
 
@@ -408,6 +455,7 @@ export default function Home() {
     useState<ScheduleStatus>("pending");
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [isScheduleSaving, setIsScheduleSaving] = useState(false);
+  const [isScheduleChecking, setIsScheduleChecking] = useState(false);
   const [weeklySchedule, setWeeklySchedule] = useState<WeeklyScheduleInput[]>([]);
   const [weekRangeLabel, setWeekRangeLabel] = useState("");
   const [weekStartDate, setWeekStartDate] = useState("");
@@ -416,6 +464,99 @@ export default function Home() {
 
   const clearEmployeeStorage = () => {
     localStorage.removeItem("employee");
+  };
+
+  const fetchTodayAttendance = async (currentEmployee: Employee) => {
+    try {
+      const response = await fetch("/api/attendance/today", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: currentEmployee.name,
+          birthDate: currentEmployee.birthDate,
+          phoneLast4: currentEmployee.phoneLast4,
+        }),
+      });
+
+      const data: TodayAttendanceResponse = await response.json();
+
+      if (data.success && data.today) {
+        setTodayRecords(data.today.records || []);
+      }
+    } catch (error) {
+      console.error("오늘 기록 불러오기 실패:", error);
+    }
+  };
+
+  const checkScheduleSubmitted = async (
+    currentEmployee: Employee,
+    currentWeekStartDate: string,
+    currentWeekEndDate: string,
+    currentWeeklySchedule?: WeeklyScheduleInput[]
+  ) => {
+    if (
+      !currentEmployee.name ||
+      !currentEmployee.birthDate ||
+      !currentEmployee.phoneLast4 ||
+      !currentWeekStartDate ||
+      !currentWeekEndDate
+    ) {
+      return;
+    }
+
+    try {
+      setIsScheduleChecking(true);
+
+      const params = new URLSearchParams({
+        name: String(currentEmployee.name).trim(),
+        birthDate: String(currentEmployee.birthDate).trim(),
+        phoneLast4: String(currentEmployee.phoneLast4).trim(),
+        weekStartDate: String(currentWeekStartDate).trim(),
+        weekEndDate: String(currentWeekEndDate).trim(),
+      });
+
+      const response = await fetch(
+        `/api/worker/schedule/status?${params.toString()}`,
+        {
+          method: "GET",
+          cache: "no-store",
+        }
+      );
+
+      const data: WeeklyScheduleStatusResponse = await response.json();
+
+      if (!data.success) {
+        setScheduleStatus("pending");
+        return;
+      }
+
+      if (data.submitted) {
+        setScheduleStatus("submitted");
+        setScheduleOpen(false);
+
+        if (Array.isArray(currentWeeklySchedule) && currentWeeklySchedule.length) {
+          setWeeklySchedule(
+            applySubmittedScheduleToWeek(
+              currentWeeklySchedule,
+              data.schedule?.schedule
+            )
+          );
+        }
+      } else {
+        setScheduleStatus("pending");
+
+        if (Array.isArray(currentWeeklySchedule) && currentWeeklySchedule.length) {
+          setWeeklySchedule(currentWeeklySchedule);
+        }
+      }
+    } catch (error) {
+      console.error("스케줄 제출 여부 조회 실패:", error);
+      setScheduleStatus("pending");
+    } finally {
+      setIsScheduleChecking(false);
+    }
   };
 
   useEffect(() => {
@@ -506,11 +647,23 @@ export default function Home() {
 
         const holidays = holidayResults.flat();
         const nextWeeklySchedule = createWeekdaysWithHolidayInfo(holidays);
+        const nextWeekStartDate = formatDateKey(monday);
+        const nextWeekEndDate = formatDateKey(friday);
+        const nextWeekRangeLabel = formatWeekRangeLabel(monday, friday);
 
         setWeeklySchedule(nextWeeklySchedule);
-        setWeekStartDate(formatDateKey(monday));
-        setWeekEndDate(formatDateKey(friday));
-        setWeekRangeLabel(formatWeekRangeLabel(monday, friday));
+        setWeekStartDate(nextWeekStartDate);
+        setWeekEndDate(nextWeekEndDate);
+        setWeekRangeLabel(nextWeekRangeLabel);
+
+        if (employee) {
+          await checkScheduleSubmitted(
+            employee,
+            nextWeekStartDate,
+            nextWeekEndDate,
+            nextWeeklySchedule
+          );
+        }
       } catch (error) {
         console.error("공휴일/주간 일정 생성 실패:", error);
 
@@ -530,17 +683,30 @@ export default function Home() {
           };
         });
 
+        const nextWeekStartDate = formatDateKey(monday);
+        const nextWeekEndDate = formatDateKey(friday);
+        const nextWeekRangeLabel = formatWeekRangeLabel(monday, friday);
+
         setWeeklySchedule(fallbackWeek);
-        setWeekStartDate(formatDateKey(monday));
-        setWeekEndDate(formatDateKey(friday));
-        setWeekRangeLabel(formatWeekRangeLabel(monday, friday));
+        setWeekStartDate(nextWeekStartDate);
+        setWeekEndDate(nextWeekEndDate);
+        setWeekRangeLabel(nextWeekRangeLabel);
+
+        if (employee) {
+          await checkScheduleSubmitted(
+            employee,
+            nextWeekStartDate,
+            nextWeekEndDate,
+            fallbackWeek
+          );
+        }
       } finally {
         setIsHolidayLoading(false);
       }
     };
 
     loadWeekAndHolidays();
-  }, []);
+  }, [employee]);
 
   const checkoutAvailability = useMemo(() => {
     return getCheckoutAvailability(now);
@@ -597,30 +763,6 @@ export default function Home() {
   const selectedScheduleCount = useMemo(() => {
     return weeklySchedule.filter((day) => !day.isHoliday && day.available).length;
   }, [weeklySchedule]);
-
-  const fetchTodayAttendance = async (currentEmployee: Employee) => {
-    try {
-      const response = await fetch("/api/attendance/today", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: currentEmployee.name,
-          birthDate: currentEmployee.birthDate,
-          phoneLast4: currentEmployee.phoneLast4,
-        }),
-      });
-
-      const data: TodayAttendanceResponse = await response.json();
-
-      if (data.success && data.today) {
-        setTodayRecords(data.today.records || []);
-      }
-    } catch (error) {
-      console.error("오늘 기록 불러오기 실패:", error);
-    }
-  };
 
   const sendAttendance = async (type: "check-in" | "check-out") => {
     if (!employee) {
@@ -806,6 +948,13 @@ export default function Home() {
       setScheduleStatus("submitted");
       setScheduleOpen(false);
       setMessage("이번 주 스케줄 제출이 완료되었습니다.");
+
+      await checkScheduleSubmitted(
+        employee,
+        weekStartDate,
+        weekEndDate,
+        weeklySchedule
+      );
     } catch (error) {
       console.error(error);
       alert("스케줄 제출 중 오류가 발생했습니다.");
@@ -919,18 +1068,26 @@ export default function Home() {
                   : scheduleDoneBadgeStyle
               }
             >
-              {isSchedulePending ? "미제출" : "제출 완료"}
+              {isScheduleChecking
+                ? "확인 중"
+                : isSchedulePending
+                ? "미제출"
+                : "제출 완료"}
             </div>
           </div>
 
           <div style={{ marginBottom: "16px" }}>
             <div style={scheduleMainTextStyle}>
-              {isSchedulePending
+              {isScheduleChecking
+                ? "제출 여부를 확인하고 있습니다."
+                : isSchedulePending
                 ? "이번 주 스케줄이 아직 제출되지 않았습니다."
                 : "스케줄 제출이 완료되었습니다."}
             </div>
             <div style={scheduleSubTextStyle}>
-              {isSchedulePending
+              {isScheduleChecking
+                ? "잠시만 기다려주세요."
+                : isSchedulePending
                 ? "아래에서 출근 가능 요일만 선택 후 제출해주세요."
                 : "한 번 제출한 뒤에는 관리자만 수정할 수 있습니다."}
             </div>
@@ -958,7 +1115,7 @@ export default function Home() {
             ))}
           </div>
 
-          {scheduleOpen && isSchedulePending && (
+          {scheduleOpen && isSchedulePending && !isScheduleChecking && (
             <div style={scheduleEditorWrapStyle}>
               {weeklySchedule.map((day) => {
                 if (day.isHoliday) {
@@ -1014,12 +1171,15 @@ export default function Home() {
               <button
                 type="button"
                 onClick={handleSubmitSchedule}
-                disabled={isScheduleSaving || isHolidayLoading}
+                disabled={isScheduleSaving || isHolidayLoading || isScheduleChecking}
                 style={{
                   ...scheduleSubmitButtonStyle,
-                  opacity: isScheduleSaving || isHolidayLoading ? 0.7 : 1,
+                  opacity:
+                    isScheduleSaving || isHolidayLoading || isScheduleChecking
+                      ? 0.7
+                      : 1,
                   cursor:
-                    isScheduleSaving || isHolidayLoading
+                    isScheduleSaving || isHolidayLoading || isScheduleChecking
                       ? "not-allowed"
                       : "pointer",
                 }}
@@ -1029,7 +1189,7 @@ export default function Home() {
             </div>
           )}
 
-          {!scheduleOpen && isSchedulePending && (
+          {!scheduleOpen && isSchedulePending && !isScheduleChecking && (
             <button
               type="button"
               onClick={() => setScheduleOpen(true)}
@@ -1044,7 +1204,7 @@ export default function Home() {
             </button>
           )}
 
-          {scheduleOpen && isSchedulePending && (
+          {scheduleOpen && isSchedulePending && !isScheduleChecking && (
             <button
               type="button"
               onClick={() => setScheduleOpen(false)}
@@ -1054,7 +1214,7 @@ export default function Home() {
             </button>
           )}
 
-          {!isSchedulePending && (
+          {!isSchedulePending && !isScheduleChecking && (
             <div style={scheduleDoneButtonStyle}>제출 완료 (수정 불가)</div>
           )}
         </div>
