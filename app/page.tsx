@@ -79,14 +79,20 @@ type TodayRecord = {
 
 type ScheduleStatus = "pending" | "submitted";
 
+type HolidayItem = {
+  date: string;
+  localName?: string;
+  name?: string;
+};
+
 type WeeklyScheduleInput = {
   key: string;
   dayLabel: string;
   dateLabel: string;
+  fullDate: string;
   isHoliday: boolean;
+  holidayName: string;
   available: boolean;
-  startTime: string;
-  endTime: string;
 };
 
 function getOrCreateDeviceId() {
@@ -301,10 +307,6 @@ function formatOnlyTime(value: string, recordType: string) {
   });
 }
 
-function getThisWeekRangeLabel() {
-  return "2026.04.20 (월) ~ 04.24 (금)";
-}
-
 function formatMinutesToKorean(totalMinutes: number) {
   if (totalMinutes <= 0) return "0분";
 
@@ -322,54 +324,75 @@ function formatMinutesToKorean(totalMinutes: number) {
   return `${minutes}분`;
 }
 
-function getDefaultWeeklySchedule(): WeeklyScheduleInput[] {
-  return [
-    {
-      key: "mon",
-      dayLabel: "월",
-      dateLabel: "04.20",
-      isHoliday: false,
+function getMondayOfCurrentWeekInKst() {
+  const now = new Date();
+  const seoulNow = new Date(
+    now.toLocaleString("en-US", { timeZone: "Asia/Seoul" })
+  );
+
+  const day = seoulNow.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+
+  seoulNow.setHours(0, 0, 0, 0);
+  seoulNow.setDate(seoulNow.getDate() + diff);
+
+  return seoulNow;
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function formatDateKey(date: Date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function formatShortDate(date: Date) {
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${m}.${d}`;
+}
+
+function getKoreanDayLabel(date: Date) {
+  const labels = ["일", "월", "화", "수", "목", "금", "토"];
+  return labels[date.getDay()];
+}
+
+function formatWeekRangeLabel(startDate: Date, endDate: Date) {
+  const startYear = startDate.getFullYear();
+  const startMonth = String(startDate.getMonth() + 1).padStart(2, "0");
+  const startDay = String(startDate.getDate()).padStart(2, "0");
+  const endMonth = String(endDate.getMonth() + 1).padStart(2, "0");
+  const endDay = String(endDate.getDate()).padStart(2, "0");
+
+  return `${startYear}.${startMonth}.${startDay} (${getKoreanDayLabel(
+    startDate
+  )}) ~ ${endMonth}.${endDay} (${getKoreanDayLabel(endDate)})`;
+}
+
+function createWeekdaysWithHolidayInfo(holidays: HolidayItem[]) {
+  const monday = getMondayOfCurrentWeekInKst();
+  const weekdays = [0, 1, 2, 3, 4].map((offset) => addDays(monday, offset));
+
+  return weekdays.map((date, index) => {
+    const fullDate = formatDateKey(date);
+    const matchedHoliday = holidays.find((holiday) => holiday.date === fullDate);
+
+    return {
+      key: `weekday-${index}`,
+      dayLabel: getKoreanDayLabel(date),
+      dateLabel: formatShortDate(date),
+      fullDate,
+      isHoliday: Boolean(matchedHoliday),
+      holidayName: matchedHoliday?.localName || matchedHoliday?.name || "",
       available: false,
-      startTime: "09:00",
-      endTime: "18:00",
-    },
-    {
-      key: "tue",
-      dayLabel: "화",
-      dateLabel: "04.21",
-      isHoliday: true,
-      available: false,
-      startTime: "",
-      endTime: "",
-    },
-    {
-      key: "wed",
-      dayLabel: "수",
-      dateLabel: "04.22",
-      isHoliday: false,
-      available: false,
-      startTime: "09:00",
-      endTime: "18:00",
-    },
-    {
-      key: "thu",
-      dayLabel: "목",
-      dateLabel: "04.23",
-      isHoliday: false,
-      available: false,
-      startTime: "09:00",
-      endTime: "18:00",
-    },
-    {
-      key: "fri",
-      dayLabel: "금",
-      dateLabel: "04.24",
-      isHoliday: false,
-      available: false,
-      startTime: "09:00",
-      endTime: "18:00",
-    },
-  ];
+    };
+  });
 }
 
 export default function Home() {
@@ -385,9 +408,11 @@ export default function Home() {
     useState<ScheduleStatus>("pending");
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [isScheduleSaving, setIsScheduleSaving] = useState(false);
-  const [weeklySchedule, setWeeklySchedule] = useState<WeeklyScheduleInput[]>(
-    getDefaultWeeklySchedule()
-  );
+  const [weeklySchedule, setWeeklySchedule] = useState<WeeklyScheduleInput[]>([]);
+  const [weekRangeLabel, setWeekRangeLabel] = useState("");
+  const [weekStartDate, setWeekStartDate] = useState("");
+  const [weekEndDate, setWeekEndDate] = useState("");
+  const [isHolidayLoading, setIsHolidayLoading] = useState(true);
 
   const clearEmployeeStorage = () => {
     localStorage.removeItem("employee");
@@ -449,6 +474,72 @@ export default function Home() {
     }, 30000);
 
     return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const loadWeekAndHolidays = async () => {
+      try {
+        setIsHolidayLoading(true);
+
+        const monday = getMondayOfCurrentWeekInKst();
+        const friday = addDays(monday, 4);
+        const years = Array.from(
+          new Set([monday.getFullYear(), friday.getFullYear()])
+        );
+
+        const holidayResults = await Promise.all(
+          years.map(async (year) => {
+            const response = await fetch(
+              `https://date.nager.at/api/v3/PublicHolidays/${year}/KR`,
+              {
+                cache: "no-store",
+              }
+            );
+
+            if (!response.ok) {
+              throw new Error("공휴일 데이터를 불러오지 못했습니다.");
+            }
+
+            return (await response.json()) as HolidayItem[];
+          })
+        );
+
+        const holidays = holidayResults.flat();
+        const nextWeeklySchedule = createWeekdaysWithHolidayInfo(holidays);
+
+        setWeeklySchedule(nextWeeklySchedule);
+        setWeekStartDate(formatDateKey(monday));
+        setWeekEndDate(formatDateKey(friday));
+        setWeekRangeLabel(formatWeekRangeLabel(monday, friday));
+      } catch (error) {
+        console.error("공휴일/주간 일정 생성 실패:", error);
+
+        const monday = getMondayOfCurrentWeekInKst();
+        const friday = addDays(monday, 4);
+        const fallbackWeek = [0, 1, 2, 3, 4].map((offset, index) => {
+          const date = addDays(monday, offset);
+
+          return {
+            key: `weekday-${index}`,
+            dayLabel: getKoreanDayLabel(date),
+            dateLabel: formatShortDate(date),
+            fullDate: formatDateKey(date),
+            isHoliday: false,
+            holidayName: "",
+            available: false,
+          };
+        });
+
+        setWeeklySchedule(fallbackWeek);
+        setWeekStartDate(formatDateKey(monday));
+        setWeekEndDate(formatDateKey(friday));
+        setWeekRangeLabel(formatWeekRangeLabel(monday, friday));
+      } finally {
+        setIsHolidayLoading(false);
+      }
+    };
+
+    loadWeekAndHolidays();
   }, []);
 
   const checkoutAvailability = useMemo(() => {
@@ -666,85 +757,62 @@ export default function Home() {
     );
   };
 
-  const handleScheduleTimeChange = (
-    key: string,
-    field: "startTime" | "endTime",
-    value: string
-  ) => {
-    if (scheduleStatus === "submitted") return;
+  const handleSubmitSchedule = async () => {
+    if (!employee) return;
 
-    setWeeklySchedule((prev) =>
-      prev.map((day) => {
-        if (day.key !== key || day.isHoliday) return day;
-
-        return {
-          ...day,
-          [field]: value,
-        };
-      })
-    );
-  };
-
-const handleSubmitSchedule = async () => {
-  if (!employee) return;
-
-  if (scheduleStatus === "submitted") {
-    return;
-  }
-
-  const activeDays = weeklySchedule.filter(
-    (day) => !day.isHoliday && day.available
-  );
-
-  if (activeDays.length === 0) {
-    alert("최소 1일 이상 출근 가능으로 선택해주세요.");
-    return;
-  }
-
-  const invalidDay = activeDays.find(
-    (day) => !day.startTime || !day.endTime || day.startTime >= day.endTime
-  );
-
-  if (invalidDay) {
-    alert(`${invalidDay.dayLabel}요일 시간을 다시 확인해주세요.`);
-    return;
-  }
-
-  try {
-    setIsScheduleSaving(true);
-
-    const response = await fetch("/api/worker/schedule", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        name: employee.name,
-        birthDate: employee.birthDate,
-        phoneLast4: employee.phoneLast4,
-        weekStartDate: "2026-04-20",
-        weekEndDate: "2026-04-24",
-        schedule: activeDays,
-      }),
-    });
-
-    const data = await response.json();
-
-    if (!data.success) {
-      alert(data.message || "스케줄 제출에 실패했습니다.");
+    if (scheduleStatus === "submitted") {
       return;
     }
 
-    setScheduleStatus("submitted");
-    setScheduleOpen(false);
-    setMessage("이번 주 스케줄 제출이 완료되었습니다.");
-  } catch (error) {
-    console.error(error);
-    alert("스케줄 제출 중 오류가 발생했습니다.");
-  } finally {
-    setIsScheduleSaving(false);
-  }
-};
+    const activeDays = weeklySchedule
+      .filter((day) => !day.isHoliday && day.available)
+      .map((day) => ({
+        dayLabel: day.dayLabel,
+        dateLabel: day.dateLabel,
+        fullDate: day.fullDate,
+        available: true,
+      }));
+
+    if (activeDays.length === 0) {
+      alert("최소 1일 이상 출근 가능으로 선택해주세요.");
+      return;
+    }
+
+    try {
+      setIsScheduleSaving(true);
+
+      const response = await fetch("/api/worker/schedule", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: employee.name,
+          birthDate: employee.birthDate,
+          phoneLast4: employee.phoneLast4,
+          weekStartDate,
+          weekEndDate,
+          schedule: activeDays,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        alert(data.message || "스케줄 제출에 실패했습니다.");
+        return;
+      }
+
+      setScheduleStatus("submitted");
+      setScheduleOpen(false);
+      setMessage("이번 주 스케줄 제출이 완료되었습니다.");
+    } catch (error) {
+      console.error(error);
+      alert("스케줄 제출 중 오류가 발생했습니다.");
+    } finally {
+      setIsScheduleSaving(false);
+    }
+  };
 
   if (!employee) {
     return (
@@ -838,7 +906,9 @@ const handleSubmitSchedule = async () => {
               </div>
               <div>
                 <div style={scheduleTitleStyle}>이번 주 스케줄</div>
-                <div style={scheduleDateStyle}>{getThisWeekRangeLabel()}</div>
+                <div style={scheduleDateStyle}>
+                  {isHolidayLoading ? "주간 일정 불러오는 중..." : weekRangeLabel}
+                </div>
               </div>
             </div>
 
@@ -861,7 +931,7 @@ const handleSubmitSchedule = async () => {
             </div>
             <div style={scheduleSubTextStyle}>
               {isSchedulePending
-                ? "아래에서 바로 입력 후 제출해주세요."
+                ? "아래에서 출근 가능 요일만 선택 후 제출해주세요."
                 : "한 번 제출한 뒤에는 관리자만 수정할 수 있습니다."}
             </div>
           </div>
@@ -899,7 +969,7 @@ const handleSubmitSchedule = async () => {
                           {day.dayLabel} ({day.dateLabel})
                         </div>
                         <div style={scheduleEditorHolidayTextStyle}>
-                          공휴일 자동 제외
+                          {day.holidayName || "공휴일"} 자동 제외
                         </div>
                       </div>
                       <div style={scheduleEditorDashStyle}>-</div>
@@ -924,40 +994,14 @@ const handleSubmitSchedule = async () => {
                       </label>
                     </div>
 
-                    <div style={scheduleTimeWrapStyle}>
-                      <input
-                        type="time"
-                        value={day.startTime}
-                        disabled={!day.available}
-                        onChange={(e) =>
-                          handleScheduleTimeChange(
-                            day.key,
-                            "startTime",
-                            e.target.value
-                          )
-                        }
-                        style={{
-                          ...scheduleTimeInputStyle,
-                          opacity: day.available ? 1 : 0.5,
-                        }}
-                      />
-                      <span style={scheduleTimeTildeStyle}>~</span>
-                      <input
-                        type="time"
-                        value={day.endTime}
-                        disabled={!day.available}
-                        onChange={(e) =>
-                          handleScheduleTimeChange(
-                            day.key,
-                            "endTime",
-                            e.target.value
-                          )
-                        }
-                        style={{
-                          ...scheduleTimeInputStyle,
-                          opacity: day.available ? 1 : 0.5,
-                        }}
-                      />
+                    <div
+                      style={
+                        day.available
+                          ? scheduleSelectedBadgeStyle
+                          : scheduleUnselectedBadgeStyle
+                      }
+                    >
+                      {day.available ? "선택됨" : "미선택"}
                     </div>
                   </div>
                 );
@@ -970,11 +1014,14 @@ const handleSubmitSchedule = async () => {
               <button
                 type="button"
                 onClick={handleSubmitSchedule}
-                disabled={isScheduleSaving}
+                disabled={isScheduleSaving || isHolidayLoading}
                 style={{
                   ...scheduleSubmitButtonStyle,
-                  opacity: isScheduleSaving ? 0.7 : 1,
-                  cursor: isScheduleSaving ? "not-allowed" : "pointer",
+                  opacity: isScheduleSaving || isHolidayLoading ? 0.7 : 1,
+                  cursor:
+                    isScheduleSaving || isHolidayLoading
+                      ? "not-allowed"
+                      : "pointer",
                 }}
               >
                 {isScheduleSaving ? "제출 중..." : "스케줄 제출하기"}
@@ -986,9 +1033,14 @@ const handleSubmitSchedule = async () => {
             <button
               type="button"
               onClick={() => setScheduleOpen(true)}
-              style={scheduleOpenButtonStyle}
+              disabled={isHolidayLoading}
+              style={{
+                ...scheduleOpenButtonStyle,
+                opacity: isHolidayLoading ? 0.7 : 1,
+                cursor: isHolidayLoading ? "not-allowed" : "pointer",
+              }}
             >
-              스케줄 입력 열기
+              {isHolidayLoading ? "주간 일정 불러오는 중..." : "스케줄 입력 열기"}
             </button>
           )}
 
@@ -1018,21 +1070,6 @@ const handleSubmitSchedule = async () => {
               <div style={todaySummaryIconStyle}>🗓️</div>
               <div style={todaySummaryTitleStyle}>오늘 기록</div>
             </div>
-            <button
-              type="button"
-              style={todaySummaryDetailButtonStyle}
-              onClick={() => {
-                const recordSection = document.getElementById("today-record-list");
-                if (recordSection) {
-                  recordSection.scrollIntoView({
-                    behavior: "smooth",
-                    block: "start",
-                  });
-                }
-              }}
-            >
-              상세보기
-            </button>
           </div>
 
           {todayRecords.length === 0 ? (
@@ -1069,42 +1106,6 @@ const handleSubmitSchedule = async () => {
                     : "-"}
                 </div>
               </div>
-            </div>
-          )}
-        </div>
-
-        <div id="today-record-list" style={recordSectionStyle}>
-          <div style={recordTitleStyle}>오늘 기록</div>
-
-          {todayRecords.length === 0 ? (
-            <div style={emptyRecordStyle}>오늘 기록이 없습니다.</div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              {todayRecords.map((record) => {
-                const isCheckIn = isCheckInType(record.record_type);
-
-                return (
-                  <div key={record.id} style={recordItemStyle}>
-                    <div
-                      style={{
-                        ...recordBadgeStyle,
-                        backgroundColor: isCheckIn ? "#e8f5e9" : "#e3f2fd",
-                        color: isCheckIn ? "#2e7d32" : "#1565c0",
-                      }}
-                    >
-                      {isCheckIn ? "출근" : "퇴근"}
-                    </div>
-
-                    <div style={recordTimeStyle}>
-                      {formatDisplayAttendanceTime(
-                        record.checked_at,
-                        record.record_type,
-                        true
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
             </div>
           )}
         </div>
@@ -1445,32 +1446,32 @@ const scheduleCheckboxLabelStyle: React.CSSProperties = {
   fontWeight: 600,
 };
 
-const scheduleTimeWrapStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: "8px",
-};
-
-const scheduleTimeInputStyle: React.CSSProperties = {
-  border: "1px solid #d1d5db",
-  borderRadius: "10px",
-  padding: "10px 8px",
-  fontSize: "14px",
-  backgroundColor: "#ffffff",
-  color: "#111827",
-  width: "96px",
-};
-
-const scheduleTimeTildeStyle: React.CSSProperties = {
-  fontSize: "15px",
-  color: "#6b7280",
-  fontWeight: 700,
-};
-
 const scheduleEditorDashStyle: React.CSSProperties = {
   fontSize: "18px",
   color: "#9ca3af",
   fontWeight: 700,
+};
+
+const scheduleSelectedBadgeStyle: React.CSSProperties = {
+  minWidth: "72px",
+  textAlign: "center",
+  padding: "8px 12px",
+  borderRadius: "999px",
+  backgroundColor: "#fee2e2",
+  color: "#dc2626",
+  fontSize: "13px",
+  fontWeight: 800,
+};
+
+const scheduleUnselectedBadgeStyle: React.CSSProperties = {
+  minWidth: "72px",
+  textAlign: "center",
+  padding: "8px 12px",
+  borderRadius: "999px",
+  backgroundColor: "#f3f4f6",
+  color: "#6b7280",
+  fontSize: "13px",
+  fontWeight: 800,
 };
 
 const scheduleHelperTextStyle: React.CSSProperties = {
@@ -1559,7 +1560,6 @@ const todaySummarySectionStyle: React.CSSProperties = {
   backgroundColor: "#f8fbff",
   borderRadius: "16px",
   padding: "14px",
-  marginBottom: "18px",
 };
 
 const todaySummaryHeaderStyle: React.CSSProperties = {
@@ -1592,17 +1592,6 @@ const todaySummaryTitleStyle: React.CSSProperties = {
   fontSize: "18px",
   fontWeight: 800,
   color: "#111827",
-};
-
-const todaySummaryDetailButtonStyle: React.CSSProperties = {
-  border: "none",
-  borderRadius: "999px",
-  padding: "10px 14px",
-  backgroundColor: "#dbeafe",
-  color: "#2563eb",
-  fontSize: "14px",
-  fontWeight: 700,
-  cursor: "pointer",
 };
 
 const todaySummaryEmptyStyle: React.CSSProperties = {
@@ -1659,50 +1648,4 @@ const todaySummaryPillStyle: React.CSSProperties = {
   color: "#ffffff",
   fontSize: "13px",
   fontWeight: 700,
-};
-
-const recordSectionStyle: React.CSSProperties = {
-  marginTop: "8px",
-};
-
-const recordTitleStyle: React.CSSProperties = {
-  fontSize: "18px",
-  fontWeight: 700,
-  color: "#111827",
-  marginBottom: "12px",
-};
-
-const emptyRecordStyle: React.CSSProperties = {
-  padding: "16px",
-  borderRadius: "12px",
-  backgroundColor: "#f9fafb",
-  color: "#6b7280",
-  border: "1px dashed #d1d5db",
-};
-
-const recordItemStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: "12px",
-  padding: "14px 16px",
-  border: "1px solid #e5e7eb",
-  borderRadius: "12px",
-  backgroundColor: "#fff",
-};
-
-const recordBadgeStyle: React.CSSProperties = {
-  minWidth: "64px",
-  textAlign: "center",
-  padding: "6px 10px",
-  borderRadius: "999px",
-  fontWeight: 700,
-  fontSize: "14px",
-};
-
-const recordTimeStyle: React.CSSProperties = {
-  fontSize: "15px",
-  color: "#374151",
-  fontWeight: 600,
-  textAlign: "right",
 };

@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+type ScheduleItem = {
+  dayLabel?: string;
+  dateLabel?: string;
+  fullDate?: string;
+  available?: boolean;
+};
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -29,6 +36,28 @@ export async function POST(request: Request) {
         {
           success: false,
           message: "제출할 스케줄이 없습니다.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const cleanedSchedule = (schedule as ScheduleItem[])
+      .filter((item) => item && item.available === true)
+      .map((item) => ({
+        dayLabel: String(item.dayLabel || "").trim(),
+        dateLabel: String(item.dateLabel || "").trim(),
+        fullDate: String(item.fullDate || "").trim(),
+        available: true,
+      }))
+      .filter(
+        (item) => item.dayLabel && item.dateLabel && item.fullDate
+      );
+
+    if (cleanedSchedule.length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "출근 가능 요일이 없습니다.",
         },
         { status: 400 }
       );
@@ -78,17 +107,19 @@ export async function POST(request: Request) {
       );
     }
 
-    const { error: insertError } = await supabase.from("weekly_schedules").insert([
-      {
-        name,
-        birth_date: birthDate,
-        phone_last4: phoneLast4,
-        week_start_date: weekStartDate,
-        week_end_date: weekEndDate,
-        schedule,
-        status: "submitted",
-      },
-    ]);
+    const { error: insertError } = await supabase
+      .from("weekly_schedules")
+      .insert([
+        {
+          name,
+          birth_date: birthDate,
+          phone_last4: phoneLast4,
+          week_start_date: weekStartDate,
+          week_end_date: weekEndDate,
+          schedule: cleanedSchedule,
+          status: "submitted",
+        },
+      ]);
 
     if (insertError) {
       return NextResponse.json(
