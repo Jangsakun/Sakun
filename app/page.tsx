@@ -1016,6 +1016,8 @@ export default function Home() {
           <div style={noticeTitleStyle}>퇴근 안내</div>
           <div style={noticeTextStyle}>
             {checkoutAvailability.notice}
+            <br />
+  18시 이전 퇴근은 관리자에게 문의 바랍니다.
             {!checkoutAvailability.enabled &&
               checkoutAvailability.nextAvailableLabel && (
                 <>
