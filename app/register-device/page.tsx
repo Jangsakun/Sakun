@@ -29,6 +29,9 @@ export default function RegisterDevicePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
+  const inputClassName =
+    "w-full h-12 border border-gray-200 rounded px-3 bg-white text-black placeholder-gray-400";
+
   const handleSubmit = async () => {
     if (!name || !phone || !residentNumber || !bankName || !accountNumber) {
       setMessage("모든 항목을 입력해주세요.");
@@ -94,9 +97,9 @@ export default function RegisterDevicePage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#f5f5f7] flex items-center justify-center px-4 py-8">
+    <main className="min-h-screen bg-[#f5f5f7] text-black flex items-center justify-center px-4 py-8 [color-scheme:light]">
       <div className="w-full max-w-[430px]">
-        <div className="rounded-[32px] bg-white shadow px-6 py-7">
+        <div className="rounded-[32px] bg-white text-black shadow px-6 py-7">
           <button
             type="button"
             onClick={() => router.back()}
@@ -105,7 +108,7 @@ export default function RegisterDevicePage() {
             ← 뒤로가기
           </button>
 
-          <h1 className="text-2xl font-bold">회원 등록</h1>
+          <h1 className="text-2xl font-bold text-black">회원 등록</h1>
 
           {isSuccess ? (
             <div className="py-10 text-center text-green-600">
@@ -118,7 +121,7 @@ export default function RegisterDevicePage() {
                   placeholder="이름"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full h-12 border rounded px-3"
+                  className={inputClassName}
                 />
 
                 <input
@@ -127,7 +130,7 @@ export default function RegisterDevicePage() {
                   onChange={(e) =>
                     setPhone(e.target.value.replace(/[^0-9]/g, ""))
                   }
-                  className="w-full h-12 border rounded px-3"
+                  className={inputClassName}
                 />
 
                 <input
@@ -138,14 +141,14 @@ export default function RegisterDevicePage() {
                       e.target.value.replace(/[^0-9]/g, "").slice(0, 13)
                     )
                   }
-                  className="w-full h-12 border rounded px-3"
+                  className={inputClassName}
                 />
 
                 <input
                   placeholder="은행명"
                   value={bankName}
                   onChange={(e) => setBankName(e.target.value)}
-                  className="w-full h-12 border rounded px-3"
+                  className={inputClassName}
                 />
 
                 <input
@@ -154,7 +157,7 @@ export default function RegisterDevicePage() {
                   onChange={(e) =>
                     setAccountNumber(e.target.value.replace(/[^0-9]/g, ""))
                   }
-                  className="w-full h-12 border rounded px-3"
+                  className={inputClassName}
                 />
 
                 <input
@@ -163,20 +166,20 @@ export default function RegisterDevicePage() {
                   onChange={(e) =>
                     setReconnectCode(e.target.value.toUpperCase())
                   }
-                  className="w-full h-12 border rounded px-3"
+                  className={inputClassName}
                 />
 
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-gray-500">
                   휴대폰을 변경한 경우 관리자에게 받은 재연결 코드를 입력하세요
                 </p>
 
-                <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-4">
+                <div className="rounded-lg border border-gray-200 bg-gray-50 text-black px-4 py-4">
                   <label className="flex items-start gap-3 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={agreedToPrivacy}
                       onChange={(e) => setAgreedToPrivacy(e.target.checked)}
-                      className="mt-1 h-4 w-4"
+                      className="mt-1 h-4 w-4 accent-blue-600"
                     />
                     <div className="text-sm text-gray-700">
                       <p className="font-medium text-gray-900">
