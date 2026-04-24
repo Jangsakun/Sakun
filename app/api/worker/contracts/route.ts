@@ -4,61 +4,44 @@ import { createClient } from "@supabase/supabase-js";
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
+    const employeeId = Number(url.searchParams.get("employeeId"));
 
-    const name = url.searchParams.get("name");
-    const residentNumber = url.searchParams.get("residentNumber");
-
-    if (!name || !residentNumber) {
+    if (!employeeId || Number.isNaN(employeeId)) {
       return NextResponse.json(
-        { success: false, message: "값 부족" },
+        { success: false, message: "employeeId 오류" },
         { status: 400 }
       );
     }
 
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
-    // 직원 찾기
-    const { data: employee, error: empError } = await supabase
-      .from("employees")
-      .select("id")
-      .eq("name", name)
-      .eq("resident_number", residentNumber)
-      .single();
-
-    if (empError || !employee) {
-      return NextResponse.json(
-        { success: false, message: "직원 없음" },
-        { status: 404 }
-      );
-    }
-
-    // 계약서 찾기
-    const { data: contract, error: contractError } = await supabase
+    const { data: contract, error } = await supabase
       .from("contracts")
       .select("*")
-      .eq("employee_id", employee.id)
+      .eq("employee_id", employeeId)
+      .in("status", ["pending", "signed"])
       .order("created_at", { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
-    if (contractError || !contract) {
-      return NextResponse.json({
-        success: true,
-        contract: null,
-      });
+    if (error) {
+      return NextResponse.json(
+        { success: false, message: error.message },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({
       success: true,
-      contract,
+      contract: contract || null,
     });
-  } catch (err: any) {
-    return NextResponse.json(
-      { success: false, message: err.message },
-      { status: 500 }
-    );
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "계약서 조회 중 오류 발생";
+
+    return NextResponse.json({ success: false, message }, { status: 500 });
   }
 }
