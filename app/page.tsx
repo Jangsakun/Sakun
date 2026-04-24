@@ -347,19 +347,34 @@ function formatMinutesToKorean(totalMinutes: number) {
   return `${minutes}분`;
 }
 
-function getMondayOfCurrentWeekInKst() {
+function getScheduleTargetMondayInKst() {
   const now = new Date();
   const seoulNow = new Date(
     now.toLocaleString("en-US", { timeZone: "Asia/Seoul" })
   );
 
   const day = seoulNow.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+
+  const shouldUseNextWeek = day === 0 || day >= 4;
+  const addWeekDays = shouldUseNextWeek ? 7 : 0;
 
   seoulNow.setHours(0, 0, 0, 0);
-  seoulNow.setDate(seoulNow.getDate() + diff);
+  seoulNow.setDate(seoulNow.getDate() + diffToMonday + addWeekDays);
 
   return seoulNow;
+}
+
+function getScheduleWeekTitleInKst() {
+  const now = new Date();
+  const seoulNow = new Date(
+    now.toLocaleString("en-US", { timeZone: "Asia/Seoul" })
+  );
+
+  const day = seoulNow.getDay();
+  const shouldUseNextWeek = day === 0 || day >= 4;
+
+  return shouldUseNextWeek ? "다음 주" : "이번 주";
 }
 
 function addDays(date: Date, days: number) {
@@ -399,7 +414,7 @@ function formatWeekRangeLabel(startDate: Date, endDate: Date) {
 }
 
 function createWeekdaysWithHolidayInfo(holidays: HolidayItem[]) {
-  const monday = getMondayOfCurrentWeekInKst();
+  const monday = getScheduleTargetMondayInKst();
   const weekdays = [0, 1, 2, 3, 4].map((offset) => addDays(monday, offset));
 
   return weekdays.map((date, index) => {
@@ -461,6 +476,8 @@ export default function Home() {
   const [weekStartDate, setWeekStartDate] = useState("");
   const [weekEndDate, setWeekEndDate] = useState("");
   const [isHolidayLoading, setIsHolidayLoading] = useState(true);
+
+  const scheduleWeekTitle = useMemo(() => getScheduleWeekTitleInKst(), []);
 
   const clearEmployeeStorage = () => {
     localStorage.removeItem("employee");
@@ -622,7 +639,7 @@ export default function Home() {
       try {
         setIsHolidayLoading(true);
 
-        const monday = getMondayOfCurrentWeekInKst();
+        const monday = getScheduleTargetMondayInKst();
         const friday = addDays(monday, 4);
         const years = Array.from(
           new Set([monday.getFullYear(), friday.getFullYear()])
@@ -667,7 +684,7 @@ export default function Home() {
       } catch (error) {
         console.error("공휴일/주간 일정 생성 실패:", error);
 
-        const monday = getMondayOfCurrentWeekInKst();
+        const monday = getScheduleTargetMondayInKst();
         const friday = addDays(monday, 4);
         const fallbackWeek = [0, 1, 2, 3, 4].map((offset, index) => {
           const date = addDays(monday, offset);
@@ -947,7 +964,7 @@ export default function Home() {
 
       setScheduleStatus("submitted");
       setScheduleOpen(false);
-      setMessage("이번 주 스케줄 제출이 완료되었습니다.");
+      setMessage(`${scheduleWeekTitle} 스케줄 제출이 완료되었습니다.`);
 
       await checkScheduleSubmitted(
         employee,
@@ -1017,7 +1034,7 @@ export default function Home() {
           <div style={noticeTextStyle}>
             {checkoutAvailability.notice}
             <br />
-  18시 이전 퇴근은 관리자에게 문의 바랍니다.
+            18시 이전 퇴근은 관리자에게 문의 바랍니다.
             {!checkoutAvailability.enabled &&
               checkoutAvailability.nextAvailableLabel && (
                 <>
@@ -1056,7 +1073,7 @@ export default function Home() {
                 📅
               </div>
               <div>
-                <div style={scheduleTitleStyle}>이번 주 스케줄</div>
+                <div style={scheduleTitleStyle}>{scheduleWeekTitle} 스케줄</div>
                 <div style={scheduleDateStyle}>
                   {isHolidayLoading ? "주간 일정 불러오는 중..." : weekRangeLabel}
                 </div>
@@ -1083,7 +1100,7 @@ export default function Home() {
               {isScheduleChecking
                 ? "제출 여부를 확인하고 있습니다."
                 : isSchedulePending
-                ? "이번 주 스케줄이 아직 제출되지 않았습니다."
+                ? `${scheduleWeekTitle} 스케줄이 아직 제출되지 않았습니다.`
                 : "스케줄 제출이 완료되었습니다."}
             </div>
             <div style={scheduleSubTextStyle}>
