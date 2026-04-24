@@ -1656,17 +1656,115 @@ export default function AdminPage() {
         )}
 
         {tab === "contracts" && (
-          <section style={cardStyle}>
-            <div style={sectionHeaderStyle}>
-              <div>
-                <h2 style={sectionTitleStyle}>근로계약서</h2>
-                <p style={sectionDescriptionStyle}>
-                  현재 근로계약서 기능은 사용하지 않습니다.
-                </p>
-              </div>
-            </div>
-          </section>
-        )}
+  <>
+    {/* 🔥 만료 임박 경고 카드 */}
+    <section
+      style={{
+        ...warningBoxStyle,
+        marginBottom: "16px",
+        backgroundColor: "#fef2f2",
+        border: "1px solid #fecaca",
+        color: "#991b1b",
+      }}
+    >
+      ⚠️ 계약 종료일이 임박한 직원들을 확인하세요.
+    </section>
+
+    {/* 🔥 계약 관리 테이블 */}
+    <section style={cardStyle}>
+      <div style={sectionHeaderStyle}>
+        <div>
+          <h2 style={sectionTitleStyle}>근로계약서 관리</h2>
+          <p style={sectionDescriptionStyle}>
+            직원별 계약 시작일과 종료일을 관리할 수 있습니다.
+          </p>
+        </div>
+      </div>
+
+      <div style={tableScrollStyle}>
+        <table style={employeeTableStyle}>
+          <thead>
+            <tr>
+              <th style={thStyle}>이름</th>
+              <th style={thStyle}>휴대폰번호</th>
+              <th style={thStyle}>주민번호</th>
+              <th style={thStyle}>계약 시작일</th>
+              <th style={thStyle}>계약 종료일</th>
+              <th style={thStyle}>관리</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {employees.map((emp) => (
+              <tr key={emp.id}>
+                <td style={tdStyle}>{emp.name}</td>
+                <td style={tdStyle}>{formatPhone(emp.phone)}</td>
+                <td style={tdStyle}>{getMaskedResidentNumber(emp)}</td>
+
+                <td style={tdStyle}>
+                  <input
+                    type="date"
+                    value={emp.contract_start_date || ""}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setEmployees((prev) =>
+                        prev.map((p) =>
+                          p.id === emp.id
+                            ? { ...p, contract_start_date: value }
+                            : p
+                        )
+                      );
+                    }}
+                    style={smallInputStyle}
+                  />
+                </td>
+
+                <td style={tdStyle}>
+                  <input
+                    type="date"
+                    value={emp.contract_end_date || ""}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setEmployees((prev) =>
+                        prev.map((p) =>
+                          p.id === emp.id
+                            ? { ...p, contract_end_date: value }
+                            : p
+                        )
+                      );
+                    }}
+                    style={smallInputStyle}
+                  />
+                </td>
+
+                <td style={tdStyle}>
+                  <button
+                    onClick={async () => {
+                      await fetch(`/api/admin/employees/${emp.id}`, {
+                        method: "PATCH",
+                        headers: {
+                          "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                          contract_start_date: emp.contract_start_date,
+                          contract_end_date: emp.contract_end_date,
+                        }),
+                      });
+                      alert("저장 완료");
+                    }}
+                    style={primarySmallButtonStyle}
+                  >
+                    저장
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </>
+)}
         {tab === "schedule" && (
           <section style={cardStyle}>
             <div style={sectionHeaderStyle}>
