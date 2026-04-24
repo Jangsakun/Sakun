@@ -9,27 +9,34 @@ type Employee = {
 
 export default function ContractTab() {
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(
+    null
+  );
 
-  const [contractType, setContractType] = useState<"weekly" | "freelance_11">("weekly");
+  const [contractType, setContractType] = useState<"weekly" | "freelance_11">(
+    "weekly"
+  );
   const [startDate, setStartDate] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
-  // 직원 목록 불러오기
   useEffect(() => {
     fetch("/api/admin/employees")
       .then((res) => res.json())
       .then((data) => {
         if (data?.employees) {
           setEmployees(data.employees);
+
+          if (data.employees.length > 0) {
+            setSelectedEmployeeId(Number(data.employees[0].id));
+          }
         }
       });
   }, []);
 
   const handleCreateContract = async () => {
-    if (!selectedEmployeeId) {
+    if (!selectedEmployeeId || Number.isNaN(selectedEmployeeId)) {
       setMessage("직원을 선택하세요");
       return;
     }
@@ -60,13 +67,13 @@ export default function ContractTab() {
       if (data.success) {
         setMessage("✅ 계약서 생성 완료");
       } else {
-        setMessage("❌ " + data.message);
+        setMessage("❌ " + (data.message || "계약서 생성 실패"));
       }
     } catch (error) {
       setMessage("❌ 오류 발생");
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   return (
@@ -75,24 +82,25 @@ export default function ContractTab() {
         근로계약서 관리
       </h2>
 
-      {/* 직원 선택 */}
       <div style={{ marginBottom: 12 }}>
         <label>직원 선택</label>
         <select
           style={{ width: "100%", padding: 8, marginTop: 4 }}
           value={selectedEmployeeId ?? ""}
-          onChange={(e) => setSelectedEmployeeId(Number(e.target.value))}
+          onChange={(e) => {
+            const value = e.target.value;
+            setSelectedEmployeeId(value ? Number(value) : null);
+          }}
         >
           <option value="">선택하세요</option>
           {employees.map((emp) => (
-            <option key={emp.id} value={emp.id}>
+            <option key={emp.id} value={String(emp.id)}>
               {emp.name}
             </option>
           ))}
         </select>
       </div>
 
-      {/* 계약 종류 */}
       <div style={{ marginBottom: 12 }}>
         <label>계약 종류</label>
         <select
@@ -107,7 +115,6 @@ export default function ContractTab() {
         </select>
       </div>
 
-      {/* 시작일 */}
       <div style={{ marginBottom: 12 }}>
         <label>계약 시작일</label>
         <input
@@ -118,7 +125,6 @@ export default function ContractTab() {
         />
       </div>
 
-      {/* 생성 버튼 */}
       <button
         onClick={handleCreateContract}
         disabled={loading}
@@ -133,7 +139,6 @@ export default function ContractTab() {
         {loading ? "생성중..." : "계약서 생성"}
       </button>
 
-      {/* 메시지 */}
       {message && (
         <div style={{ marginTop: 12, color: "#333" }}>{message}</div>
       )}
