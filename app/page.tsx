@@ -623,22 +623,29 @@ export default function Home() {
   };
 
   const fetchWorkerContract = async (currentEmployee: Employee) => {
-    if (!currentEmployee) {
+    if (!currentEmployee?.id) {
+      console.warn("근로계약서 조회 실패: employee.id가 없습니다.", currentEmployee);
+      setWorkerContract(null);
+      setIsContractOpen(false);
       return;
     }
 
     try {
       setIsContractLoading(true);
 
+      console.log("근로계약서 조회 employeeId:", currentEmployee.id);
+
       const response = await fetch(
-  `/api/worker/contracts?employeeId=${currentEmployee.id}`,
-  {
-    method: "GET",
-    cache: "no-store",
-  }
-);
+        `/api/worker/contracts?employeeId=${currentEmployee.id}`,
+        {
+          method: "GET",
+          cache: "no-store",
+        }
+      );
 
       const data: WorkerContractResponse = await response.json();
+
+      console.log("근로계약서 조회 응답:", data);
 
       if (data.success && data.contract) {
         setWorkerContract(data.contract);
