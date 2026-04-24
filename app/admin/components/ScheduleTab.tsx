@@ -1015,6 +1015,45 @@ export default function ScheduleTab() {
                   직원 스케줄 수정
                 </div>
                 <div
+  style={{
+    display: "flex",
+    gap: "8px",
+    marginTop: "10px",
+  }}
+>
+  <button
+    onClick={() => setWeekMode("current")}
+    style={{
+      padding: "6px 12px",
+      borderRadius: "999px",
+      border: weekMode === "current" ? "none" : "1px solid #d1d5db",
+      background: weekMode === "current" ? "#111827" : "#ffffff",
+      color: weekMode === "current" ? "#ffffff" : "#111827",
+      fontSize: "12px",
+      fontWeight: 700,
+      cursor: "pointer",
+    }}
+  >
+    이번 주
+  </button>
+
+  <button
+    onClick={() => setWeekMode("next")}
+    style={{
+      padding: "6px 12px",
+      borderRadius: "999px",
+      border: weekMode === "next" ? "none" : "1px solid #d1d5db",
+      background: weekMode === "next" ? "#111827" : "#ffffff",
+      color: weekMode === "next" ? "#ffffff" : "#111827",
+      fontSize: "12px",
+      fontWeight: 700,
+      cursor: "pointer",
+    }}
+  >
+    다음 주
+  </button>
+</div>
+                <div
                   style={{
                     marginTop: "6px",
                     color: "#6b7280",
