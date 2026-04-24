@@ -84,9 +84,9 @@ function getWeekDaysInKst(weekMode: WeekMode): DayItem[] {
   const weekStart =
     weekMode === "next" ? addDays(currentMonday, 7) : currentMonday;
 
-  const labels = ["월", "화", "수", "목", "금", "토", "일"];
+  const labels = ["월", "화", "수", "목", "금"];
 
-  return [0, 1, 2, 3, 4, 5, 6].map((offset) => {
+  return [0, 1, 2, 3, 4].map((offset) => {
     const date = addDays(weekStart, offset);
 
     return {
@@ -424,48 +424,6 @@ export default function ScheduleTab() {
         <div
           style={{
             display: "flex",
-            gap: "10px",
-            alignItems: "center",
-            flexWrap: "wrap",
-            marginBottom: "16px",
-          }}
-        >
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            style={{
-              padding: "10px 14px",
-              borderRadius: "10px",
-              border: "1px solid #d1d5db",
-              fontSize: "14px",
-              color: "#111827",
-              backgroundColor: "#ffffff",
-              minWidth: "170px",
-              outline: "none",
-            }}
-          />
-
-          <button
-            type="button"
-            onClick={handleDateSearch}
-            style={{
-              padding: "10px 16px",
-              borderRadius: "10px",
-              border: "none",
-              background: "#111827",
-              color: "#ffffff",
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-          >
-            날짜 조회
-          </button>
-        </div>
-
-        <div
-          style={{
-            display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
             gap: "12px",
@@ -502,94 +460,136 @@ export default function ScheduleTab() {
 
           <div
             style={{
-              position: "relative",
-              width: "260px",
-              maxWidth: "100%",
+              display: "flex",
+              gap: "10px",
+              alignItems: "center",
+              flexWrap: "wrap",
+              justifyContent: "flex-end",
             }}
           >
             <input
-              type="text"
-              placeholder="직원 이름 검색"
-              value={employeeSearch}
-              onChange={(e) => setEmployeeSearch(e.target.value)}
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
               style={{
-                width: "100%",
                 padding: "10px 14px",
                 borderRadius: "10px",
                 border: "1px solid #d1d5db",
                 fontSize: "14px",
                 color: "#111827",
                 backgroundColor: "#ffffff",
+                minWidth: "170px",
                 outline: "none",
               }}
             />
 
-            {employeeSearch.trim() && (
-              <div
+            <button
+              type="button"
+              onClick={handleDateSearch}
+              style={{
+                padding: "10px 16px",
+                borderRadius: "10px",
+                border: "none",
+                background: "#111827",
+                color: "#ffffff",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              날짜 조회
+            </button>
+
+            <div
+              style={{
+                position: "relative",
+                width: "260px",
+                maxWidth: "100%",
+              }}
+            >
+              <input
+                type="text"
+                placeholder="직원 이름 검색"
+                value={employeeSearch}
+                onChange={(e) => setEmployeeSearch(e.target.value)}
                 style={{
-                  position: "absolute",
-                  top: "44px",
-                  left: 0,
-                  right: 0,
-                  background: "#ffffff",
-                  border: "1px solid #e5e7eb",
-                  borderRadius: "12px",
-                  boxShadow: "0 10px 24px rgba(15, 23, 42, 0.12)",
-                  zIndex: 30,
-                  overflow: "hidden",
+                  width: "100%",
+                  padding: "10px 14px",
+                  borderRadius: "10px",
+                  border: "1px solid #d1d5db",
+                  fontSize: "14px",
+                  color: "#111827",
+                  backgroundColor: "#ffffff",
+                  outline: "none",
                 }}
-              >
-                {searchResults.length === 0 ? (
-                  <div
-                    style={{
-                      padding: "12px",
-                      color: "#6b7280",
-                      fontSize: "13px",
-                    }}
-                  >
-                    검색 결과가 없습니다.
-                  </div>
-                ) : (
-                  searchResults.map((emp, index) => (
-                    <button
-                      key={`${emp.id ?? emp.name}-${index}`}
-                      type="button"
-                      onClick={() => openEditModal(emp)}
+              />
+
+              {employeeSearch.trim() && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "44px",
+                    left: 0,
+                    right: 0,
+                    background: "#ffffff",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "12px",
+                    boxShadow: "0 10px 24px rgba(15, 23, 42, 0.12)",
+                    zIndex: 30,
+                    overflow: "hidden",
+                  }}
+                >
+                  {searchResults.length === 0 ? (
+                    <div
                       style={{
-                        width: "100%",
-                        textAlign: "left",
                         padding: "12px",
-                        border: "none",
-                        borderBottom:
-                          index === searchResults.length - 1
-                            ? "none"
-                            : "1px solid #f3f4f6",
-                        background: "#ffffff",
-                        cursor: "pointer",
-                        color: "#111827",
-                        fontWeight: 700,
+                        color: "#6b7280",
+                        fontSize: "13px",
                       }}
                     >
-                      {emp.name}
-                      <span
+                      검색 결과가 없습니다.
+                    </div>
+                  ) : (
+                    searchResults.map((emp, index) => (
+                      <button
+                        key={`${emp.id ?? emp.name}-${index}`}
+                        type="button"
+                        onClick={() => openEditModal(emp)}
                         style={{
-                          marginLeft: "6px",
-                          fontSize: "12px",
-                          color:
-                            emp.gender === "남성"
-                              ? "#2563eb"
-                              : emp.gender === "여성"
-                              ? "#db2777"
-                              : "#6b7280",
+                          width: "100%",
+                          textAlign: "left",
+                          padding: "12px",
+                          border: "none",
+                          borderBottom:
+                            index === searchResults.length - 1
+                              ? "none"
+                              : "1px solid #f3f4f6",
+                          background: "#ffffff",
+                          cursor: "pointer",
+                          color: "#111827",
+                          fontWeight: 700,
                         }}
                       >
-                        {emp.gender || "성별 미등록"}
-                      </span>
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
+                        {emp.name}
+                        <span
+                          style={{
+                            marginLeft: "6px",
+                            fontSize: "12px",
+                            color:
+                              emp.gender === "남성"
+                                ? "#2563eb"
+                                : emp.gender === "여성"
+                                ? "#db2777"
+                                : "#6b7280",
+                          }}
+                        >
+                          {emp.gender || "성별 미등록"}
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
