@@ -8,6 +8,13 @@ type EmployeeItem = {
   gender?: string | null;
 };
 
+type ScheduleDay = {
+  day: string;
+  label: string;
+  fullDate: string;
+  available: boolean;
+};
+
 type ScheduleApiResponse = {
   success: boolean;
   message?: string;
@@ -24,9 +31,15 @@ type ScheduleApiResponse = {
   };
 };
 
+type ScheduleSaveResponse = {
+  success: boolean;
+  message?: string;
+};
+
 type DayItem = {
   label: string;
   value: string;
+  day: string;
 };
 
 function getMondayOfCurrentWeekInKst() {
@@ -71,20 +84,63 @@ function getCurrentWeekDaysInKst(): DayItem[] {
     const date = addDays(monday, offset);
 
     return {
+      day: labels[offset],
       label: `${labels[offset]} (${formatMonthDay(date)})`,
       value: formatDateKey(date),
     };
   });
 }
 
+function getWeekStartAndEnd(days: DayItem[]) {
+  return {
+    weekStartDate: days[0]?.value || "",
+    weekEndDate: days[days.length - 1]?.value || "",
+  };
+}
+
 export default function ScheduleTab() {
   const days = useMemo(() => getCurrentWeekDaysInKst(), []);
+  const { weekStartDate, weekEndDate } = useMemo(
+    () => getWeekStartAndEnd(days),
+    [days]
+  );
+
   const [selectedDate, setSelectedDate] = useState<string>(days[0]?.value || "");
   const [data, setData] = useState<ScheduleApiResponse["data"] | null>(null);
   const [loading, setLoading] = useState(false);
 
   const [showUnavailable, setShowUnavailable] = useState(false);
   const [showNotSubmitted, setShowNotSubmitted] = useState(false);
+
+  const [employeeSearch, setEmployeeSearch] = useState("");
+  const [selectedEmployee, setSelectedEmployee] = useState<EmployeeItem | null>(
+    null
+  );
+  const [editSchedule, setEditSchedule] = useState<ScheduleDay[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  const allEmployees = useMemo(() => {
+    const map = new Map<string, EmployeeItem>();
+
+    [...(data?.available || []), ...(data?.unavailable || []), ...(data?.notSubmitted || [])].forEach(
+      (emp) => {
+        const key = String(emp.id ?? emp.name);
+        map.set(key, emp);
+      }
+    );
+
+    return Array.from(map.values());
+  }, [data]);
+
+  const searchResults = useMemo(() => {
+    const keyword = employeeSearch.trim().toLowerCase();
+
+    if (!keyword) return [];
+
+    return allEmployees.filter((emp) =>
+      emp.name.toLowerCase().includes(keyword)
+    );
+  }, [employeeSearch, allEmployees]);
 
   const maleAvailableEmployees = useMemo(() => {
     return (data?.available || []).filter((emp) => emp.gender === "남성");
@@ -126,6 +182,91 @@ export default function ScheduleTab() {
     }
   };
 
+  const openEditModal = (employee: EmployeeItem) => {
+    const selectedAvailableDates = new Set<string>();
+
+    if (data?.available.some((emp) => String(emp.id ?? emp.name) === String(employee.id ?? employee.name))) {
+      selectedAvailableDates.add(selectedDate);
+    }
+
+    const nextSchedule = days.map((day) => ({
+      day: day.day,
+      label: day.label,
+      fullDate: day.value,
+      available: selectedAvailableDates.has(day.value),
+    }));
+
+    setSelectedEmployee(employee);
+    setEditSchedule(nextSchedule);
+    setEmployeeSearch("");
+  };
+
+  const closeEditModal = () => {
+    setSelectedEmployee(null);
+    setEditSchedule([]);
+    setSaving(false);
+  };
+
+  const toggleEditSchedule = (fullDate: string) => {
+    setEditSchedule((prev) =>
+      prev.map((item) =>
+        item.fullDate === fullDate
+          ? {
+              ...item,
+              available: !item.available,
+            }
+          : item
+      )
+    );
+  };
+
+  const saveEmployeeSchedule = async () => {
+    if (!selectedEmployee) {
+      alert("수정할 직원을 선택해주세요.");
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      const res = await fetch("/api/admin/schedule", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          employeeId: selectedEmployee.id,
+          name: selectedEmployee.name,
+          gender: selectedEmployee.gender || null,
+          weekStartDate,
+          weekEndDate,
+          schedule: editSchedule.map((item) => ({
+            day: item.day,
+            label: item.label,
+            fullDate: item.fullDate,
+            available: item.available,
+          })),
+        }),
+      });
+
+      const result: ScheduleSaveResponse = await res.json();
+
+      if (!result.success) {
+        alert(result.message || "스케줄 저장 실패");
+        return;
+      }
+
+      alert("스케줄이 수정되었습니다.");
+      closeEditModal();
+      fetchSchedule(selectedDate);
+    } catch (error) {
+      console.error("스케줄 저장 실패:", error);
+      alert("스케줄 저장 중 오류가 발생했습니다.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   useEffect(() => {
     if (!selectedDate && days[0]?.value) {
       setSelectedDate(days[0].value);
@@ -158,13 +299,109 @@ export default function ScheduleTab() {
       <div style={{ marginBottom: "18px" }}>
         <div
           style={{
-            fontSize: "14px",
-            color: "#6b7280",
-            lineHeight: 1.5,
+            display: "flex",
+            justifyContent: "space-between",
+            gap: "14px",
+            alignItems: "flex-start",
+            flexWrap: "wrap",
             marginBottom: "14px",
           }}
         >
-          이번 주 요일 버튼으로 빠르게 확인하거나, 날짜를 직접 선택해서 조회할 수 있습니다.
+          <div
+            style={{
+              fontSize: "14px",
+              color: "#6b7280",
+              lineHeight: 1.5,
+            }}
+          >
+            이번 주 요일 버튼으로 빠르게 확인하거나, 날짜를 직접 선택해서 조회할 수 있습니다.
+          </div>
+
+          <div style={{ position: "relative", minWidth: "260px" }}>
+            <input
+              type="text"
+              placeholder="직원 이름 검색"
+              value={employeeSearch}
+              onChange={(e) => setEmployeeSearch(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "10px 14px",
+                borderRadius: "10px",
+                border: "1px solid #d1d5db",
+                fontSize: "14px",
+                color: "#111827",
+                backgroundColor: "#ffffff",
+                outline: "none",
+              }}
+            />
+
+            {employeeSearch.trim() && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "44px",
+                  left: 0,
+                  right: 0,
+                  background: "#ffffff",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: "12px",
+                  boxShadow: "0 10px 24px rgba(15, 23, 42, 0.12)",
+                  zIndex: 30,
+                  overflow: "hidden",
+                }}
+              >
+                {searchResults.length === 0 ? (
+                  <div
+                    style={{
+                      padding: "12px",
+                      color: "#6b7280",
+                      fontSize: "13px",
+                    }}
+                  >
+                    검색 결과가 없습니다.
+                  </div>
+                ) : (
+                  searchResults.map((emp, index) => (
+                    <button
+                      key={`${emp.id ?? emp.name}-${index}`}
+                      type="button"
+                      onClick={() => openEditModal(emp)}
+                      style={{
+                        width: "100%",
+                        textAlign: "left",
+                        padding: "12px",
+                        border: "none",
+                        borderBottom:
+                          index === searchResults.length - 1
+                            ? "none"
+                            : "1px solid #f3f4f6",
+                        background: "#ffffff",
+                        cursor: "pointer",
+                        color: "#111827",
+                        fontWeight: 700,
+                      }}
+                    >
+                      {emp.name}
+                      <span
+                        style={{
+                          marginLeft: "6px",
+                          fontSize: "12px",
+                          color:
+                            emp.gender === "남성"
+                              ? "#2563eb"
+                              : emp.gender === "여성"
+                              ? "#db2777"
+                              : "#6b7280",
+                        }}
+                      >
+                        {emp.gender || "성별 미등록"}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         <div
@@ -315,8 +552,10 @@ export default function ScheduleTab() {
                         </span>
                       ) : (
                         maleAvailableEmployees.map((emp, index) => (
-                          <span
+                          <button
                             key={`${emp.id ?? emp.name}-${index}`}
+                            type="button"
+                            onClick={() => openEditModal(emp)}
                             style={{
                               padding: "6px 10px",
                               borderRadius: "999px",
@@ -324,10 +563,12 @@ export default function ScheduleTab() {
                               fontSize: "13px",
                               color: "#1d4ed8",
                               fontWeight: 700,
+                              border: "none",
+                              cursor: "pointer",
                             }}
                           >
                             {emp.name}
-                          </span>
+                          </button>
                         ))
                       )}
                     </div>
@@ -370,8 +611,10 @@ export default function ScheduleTab() {
                         </span>
                       ) : (
                         femaleAvailableEmployees.map((emp, index) => (
-                          <span
+                          <button
                             key={`${emp.id ?? emp.name}-${index}`}
+                            type="button"
+                            onClick={() => openEditModal(emp)}
                             style={{
                               padding: "6px 10px",
                               borderRadius: "999px",
@@ -379,10 +622,12 @@ export default function ScheduleTab() {
                               fontSize: "13px",
                               color: "#be185d",
                               fontWeight: 700,
+                              border: "none",
+                              cursor: "pointer",
                             }}
                           >
                             {emp.name}
-                          </span>
+                          </button>
                         ))
                       )}
                     </div>
@@ -421,8 +666,10 @@ export default function ScheduleTab() {
                       }}
                     >
                       {unknownGenderAvailableEmployees.map((emp, index) => (
-                        <span
+                        <button
                           key={`${emp.id ?? emp.name}-${index}`}
+                          type="button"
+                          onClick={() => openEditModal(emp)}
                           style={{
                             padding: "6px 10px",
                             borderRadius: "999px",
@@ -430,10 +677,12 @@ export default function ScheduleTab() {
                             fontSize: "13px",
                             color: "#374151",
                             fontWeight: 700,
+                            border: "none",
+                            cursor: "pointer",
                           }}
                         >
                           {emp.name}
-                        </span>
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -488,19 +737,23 @@ export default function ScheduleTab() {
                     }}
                   >
                     {data.unavailable.map((emp, index) => (
-                      <span
+                      <button
                         key={`${emp.id ?? emp.name}-${index}`}
+                        type="button"
+                        onClick={() => openEditModal(emp)}
                         style={{
                           padding: "6px 10px",
                           borderRadius: "999px",
                           background: "#fee2e2",
                           fontSize: "13px",
                           color: "#991b1b",
-                          fontWeight: 600,
+                          fontWeight: 700,
+                          border: "none",
+                          cursor: "pointer",
                         }}
                       >
                         {emp.name}
-                      </span>
+                      </button>
                     ))}
                   </div>
                 )}
@@ -553,19 +806,23 @@ export default function ScheduleTab() {
                     }}
                   >
                     {data.notSubmitted.map((emp, index) => (
-                      <span
+                      <button
                         key={`${emp.id ?? emp.name}-${index}`}
+                        type="button"
+                        onClick={() => openEditModal(emp)}
                         style={{
                           padding: "6px 10px",
                           borderRadius: "999px",
                           background: "#e5e7eb",
                           fontSize: "13px",
                           color: "#374151",
-                          fontWeight: 600,
+                          fontWeight: 700,
+                          border: "none",
+                          cursor: "pointer",
                         }}
                       >
                         {emp.name}
-                      </span>
+                      </button>
                     ))}
                   </div>
                 )}
@@ -586,6 +843,211 @@ export default function ScheduleTab() {
           }}
         >
           조회된 데이터가 없습니다.
+        </div>
+      )}
+
+      {selectedEmployee && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.45)",
+            zIndex: 100,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            padding: "20px",
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "520px",
+              background: "#ffffff",
+              borderRadius: "18px",
+              boxShadow: "0 20px 60px rgba(15, 23, 42, 0.28)",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                padding: "18px 20px",
+                borderBottom: "1px solid #e5e7eb",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: "12px",
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    fontSize: "20px",
+                    fontWeight: 900,
+                    color: "#111827",
+                  }}
+                >
+                  직원 스케줄 수정
+                </div>
+                <div
+                  style={{
+                    marginTop: "6px",
+                    color: "#6b7280",
+                    fontSize: "13px",
+                  }}
+                >
+                  {selectedEmployee.name}
+                  {selectedEmployee.gender ? ` (${selectedEmployee.gender})` : ""}
+                  {" · "}
+                  {weekStartDate} ~ {weekEndDate}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeEditModal}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  fontSize: "24px",
+                  cursor: "pointer",
+                  color: "#111827",
+                  lineHeight: 1,
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ padding: "20px" }}>
+              <div
+                style={{
+                  border: "1px solid #e5e7eb",
+                  borderRadius: "14px",
+                  overflow: "hidden",
+                  marginBottom: "16px",
+                }}
+              >
+                {editSchedule.map((item, index) => (
+                  <label
+                    key={item.fullDate}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "70px 1fr 130px",
+                      gap: "10px",
+                      alignItems: "center",
+                      padding: "14px",
+                      borderBottom:
+                        index === editSchedule.length - 1
+                          ? "none"
+                          : "1px solid #e5e7eb",
+                      cursor: "pointer",
+                      background: item.available ? "#eff6ff" : "#ffffff",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontWeight: 800,
+                        color: "#111827",
+                      }}
+                    >
+                      {item.day}
+                    </span>
+
+                    <span
+                      style={{
+                        color: "#374151",
+                        fontSize: "14px",
+                      }}
+                    >
+                      {item.label}
+                    </span>
+
+                    <span
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        justifyContent: "flex-end",
+                        color: item.available ? "#2563eb" : "#6b7280",
+                        fontWeight: 800,
+                        fontSize: "14px",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={item.available}
+                        onChange={() => toggleEditSchedule(item.fullDate)}
+                        style={{
+                          width: "18px",
+                          height: "18px",
+                          cursor: "pointer",
+                        }}
+                      />
+                      출근 가능
+                    </span>
+                  </label>
+                ))}
+              </div>
+
+              <div
+                style={{
+                  padding: "12px",
+                  borderRadius: "12px",
+                  background: "#eff6ff",
+                  border: "1px solid #bfdbfe",
+                  color: "#1d4ed8",
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  marginBottom: "16px",
+                }}
+              >
+                수정 후 저장하면 해당 직원의 이번 주 스케줄이 변경됩니다.
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: "10px",
+                  justifyContent: "flex-end",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={closeEditModal}
+                  disabled={saving}
+                  style={{
+                    padding: "12px 18px",
+                    borderRadius: "12px",
+                    border: "1px solid #d1d5db",
+                    background: "#ffffff",
+                    color: "#111827",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                  }}
+                >
+                  취소
+                </button>
+
+                <button
+                  type="button"
+                  onClick={saveEmployeeSchedule}
+                  disabled={saving}
+                  style={{
+                    padding: "12px 22px",
+                    borderRadius: "12px",
+                    border: "none",
+                    background: "#111827",
+                    color: "#ffffff",
+                    fontWeight: 900,
+                    cursor: "pointer",
+                  }}
+                >
+                  {saving ? "저장중..." : "저장"}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
