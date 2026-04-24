@@ -332,11 +332,26 @@ export default function ScheduleTab() {
       fetchSchedule(selectedDate);
     }
   }, [selectedDate, days]);
-  
-  useEffect(() => {
+
+useEffect(() => {
   if (!selectedEmployee) return;
 
-  const nextDays = getWeekDaysInKst(weekMode);
+  const currentMonday = getMondayOfCurrentWeekInKst();
+
+  const baseMonday =
+    weekMode === "next" ? addDays(currentMonday, 7) : currentMonday;
+
+  const labels = ["월", "화", "수", "목", "금"];
+
+  const nextDays = [0, 1, 2, 3, 4].map((i) => {
+    const date = addDays(baseMonday, i);
+
+    return {
+      day: labels[i],
+      label: `${labels[i]} (${formatMonthDay(date)})`,
+      value: formatDateKey(date),
+    };
+  });
 
   const selectedSet = new Set(
     editSchedule.filter((v) => v.available).map((v) => v.fullDate)
