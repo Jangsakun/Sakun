@@ -332,6 +332,25 @@ export default function ScheduleTab() {
       fetchSchedule(selectedDate);
     }
   }, [selectedDate, days]);
+  
+  useEffect(() => {
+  if (!selectedEmployee) return;
+
+  const nextDays = getWeekDaysInKst(weekMode);
+
+  const selectedSet = new Set(
+    editSchedule.filter((v) => v.available).map((v) => v.fullDate)
+  );
+
+  const newSchedule = nextDays.map((day) => ({
+    day: day.day,
+    label: day.label,
+    fullDate: day.value,
+    available: selectedSet.has(day.value),
+  }));
+
+  setEditSchedule(newSchedule);
+}, [weekMode]);
 
   useEffect(() => {
     setShowUnavailable(false);
