@@ -3,7 +3,6 @@
 import { CSSProperties, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import ScheduleTab from "./components/ScheduleTab";
-import ContractTab from "./components/ContractTab";
 
 type AdminRecord = {
   id: number;
@@ -97,16 +96,6 @@ type PayrollResponse = {
   message?: string;
 };
 
-type ContractUpdateResponse = {
-  success: boolean;
-  message?: string;
-  contractStartDate?: string;
-  contractEndDate?: string;
-};
-
-type ExpiringContractRow = Employee & {
-  daysLeft: number;
-};
 
 type ReconnectIssueResponse = {
   success: boolean;
@@ -167,14 +156,6 @@ export default function AdminPage() {
   const [editCheckInTime, setEditCheckInTime] = useState("");
   const [editCheckOutTime, setEditCheckOutTime] = useState("");
   const [attendanceSaving, setAttendanceSaving] = useState(false);
-
-  const [contractStartDateMap, setContractStartDateMap] = useState<
-    Record<number, string>
-  >({});
-  const [contractEndDateMap, setContractEndDateMap] = useState<
-    Record<number, string>
-  >({});
-  const [contractSavingId, setContractSavingId] = useState<number | null>(null);
 
   const [reconnectLoadingId, setReconnectLoadingId] = useState<number | null>(
     null
@@ -237,18 +218,12 @@ export default function AdminPage() {
         setEmployeeMessage("");
 
         const initialWages: { [key: number]: number } = {};
-        const initialContractStartMap: Record<number, string> = {};
-        const initialContractEndMap: Record<number, string> = {};
 
         data.employees.forEach((emp) => {
           initialWages[emp.id] = emp.hourly_wage || 0;
-          initialContractStartMap[emp.id] = emp.contract_start_date || "";
-          initialContractEndMap[emp.id] = emp.contract_end_date || "";
         });
 
         setWages(initialWages);
-        setContractStartDateMap(initialContractStartMap);
-        setContractEndDateMap(initialContractEndMap);
       } else {
         setEmployees([]);
         setEmployeeMessage(data.message || "직원 목록 조회 실패");
@@ -311,7 +286,7 @@ export default function AdminPage() {
   }, [startDate, endDate, tab]);
 
   useEffect(() => {
-    if (tab === "employees" || tab === "contracts") {
+    if (tab === "employees") {
       fetchEmployees();
     }
   }, [tab]);
@@ -330,39 +305,6 @@ export default function AdminPage() {
     return map;
   }, [employees]);
 
-  const expiringContracts = useMemo(() => {
-    const today = new Date();
-    const todayOnly = new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      today.getDate()
-    );
-
-    return employees
-      .map((employee) => {
-        if (!employee.contract_end_date) return null;
-
-        const endDate = new Date(`${employee.contract_end_date}T00:00:00`);
-        if (Number.isNaN(endDate.getTime())) return null;
-
-        const diffDays = Math.floor(
-          (endDate.getTime() - todayOnly.getTime()) / (1000 * 60 * 60 * 24)
-        );
-
-        if (diffDays < 0 || diffDays > 7) return null;
-
-        return {
-          ...employee,
-          daysLeft: diffDays,
-        };
-      })
-      .filter(Boolean)
-      .sort((a, b) => {
-        const aa = a as ExpiringContractRow;
-        const bb = b as ExpiringContractRow;
-        return aa.daysLeft - bb.daysLeft;
-      }) as ExpiringContractRow[];
-  }, [employees]);
 
   const filteredRecords = useMemo(() => {
     return records
@@ -800,72 +742,6 @@ export default function AdminPage() {
     }
   };
 
-  const saveContract = async (employeeId: number) => {
-    const contractStartDate = contractStartDateMap[employeeId] || "";
-    const contractEndDate = contractEndDateMap[employeeId] || "";
-
-    if (!contractStartDate || !contractEndDate) {
-      alert("계약 시작일과 계약 종료일을 입력해주세요.");
-      return;
-    }
-
-    if (contractStartDate > contractEndDate) {
-      alert("계약 시작일은 계약 종료일보다 늦을 수 없습니다.");
-      return;
-    }
-
-    try {
-      setContractSavingId(employeeId);
-
-      const response = await fetch("/api/admin/contracts", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          employeeId,
-          contractStartDate,
-          contractEndDate,
-        }),
-      });
-
-      const data: ContractUpdateResponse = await response.json();
-
-      if (!data.success) {
-        alert(data.message || "근로계약 기간 저장 실패");
-        return;
-      }
-
-      setEmployees((prev) =>
-        prev.map((emp) =>
-          emp.id === employeeId
-            ? {
-                ...emp,
-                contract_start_date: contractStartDate,
-                contract_end_date: contractEndDate,
-              }
-            : emp
-        )
-      );
-
-      setContractStartDateMap((prev) => ({
-        ...prev,
-        [employeeId]: contractStartDate,
-      }));
-
-      setContractEndDateMap((prev) => ({
-        ...prev,
-        [employeeId]: contractEndDate,
-      }));
-
-      alert("근로계약 기간이 저장되었습니다.");
-    } catch (error) {
-      console.error(error);
-      alert("근로계약 기간 저장 중 오류 발생");
-    } finally {
-      setContractSavingId(null);
-    }
-  };
 
   const downloadAttendanceCsv = () => {
     if (groupedAttendanceRows.length === 0) {
@@ -993,7 +869,7 @@ export default function AdminPage() {
             <p style={eyebrowStyle}>Admin Dashboard</p>
             <h1 style={titleStyle}>장사꾼 관리자 대시보드</h1>
             <p style={descriptionStyle}>
-              직원 상태와 출퇴근 기록, 급여, 근로계약 기간을 한 화면에서 관리할 수 있습니다.
+              직원 상태와 출퇴근 기록, 급여를 한 화면에서 관리할 수 있습니다.
             </p>
           </div>
 
@@ -1002,7 +878,7 @@ export default function AdminPage() {
               onClick={() => {
                 if (tab === "attendance") {
                   fetchRecords();
-                } else if (tab === "employees" || tab === "contracts") {
+                } else if (tab === "employees") {
                   fetchEmployees();
                 } else if (tab === "payroll") {
                   fetchPayroll();
@@ -1780,202 +1656,16 @@ export default function AdminPage() {
         )}
 
         {tab === "contracts" && (
-          <>
-            <section style={contractAlertCardStyle}>
-              <div style={contractAlertHeaderStyle}>
-                <div>
-                  <div style={contractAlertTitleWrapStyle}>
-                    <span style={contractAlertIconStyle}>⚠️</span>
-                    <h2 style={contractAlertTitleStyle}>근로계약서 만료 임박</h2>
-                  </div>
-                  <p style={contractAlertDescriptionStyle}>
-                    근로계약서 만료까지 7일 이하로 남은 직원 목록입니다. 계약
-                    갱신을 검토해주세요.
-                  </p>
-                </div>
-
-                <button
-                  onClick={() => setEmployeeSearch("")}
-                  style={contractAlertLinkButtonStyle}
-                >
-                  전체 근로계약서 보기
-                </button>
+          <section style={cardStyle}>
+            <div style={sectionHeaderStyle}>
+              <div>
+                <h2 style={sectionTitleStyle}>근로계약서</h2>
+                <p style={sectionDescriptionStyle}>
+                  현재 근로계약서 기능은 사용하지 않습니다.
+                </p>
               </div>
-
-              {employeeLoading ? (
-                <div style={emptyBoxStyle}>계약 정보를 불러오는 중입니다...</div>
-              ) : expiringContracts.length === 0 ? (
-                <div style={emptyBoxStyle}>
-                  현재 7일 이내 만료 예정인 근로계약서는 없습니다.
-                </div>
-              ) : (
-                <div style={tableScrollStyle}>
-                  <table style={contractAlertTableStyle}>
-                    <thead>
-                      <tr>
-                        <th style={thStyle}>이름</th>
-                        <th style={thStyle}>휴대폰번호</th>
-                        <th style={thStyle}>주민번호</th>
-                        <th style={thStyle}>계약 종료일</th>
-                        <th style={thStyle}>남은 기간</th>
-                        <th style={thStyle}>관리</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {expiringContracts.map((employee) => (
-                        <tr key={`expiring-${employee.id}`}>
-                          <td style={tdStyle}>
-                            <span style={nameTextStyle}>{employee.name}</span>
-                          </td>
-                          <td style={tdStyle}>{formatPhone(employee.phone)}</td>
-                          <td style={tdStyle}>
-                            {getMaskedResidentNumber(employee)}
-                          </td>
-                          <td style={tdStyle}>
-                            {employee.contract_end_date
-                              ? formatDate(employee.contract_end_date)
-                              : "-"}
-                          </td>
-                          <td style={tdStyle}>
-                            <span
-                              style={{
-                                ...badgeStyle,
-                                backgroundColor:
-                                  employee.daysLeft === 0 ? "#fee2e2" : "#ffedd5",
-                                color:
-                                  employee.daysLeft === 0 ? "#b91c1c" : "#c2410c",
-                                fontWeight: 800,
-                              }}
-                            >
-                              {employee.daysLeft === 0
-                                ? "D-Day"
-                                : `D-${employee.daysLeft}`}
-                            </span>
-                          </td>
-                          <td style={tdStyle}>
-                            <button
-                              onClick={() => {
-                                setEmployeeSearch(employee.name);
-                              }}
-                              style={primarySmallButtonStyle}
-                            >
-                              계약정보 보기
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
-
-            <section style={{ ...cardStyle, marginBottom: "20px" }}>
-              <ContractTab />
-            </section>
-
-            <section style={cardStyle}>
-              <div style={sectionHeaderStyle}>
-                <div>
-                  <h2 style={sectionTitleStyle}>근로계약서 관리</h2>
-                  <p style={sectionDescriptionStyle}>
-                    직원별 계약 시작일과 계약 종료일을 직접 입력하고 저장할 수
-                    있습니다.
-                  </p>
-                </div>
-              </div>
-
-              <div style={filterRowStyle}>
-                <div style={fieldGroupStyle}>
-                  <label style={labelStyle}>직원 이름 검색</label>
-                  <input
-                    type="text"
-                    placeholder="직원 이름 입력"
-                    value={employeeSearch}
-                    onChange={(e) => setEmployeeSearch(e.target.value)}
-                    style={inputStyle}
-                  />
-                </div>
-
-                <div style={fieldButtonGroupStyle}>
-                  <button onClick={fetchEmployees} style={primaryButtonStyle}>
-                    계약정보 새로고침
-                  </button>
-                </div>
-              </div>
-
-              {employeeLoading ? (
-                <div style={emptyBoxStyle}>계약 정보를 불러오는 중입니다...</div>
-              ) : employeeMessage ? (
-                <div style={emptyBoxStyle}>{employeeMessage}</div>
-              ) : filteredEmployees.length === 0 ? (
-                <div style={emptyBoxStyle}>직원이 없습니다.</div>
-              ) : (
-                <div style={tableScrollStyle}>
-                  <table style={tableStyle}>
-                    <thead>
-                      <tr>
-                        <th style={thStyle}>이름</th>
-                        <th style={thStyle}>휴대폰번호</th>
-                        <th style={thStyle}>주민번호</th>
-                        <th style={thStyle}>계약 시작일</th>
-                        <th style={thStyle}>계약 종료일</th>
-                        <th style={thStyle}>관리</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredEmployees.map((employee) => (
-                        <tr key={employee.id}>
-                          <td style={tdStyle}>
-                            <span style={nameTextStyle}>{employee.name}</span>
-                          </td>
-                          <td style={tdStyle}>{formatPhone(employee.phone)}</td>
-                          <td style={tdStyle}>
-                            {getMaskedResidentNumber(employee)}
-                          </td>
-                          <td style={tdStyle}>
-                            <input
-                              type="date"
-                              value={contractStartDateMap[employee.id] || ""}
-                              onChange={(e) =>
-                                setContractStartDateMap((prev) => ({
-                                  ...prev,
-                                  [employee.id]: e.target.value,
-                                }))
-                              }
-                              style={smallInputStyle}
-                            />
-                          </td>
-                          <td style={tdStyle}>
-                            <input
-                              type="date"
-                              value={contractEndDateMap[employee.id] || ""}
-                              onChange={(e) =>
-                                setContractEndDateMap((prev) => ({
-                                  ...prev,
-                                  [employee.id]: e.target.value,
-                                }))
-                              }
-                              style={smallInputStyle}
-                            />
-                          </td>
-                          <td style={tdStyle}>
-                            <button
-                              onClick={() => saveContract(employee.id)}
-                              style={primarySmallButtonStyle}
-                              disabled={contractSavingId === employee.id}
-                            >
-                              {contractSavingId === employee.id ? "저장중..." : "저장"}
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
-          </>
+            </div>
+          </section>
         )}
         {tab === "schedule" && (
           <section style={cardStyle}>
@@ -2323,66 +2013,6 @@ const cardStyle: CSSProperties = {
   borderRadius: "20px",
   padding: "22px",
   boxShadow: "0 8px 24px rgba(15, 23, 42, 0.05)",
-};
-
-const contractAlertCardStyle: CSSProperties = {
-  backgroundColor: "#fffdf7",
-  border: "1px solid #f6c97a",
-  borderRadius: "20px",
-  padding: "22px",
-  boxShadow: "0 8px 24px rgba(15, 23, 42, 0.04)",
-  marginBottom: "20px",
-};
-
-const contractAlertHeaderStyle: CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "flex-start",
-  gap: "12px",
-  flexWrap: "wrap",
-  marginBottom: "16px",
-};
-
-const contractAlertTitleWrapStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: "10px",
-};
-
-const contractAlertIconStyle: CSSProperties = {
-  fontSize: "28px",
-  lineHeight: 1,
-};
-
-const contractAlertTitleStyle: CSSProperties = {
-  margin: 0,
-  fontSize: "24px",
-  fontWeight: 800,
-  color: "#111827",
-};
-
-const contractAlertDescriptionStyle: CSSProperties = {
-  margin: "8px 0 0",
-  fontSize: "14px",
-  color: "#6b7280",
-};
-
-const contractAlertLinkButtonStyle: CSSProperties = {
-  padding: "10px 14px",
-  border: "none",
-  borderRadius: "12px",
-  cursor: "pointer",
-  backgroundColor: "transparent",
-  color: "#2563eb",
-  fontWeight: 700,
-  fontSize: "14px",
-};
-
-const contractAlertTableStyle: CSSProperties = {
-  width: "100%",
-  borderCollapse: "separate",
-  borderSpacing: 0,
-  minWidth: "1000px",
 };
 
 const sectionHeaderStyle: CSSProperties = {
