@@ -630,19 +630,13 @@ export default function Home() {
     try {
       setIsContractLoading(true);
 
-      const response = await fetch("/api/worker/contracts", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        cache: "no-store",
-        body: JSON.stringify({
-          employeeId: currentEmployee.id,
-          name: currentEmployee.name,
-          birthDate: currentEmployee.birthDate,
-          phoneLast4: currentEmployee.phoneLast4,
-        }),
-      });
+      const response = await fetch(
+  `/api/worker/contracts?employeeId=${currentEmployee.id}`,
+  {
+    method: "GET",
+    cache: "no-store",
+  }
+);
 
       const data: WorkerContractResponse = await response.json();
 
