@@ -1307,7 +1307,7 @@ const cardStyle: React.CSSProperties = {
   width: "100%",
   maxWidth: "520px",
   backgroundColor: "#ffffff",
-  borderRadius: "20px",
+  borderRadius: "20px 14px",
   padding: "28px",
   boxShadow: "0 10px 30px rgba(0,0,0,0.08)",
 };
@@ -1519,7 +1519,7 @@ const scheduleSubTextStyle: React.CSSProperties = {
 const scheduleMiniDayRowStyle: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(5, 1fr)",
-  gap: "10px",
+  gap: "6px",
   marginBottom: "16px",
 };
 
@@ -1527,19 +1527,19 @@ const scheduleMiniDayCardStyle: React.CSSProperties = {
   border: "1px solid #e5e7eb",
   borderRadius: "14px",
   backgroundColor: "#ffffff",
-  padding: "12px 8px",
+  padding: "10px 4px",
   textAlign: "center",
 };
 
 const scheduleMiniDayLabelStyle: React.CSSProperties = {
-  fontSize: "14px",
+  fontSize: "12px",
   fontWeight: 700,
   color: "#374151",
   marginBottom: "6px",
 };
 
 const scheduleMiniDayDateStyle: React.CSSProperties = {
-  fontSize: "13px",
+  fontSize: "11px",
   color: "#111827",
   fontWeight: 600,
   marginBottom: "10px",
