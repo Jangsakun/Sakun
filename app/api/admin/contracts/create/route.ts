@@ -366,7 +366,7 @@ export async function POST(request: Request) {
 
     const { data: employee, error: employeeError } = await supabase
       .from("employees")
-      .select("id, name, resident_number, phone, address")
+      .select("id, name, resident_number, phone")
       .eq("id", parsedEmployeeId)
       .single();
 
@@ -381,7 +381,7 @@ export async function POST(request: Request) {
       name: employee.name || "",
       residentNumber: employee.resident_number || "",
       phone: employee.phone || "",
-      address: employee.address || "",
+      address: "",
       contractStartDate,
       contractEndDate,
     };
