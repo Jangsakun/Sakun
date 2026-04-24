@@ -224,7 +224,12 @@ export default function ScheduleTab() {
 
     if (Array.isArray(employeeSchedule)) {
       employeeSchedule.forEach((item) => {
-        if (item.available === true && item.fullDate) {
+        if (
+          item.available === true &&
+          item.fullDate &&
+          item.fullDate >= weekStartDate &&
+          item.fullDate <= weekEndDate
+        ) {
           selectedAvailableDates.add(item.fullDate);
         }
       });
