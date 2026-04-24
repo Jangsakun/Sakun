@@ -209,6 +209,16 @@ export default function ScheduleTab() {
     setEmployeeSearch("");
   };
 
+  const handleChangeWeekModeInModal = (nextWeekMode: WeekMode) => {
+    const nextDays = getWeekDaysInKst(nextWeekMode);
+
+    setWeekMode(nextWeekMode);
+    setSelectedDate(nextDays[0]?.value || "");
+    setShowUnavailable(false);
+    setShowNotSubmitted(false);
+    setEmployeeSearch("");
+  };
+
   const openEditModal = (employee: EmployeeItem) => {
     const selectedAvailableDates = new Set<string>();
 
@@ -322,42 +332,35 @@ export default function ScheduleTab() {
     }
   };
 
-useEffect(() => {
-  if (!selectedEmployee) return;
+  useEffect(() => {
+    if (!selectedDate && days[0]?.value) {
+      setSelectedDate(days[0].value);
+      return;
+    }
 
-  const currentMonday = getMondayOfCurrentWeekInKst();
+    if (selectedDate) {
+      fetchSchedule(selectedDate);
+    }
+  }, [selectedDate]);
 
-  const baseMonday =
-    weekMode === "next" ? addDays(currentMonday, 7) : currentMonday;
+  useEffect(() => {
+    if (!selectedEmployee) return;
 
-  const labels = ["월", "화", "수", "목", "금"];
+    const selectedDaySet = new Set(
+      editSchedule.filter((v) => v.available).map((v) => v.day)
+    );
 
-  // 🔥 요일 기준으로 저장
-  const selectedDaySet = new Set(
-    editSchedule
-      .filter((v) => v.available)
-      .map((v) => v.day) // ⭐ 여기 중요
-  );
+    const nextDays = getWeekDaysInKst(weekMode);
 
-  const nextDays = [0, 1, 2, 3, 4].map((i) => {
-    const date = addDays(baseMonday, i);
+    const newSchedule = nextDays.map((day) => ({
+      day: day.day,
+      label: day.label,
+      fullDate: day.value,
+      available: selectedDaySet.has(day.day),
+    }));
 
-    return {
-      day: labels[i],
-      label: `${labels[i]} (${formatMonthDay(date)})`,
-      value: formatDateKey(date),
-    };
-  });
-
-  const newSchedule = nextDays.map((day) => ({
-    day: day.day,
-    label: day.label,
-    fullDate: day.value,
-    available: selectedDaySet.has(day.day), // ⭐ 여기 중요
-  }));
-
-  setEditSchedule(newSchedule);
-}, [weekMode]);
+    setEditSchedule(newSchedule);
+  }, [weekMode]);
 
   useEffect(() => {
     setShowUnavailable(false);
@@ -1040,45 +1043,52 @@ useEffect(() => {
                 >
                   직원 스케줄 수정
                 </div>
-                <div
-  style={{
-    display: "flex",
-    gap: "8px",
-    marginTop: "10px",
-  }}
->
-  <button
-    onClick={() => setWeekMode("current")}
-    style={{
-      padding: "6px 12px",
-      borderRadius: "999px",
-      border: weekMode === "current" ? "none" : "1px solid #d1d5db",
-      background: weekMode === "current" ? "#111827" : "#ffffff",
-      color: weekMode === "current" ? "#ffffff" : "#111827",
-      fontSize: "12px",
-      fontWeight: 700,
-      cursor: "pointer",
-    }}
-  >
-    이번 주
-  </button>
 
-  <button
-    onClick={() => setWeekMode("next")}
-    style={{
-      padding: "6px 12px",
-      borderRadius: "999px",
-      border: weekMode === "next" ? "none" : "1px solid #d1d5db",
-      background: weekMode === "next" ? "#111827" : "#ffffff",
-      color: weekMode === "next" ? "#ffffff" : "#111827",
-      fontSize: "12px",
-      fontWeight: 700,
-      cursor: "pointer",
-    }}
-  >
-    다음 주
-  </button>
-</div>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "8px",
+                    marginTop: "10px",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleChangeWeekModeInModal("current")}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: "999px",
+                      border:
+                        weekMode === "current" ? "none" : "1px solid #d1d5db",
+                      background:
+                        weekMode === "current" ? "#111827" : "#ffffff",
+                      color: weekMode === "current" ? "#ffffff" : "#111827",
+                      fontSize: "12px",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    이번 주
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleChangeWeekModeInModal("next")}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: "999px",
+                      border:
+                        weekMode === "next" ? "none" : "1px solid #d1d5db",
+                      background: weekMode === "next" ? "#111827" : "#ffffff",
+                      color: weekMode === "next" ? "#ffffff" : "#111827",
+                      fontSize: "12px",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    다음 주
+                  </button>
+                </div>
+
                 <div
                   style={{
                     marginTop: "6px",
