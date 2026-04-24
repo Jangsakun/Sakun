@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 type EmployeeItem = {
   id?: number | string;
   name: string;
+  gender?: string | null;
 };
 
 type ScheduleApiResponse = {
@@ -85,6 +86,20 @@ export default function ScheduleTab() {
   const [showUnavailable, setShowUnavailable] = useState(false);
   const [showNotSubmitted, setShowNotSubmitted] = useState(false);
 
+  const maleAvailableEmployees = useMemo(() => {
+    return (data?.available || []).filter((emp) => emp.gender === "남성");
+  }, [data]);
+
+  const femaleAvailableEmployees = useMemo(() => {
+    return (data?.available || []).filter((emp) => emp.gender === "여성");
+  }, [data]);
+
+  const unknownGenderAvailableEmployees = useMemo(() => {
+    return (data?.available || []).filter(
+      (emp) => emp.gender !== "남성" && emp.gender !== "여성"
+    );
+  }, [data]);
+
   const fetchSchedule = async (date: string) => {
     if (!date) return;
 
@@ -140,11 +155,7 @@ export default function ScheduleTab() {
 
   return (
     <div style={{ marginTop: "20px" }}>
-      <div
-        style={{
-          marginBottom: "18px",
-        }}
-      >
+      <div style={{ marginBottom: "18px" }}>
         <div
           style={{
             fontSize: "14px",
@@ -250,7 +261,7 @@ export default function ScheduleTab() {
               background: "#f0fdf4",
             }}
           >
-            <div style={{ fontWeight: 700, marginBottom: "10px" }}>
+            <div style={{ fontWeight: 700, marginBottom: "12px" }}>
               🟢 출근 가능 {data.summary.available}명
             </div>
 
@@ -259,23 +270,175 @@ export default function ScheduleTab() {
                 출근 가능 인원이 없습니다.
               </div>
             ) : (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                {data.available.map((emp, index) => (
-                  <span
-                    key={`${emp.id ?? emp.name}-${index}`}
+              <>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                    gap: "10px",
+                  }}
+                >
+                  <div
                     style={{
-                      padding: "6px 10px",
-                      borderRadius: "999px",
-                      background: "#dcfce7",
-                      fontSize: "13px",
-                      color: "#166534",
-                      fontWeight: 600,
+                      border: "1px solid #bfdbfe",
+                      borderRadius: "10px",
+                      background: "#ffffff",
+                      overflow: "hidden",
                     }}
                   >
-                    {emp.name}
-                  </span>
-                ))}
-              </div>
+                    <div
+                      style={{
+                        padding: "9px 12px",
+                        background: "#eff6ff",
+                        color: "#1d4ed8",
+                        fontSize: "13px",
+                        fontWeight: 800,
+                        borderBottom: "1px solid #bfdbfe",
+                      }}
+                    >
+                      남자 {maleAvailableEmployees.length}명 출근
+                    </div>
+
+                    <div
+                      style={{
+                        padding: "12px",
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "8px",
+                        minHeight: "54px",
+                        alignItems: "flex-start",
+                      }}
+                    >
+                      {maleAvailableEmployees.length === 0 ? (
+                        <span style={{ color: "#9ca3af", fontSize: "13px" }}>
+                          없음
+                        </span>
+                      ) : (
+                        maleAvailableEmployees.map((emp, index) => (
+                          <span
+                            key={`${emp.id ?? emp.name}-${index}`}
+                            style={{
+                              padding: "6px 10px",
+                              borderRadius: "999px",
+                              background: "#dbeafe",
+                              fontSize: "13px",
+                              color: "#1d4ed8",
+                              fontWeight: 700,
+                            }}
+                          >
+                            {emp.name}
+                          </span>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      border: "1px solid #fbcfe8",
+                      borderRadius: "10px",
+                      background: "#ffffff",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        padding: "9px 12px",
+                        background: "#fdf2f8",
+                        color: "#db2777",
+                        fontSize: "13px",
+                        fontWeight: 800,
+                        borderBottom: "1px solid #fbcfe8",
+                      }}
+                    >
+                      여자 {femaleAvailableEmployees.length}명 출근
+                    </div>
+
+                    <div
+                      style={{
+                        padding: "12px",
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "8px",
+                        minHeight: "54px",
+                        alignItems: "flex-start",
+                      }}
+                    >
+                      {femaleAvailableEmployees.length === 0 ? (
+                        <span style={{ color: "#9ca3af", fontSize: "13px" }}>
+                          없음
+                        </span>
+                      ) : (
+                        femaleAvailableEmployees.map((emp, index) => (
+                          <span
+                            key={`${emp.id ?? emp.name}-${index}`}
+                            style={{
+                              padding: "6px 10px",
+                              borderRadius: "999px",
+                              background: "#fce7f3",
+                              fontSize: "13px",
+                              color: "#be185d",
+                              fontWeight: 700,
+                            }}
+                          >
+                            {emp.name}
+                          </span>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {unknownGenderAvailableEmployees.length > 0 && (
+                  <div
+                    style={{
+                      marginTop: "10px",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "10px",
+                      background: "#ffffff",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        padding: "9px 12px",
+                        background: "#f9fafb",
+                        color: "#4b5563",
+                        fontSize: "13px",
+                        fontWeight: 800,
+                        borderBottom: "1px solid #d1d5db",
+                      }}
+                    >
+                      성별 미등록 {unknownGenderAvailableEmployees.length}명 출근
+                    </div>
+
+                    <div
+                      style={{
+                        padding: "12px",
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "8px",
+                      }}
+                    >
+                      {unknownGenderAvailableEmployees.map((emp, index) => (
+                        <span
+                          key={`${emp.id ?? emp.name}-${index}`}
+                          style={{
+                            padding: "6px 10px",
+                            borderRadius: "999px",
+                            background: "#e5e7eb",
+                            fontSize: "13px",
+                            color: "#374151",
+                            fontWeight: 700,
+                          }}
+                        >
+                          {emp.name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
 

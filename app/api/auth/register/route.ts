@@ -55,6 +55,38 @@ function getBirthDateFromResidentNumber(residentNumber: string) {
   return birthDate;
 }
 
+function getGenderFromResidentNumber(residentNumber: string) {
+  const digits = residentNumber.replace(/[^0-9]/g, "");
+
+  if (digits.length !== 13) {
+    return null;
+  }
+
+  const genderCode = digits[6];
+
+  if (
+    genderCode === "1" ||
+    genderCode === "3" ||
+    genderCode === "5" ||
+    genderCode === "7" ||
+    genderCode === "9"
+  ) {
+    return "남성";
+  }
+
+  if (
+    genderCode === "2" ||
+    genderCode === "4" ||
+    genderCode === "6" ||
+    genderCode === "8" ||
+    genderCode === "0"
+  ) {
+    return "여성";
+  }
+
+  return null;
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -131,12 +163,23 @@ export async function POST(request: Request) {
     }
 
     const birthDate = getBirthDateFromResidentNumber(residentDigits);
+    const gender = getGenderFromResidentNumber(residentDigits);
 
     if (!birthDate) {
       return NextResponse.json(
         {
           success: false,
           message: "주민번호에서 생년월일을 추출할 수 없습니다.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!gender) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "주민번호에서 성별을 추출할 수 없습니다.",
         },
         { status: 400 }
       );
@@ -276,6 +319,7 @@ export async function POST(request: Request) {
           resident_number: residentDigits,
           resident_number_masked: maskedResidentNumber,
           birth_date: birthDate,
+          gender,
           bank_name: trimmedBankName,
           account_number: accountDigits,
           reconnect_code: null,
@@ -357,6 +401,7 @@ export async function POST(request: Request) {
           phoneLast4: updatedEmployee.phone_last4,
           residentNumberMasked: updatedEmployee.resident_number_masked,
           birthDate: updatedEmployee.birth_date,
+          gender: updatedEmployee.gender,
           bankName: updatedEmployee.bank_name,
           accountNumber: updatedEmployee.account_number,
         },
@@ -385,6 +430,7 @@ export async function POST(request: Request) {
           resident_number: residentDigits,
           resident_number_masked: maskedResidentNumber,
           birth_date: birthDate,
+          gender,
           bank_name: trimmedBankName,
           account_number: accountDigits,
           hourly_wage: 10320,
@@ -446,6 +492,7 @@ export async function POST(request: Request) {
         phoneLast4: data.phone_last4,
         residentNumberMasked: data.resident_number_masked,
         birthDate: data.birth_date,
+        gender: data.gender,
         bankName: data.bank_name,
         accountNumber: data.account_number,
       },
