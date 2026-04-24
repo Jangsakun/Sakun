@@ -343,24 +343,43 @@ export default function ScheduleTab() {
     }
   }, [selectedDate]);
 
-  useEffect(() => {
-    if (!selectedEmployee) return;
+ useEffect(() => {
+  if (!selectedEmployee) return;
 
-    const selectedDaySet = new Set(
-      editSchedule.filter((v) => v.available).map((v) => v.day)
-    );
+  const matchedEmployee = [
+    ...(data?.available || []),
+    ...(data?.unavailable || []),
+    ...(data?.notSubmitted || []),
+  ].find(
+    (emp) =>
+      String(emp.id ?? emp.name) ===
+      String(selectedEmployee.id ?? selectedEmployee.name)
+  );
 
-    const nextDays = getWeekDaysInKst(weekMode);
+  const selectedAvailableDates = new Set<string>();
 
-    const newSchedule = nextDays.map((day) => ({
-      day: day.day,
-      label: day.label,
-      fullDate: day.value,
-      available: selectedDaySet.has(day.day),
-    }));
+  if (Array.isArray(matchedEmployee?.schedule)) {
+    matchedEmployee.schedule.forEach((item) => {
+      if (
+        item.available === true &&
+        item.fullDate &&
+        item.fullDate >= weekStartDate &&
+        item.fullDate <= weekEndDate
+      ) {
+        selectedAvailableDates.add(item.fullDate);
+      }
+    });
+  }
 
-    setEditSchedule(newSchedule);
-  }, [weekMode]);
+  const newSchedule = days.map((day) => ({
+    day: day.day,
+    label: day.label,
+    fullDate: day.value,
+    available: selectedAvailableDates.has(day.value),
+  }));
+
+  setEditSchedule(newSchedule);
+}, [weekMode, data, selectedEmployee, days, weekStartDate, weekEndDate]);
 
   useEffect(() => {
     setShowUnavailable(false);
