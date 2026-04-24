@@ -1667,7 +1667,83 @@ export default function AdminPage() {
         color: "#991b1b",
       }}
     >
-      ⚠️ 계약 종료일이 임박한 직원들을 확인하세요.
+      <section
+  style={{
+    ...warningBoxStyle,
+    marginBottom: "16px",
+    backgroundColor: "#fef2f2",
+    border: "1px solid #fecaca",
+    color: "#991b1b",
+  }}
+>
+  <strong>⚠️ 계약 종료일이 임박한 직원</strong>
+
+  <div style={{ marginTop: "12px" }}>
+    {employees.filter((emp) => {
+      if (!emp.contract_end_date) return false;
+
+      const today = new Date();
+      const end = new Date(`${emp.contract_end_date}T00:00:00`);
+      const diffDays = Math.ceil(
+        (end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+      );
+
+      return diffDays >= 0 && diffDays <= 7;
+    }).length === 0 ? (
+      <div style={{ color: "#6b7280", marginTop: "8px" }}>
+        현재 7일 이내 계약 종료 예정 직원이 없습니다.
+      </div>
+    ) : (
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+        {employees
+          .filter((emp) => {
+            if (!emp.contract_end_date) return false;
+
+            const today = new Date();
+            const end = new Date(`${emp.contract_end_date}T00:00:00`);
+            const diffDays = Math.ceil(
+              (end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+            );
+
+            return diffDays >= 0 && diffDays <= 7;
+          })
+          .map((emp) => {
+            const today = new Date();
+            const end = new Date(`${emp.contract_end_date}T00:00:00`);
+            const diffDays = Math.ceil(
+              (end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+            );
+
+            return (
+              <div
+                key={emp.id}
+                style={{
+                  backgroundColor: "#ffffff",
+                  border: "1px solid #fecaca",
+                  borderRadius: "12px",
+                  padding: "10px 12px",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: "12px",
+                  flexWrap: "wrap",
+                }}
+              >
+                <span>
+                  <strong>{emp.name}</strong> / {formatPhone(emp.phone)}
+                </span>
+                <span>
+                  종료일: {formatDate(emp.contract_end_date || "")} /{" "}
+                  <strong>
+                    {diffDays === 0 ? "오늘 만료" : `${diffDays}일 남음`}
+                  </strong>
+                </span>
+              </div>
+            );
+          })}
+      </div>
+    )}
+  </div>
+</section>
     </section>
 
     {/* 🔥 계약 관리 테이블 */}
