@@ -63,18 +63,22 @@ export async function GET(request: NextRequest) {
     const notSubmitted: any[] = [];
 
     for (const emp of employees || []) {
-      const schedule = schedules?.find((s) => s.name === emp.name);
+      const scheduleRow = schedules?.find((s) => s.name === emp.name);
+      const weeklySchedule = Array.isArray(scheduleRow?.schedule)
+        ? scheduleRow.schedule
+        : [];
 
-      if (!schedule) {
+      if (!scheduleRow) {
         notSubmitted.push({
           id: emp.id,
           name: emp.name,
           gender: emp.gender,
+          schedule: [],
         });
         continue;
       }
 
-      const isAvailable = schedule.schedule?.some(
+      const isAvailable = weeklySchedule.some(
         (d: any) => d.fullDate === date && d.available === true
       );
 
@@ -83,12 +87,14 @@ export async function GET(request: NextRequest) {
           id: emp.id,
           name: emp.name,
           gender: emp.gender,
+          schedule: weeklySchedule,
         });
       } else {
         unavailable.push({
           id: emp.id,
           name: emp.name,
           gender: emp.gender,
+          schedule: weeklySchedule,
         });
       }
     }
@@ -220,6 +226,7 @@ export async function PATCH(request: NextRequest) {
       const { error: updateError } = await supabase
         .from("weekly_schedules")
         .update({
+          employee_id: finalEmployeeId,
           name: trimmedName,
           gender: finalGender,
           week_start_date: weekStartDate,

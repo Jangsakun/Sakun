@@ -2,17 +2,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-type EmployeeItem = {
-  id?: number | string;
-  name: string;
-  gender?: string | null;
-};
-
 type ScheduleDay = {
   day: string;
   label: string;
   fullDate: string;
   available: boolean;
+};
+
+type EmployeeItem = {
+  id?: number | string;
+  name: string;
+  gender?: string | null;
+  schedule?: ScheduleDay[];
 };
 
 type ScheduleApiResponse = {
@@ -122,12 +123,14 @@ export default function ScheduleTab() {
   const allEmployees = useMemo(() => {
     const map = new Map<string, EmployeeItem>();
 
-    [...(data?.available || []), ...(data?.unavailable || []), ...(data?.notSubmitted || [])].forEach(
-      (emp) => {
-        const key = String(emp.id ?? emp.name);
-        map.set(key, emp);
-      }
-    );
+    [
+      ...(data?.available || []),
+      ...(data?.unavailable || []),
+      ...(data?.notSubmitted || []),
+    ].forEach((emp) => {
+      const key = String(emp.id ?? emp.name);
+      map.set(key, emp);
+    });
 
     return Array.from(map.values());
   }, [data]);
@@ -185,8 +188,31 @@ export default function ScheduleTab() {
   const openEditModal = (employee: EmployeeItem) => {
     const selectedAvailableDates = new Set<string>();
 
-    if (data?.available.some((emp) => String(emp.id ?? emp.name) === String(employee.id ?? employee.name))) {
-      selectedAvailableDates.add(selectedDate);
+    const matchedEmployee = [
+      ...(data?.available || []),
+      ...(data?.unavailable || []),
+      ...(data?.notSubmitted || []),
+    ].find(
+      (emp) => String(emp.id ?? emp.name) === String(employee.id ?? employee.name)
+    );
+
+    const employeeSchedule = matchedEmployee?.schedule;
+
+    if (Array.isArray(employeeSchedule)) {
+      employeeSchedule.forEach((item) => {
+        if (item.available === true && item.fullDate) {
+          selectedAvailableDates.add(item.fullDate);
+        }
+      });
+    } else {
+      if (
+        data?.available.some(
+          (emp) =>
+            String(emp.id ?? emp.name) === String(employee.id ?? employee.name)
+        )
+      ) {
+        selectedAvailableDates.add(selectedDate);
+      }
     }
 
     const nextSchedule = days.map((day) => ({
@@ -299,25 +325,101 @@ export default function ScheduleTab() {
       <div style={{ marginBottom: "18px" }}>
         <div
           style={{
+            fontSize: "14px",
+            color: "#6b7280",
+            lineHeight: 1.5,
+            marginBottom: "14px",
+          }}
+        >
+          이번 주 요일 버튼으로 빠르게 확인하거나, 날짜를 직접 선택해서 조회할 수 있습니다.
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            gap: "10px",
+            alignItems: "center",
+            flexWrap: "wrap",
+            marginBottom: "16px",
+          }}
+        >
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            style={{
+              padding: "10px 14px",
+              borderRadius: "10px",
+              border: "1px solid #d1d5db",
+              fontSize: "14px",
+              color: "#111827",
+              backgroundColor: "#ffffff",
+              minWidth: "170px",
+              outline: "none",
+            }}
+          />
+
+          <button
+            type="button"
+            onClick={handleDateSearch}
+            style={{
+              padding: "10px 16px",
+              borderRadius: "10px",
+              border: "none",
+              background: "#111827",
+              color: "#ffffff",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            날짜 조회
+          </button>
+        </div>
+
+        <div
+          style={{
             display: "flex",
             justifyContent: "space-between",
-            gap: "14px",
-            alignItems: "flex-start",
+            alignItems: "center",
+            gap: "12px",
             flexWrap: "wrap",
-            marginBottom: "14px",
+            marginBottom: "20px",
           }}
         >
           <div
             style={{
-              fontSize: "14px",
-              color: "#6b7280",
-              lineHeight: 1.5,
+              display: "flex",
+              gap: "8px",
+              flexWrap: "wrap",
             }}
           >
-            이번 주 요일 버튼으로 빠르게 확인하거나, 날짜를 직접 선택해서 조회할 수 있습니다.
+            {days.map((day) => (
+              <button
+                key={day.value}
+                onClick={() => setSelectedDate(day.value)}
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: "10px",
+                  border: "none",
+                  background:
+                    selectedDate === day.value ? "#111827" : "#e5e7eb",
+                  color: selectedDate === day.value ? "#ffffff" : "#111827",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                {day.label}
+              </button>
+            ))}
           </div>
 
-          <div style={{ position: "relative", minWidth: "260px" }}>
+          <div
+            style={{
+              position: "relative",
+              width: "260px",
+              maxWidth: "100%",
+            }}
+          >
             <input
               type="text"
               placeholder="직원 이름 검색"
@@ -402,75 +504,6 @@ export default function ScheduleTab() {
               </div>
             )}
           </div>
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            gap: "10px",
-            alignItems: "center",
-            flexWrap: "wrap",
-            marginBottom: "16px",
-          }}
-        >
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            style={{
-              padding: "10px 14px",
-              borderRadius: "10px",
-              border: "1px solid #d1d5db",
-              fontSize: "14px",
-              color: "#111827",
-              backgroundColor: "#ffffff",
-              minWidth: "170px",
-              outline: "none",
-            }}
-          />
-
-          <button
-            type="button"
-            onClick={handleDateSearch}
-            style={{
-              padding: "10px 16px",
-              borderRadius: "10px",
-              border: "none",
-              background: "#111827",
-              color: "#ffffff",
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-          >
-            날짜 조회
-          </button>
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            gap: "8px",
-            marginBottom: "20px",
-            flexWrap: "wrap",
-          }}
-        >
-          {days.map((day) => (
-            <button
-              key={day.value}
-              onClick={() => setSelectedDate(day.value)}
-              style={{
-                padding: "10px 14px",
-                borderRadius: "10px",
-                border: "none",
-                background: selectedDate === day.value ? "#111827" : "#e5e7eb",
-                color: selectedDate === day.value ? "#ffffff" : "#111827",
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
-            >
-              {day.label}
-            </button>
-          ))}
         </div>
       </div>
 
