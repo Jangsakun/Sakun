@@ -47,7 +47,11 @@ function getNextCheckoutWindowLabel(hour: number, minute: number) {
 function isCheckoutAllowedAtKst(date: Date) {
   const { hour, minute } = getKstDateParts(date);
 
-  if (hour < 18) return { allowed: true, message: "" };
+  if (hour < 18)
+  return {
+    allowed: false,
+    message: "18시 이후부터 퇴근 가능합니다.",
+  };
 
   const ok =
     (minute >= 0 && minute <= 10) || (minute >= 30 && minute <= 40);
