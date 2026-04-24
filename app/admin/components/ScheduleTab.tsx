@@ -322,17 +322,6 @@ export default function ScheduleTab() {
     }
   };
 
-  useEffect(() => {
-    if (!selectedDate && days[0]?.value) {
-      setSelectedDate(days[0].value);
-      return;
-    }
-
-    if (selectedDate) {
-      fetchSchedule(selectedDate);
-    }
-  }, [selectedDate, days]);
-
 useEffect(() => {
   if (!selectedEmployee) return;
 
@@ -342,6 +331,13 @@ useEffect(() => {
     weekMode === "next" ? addDays(currentMonday, 7) : currentMonday;
 
   const labels = ["월", "화", "수", "목", "금"];
+
+  // 🔥 요일 기준으로 저장
+  const selectedDaySet = new Set(
+    editSchedule
+      .filter((v) => v.available)
+      .map((v) => v.day) // ⭐ 여기 중요
+  );
 
   const nextDays = [0, 1, 2, 3, 4].map((i) => {
     const date = addDays(baseMonday, i);
@@ -353,15 +349,11 @@ useEffect(() => {
     };
   });
 
-  const selectedSet = new Set(
-    editSchedule.filter((v) => v.available).map((v) => v.fullDate)
-  );
-
   const newSchedule = nextDays.map((day) => ({
     day: day.day,
     label: day.label,
     fullDate: day.value,
-    available: selectedSet.has(day.value),
+    available: selectedDaySet.has(day.day), // ⭐ 여기 중요
   }));
 
   setEditSchedule(newSchedule);
