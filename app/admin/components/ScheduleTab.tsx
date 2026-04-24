@@ -43,6 +43,8 @@ type DayItem = {
   day: string;
 };
 
+type WeekMode = "current" | "next";
+
 function getMondayOfCurrentWeekInKst() {
   const now = new Date();
   const seoulNow = new Date(
@@ -77,12 +79,15 @@ function formatMonthDay(date: Date) {
   return `${month}.${day}`;
 }
 
-function getCurrentWeekDaysInKst(): DayItem[] {
-  const monday = getMondayOfCurrentWeekInKst();
-  const labels = ["월", "화", "수", "목", "금"];
+function getWeekDaysInKst(weekMode: WeekMode): DayItem[] {
+  const currentMonday = getMondayOfCurrentWeekInKst();
+  const weekStart =
+    weekMode === "next" ? addDays(currentMonday, 7) : currentMonday;
 
-  return [0, 1, 2, 3, 4].map((offset) => {
-    const date = addDays(monday, offset);
+  const labels = ["월", "화", "수", "목", "금", "토", "일"];
+
+  return [0, 1, 2, 3, 4, 5, 6].map((offset) => {
+    const date = addDays(weekStart, offset);
 
     return {
       day: labels[offset],
@@ -99,8 +104,15 @@ function getWeekStartAndEnd(days: DayItem[]) {
   };
 }
 
+function getWeekTitle(weekMode: WeekMode) {
+  return weekMode === "current" ? "이번 주" : "다음 주";
+}
+
 export default function ScheduleTab() {
-  const days = useMemo(() => getCurrentWeekDaysInKst(), []);
+  const [weekMode, setWeekMode] = useState<WeekMode>("current");
+
+  const days = useMemo(() => getWeekDaysInKst(weekMode), [weekMode]);
+
   const { weekStartDate, weekEndDate } = useMemo(
     () => getWeekStartAndEnd(days),
     [days]
@@ -183,6 +195,18 @@ export default function ScheduleTab() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleChangeWeekMode = (nextWeekMode: WeekMode) => {
+    const nextDays = getWeekDaysInKst(nextWeekMode);
+
+    setWeekMode(nextWeekMode);
+    setSelectedDate(nextDays[0]?.value || "");
+    setShowUnavailable(false);
+    setShowNotSubmitted(false);
+    setSelectedEmployee(null);
+    setEditSchedule([]);
+    setEmployeeSearch("");
   };
 
   const openEditModal = (employee: EmployeeItem) => {
@@ -331,7 +355,70 @@ export default function ScheduleTab() {
             marginBottom: "14px",
           }}
         >
-          이번 주 요일 버튼으로 빠르게 확인하거나, 날짜를 직접 선택해서 조회할 수 있습니다.
+          관리자는 요일과 상관없이 이번 주 / 다음 주 스케줄을 자유롭게 조회하고 수정할 수 있습니다.
+          월요일 00시가 지나면 다음 주가 자동으로 이번 주로 롤링됩니다.
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            gap: "10px",
+            flexWrap: "wrap",
+            marginBottom: "16px",
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => handleChangeWeekMode("current")}
+            style={{
+              padding: "11px 18px",
+              borderRadius: "999px",
+              border: weekMode === "current" ? "none" : "1px solid #d1d5db",
+              background: weekMode === "current" ? "#111827" : "#ffffff",
+              color: weekMode === "current" ? "#ffffff" : "#111827",
+              fontWeight: 900,
+              cursor: "pointer",
+              boxShadow:
+                weekMode === "current"
+                  ? "0 8px 18px rgba(17, 24, 39, 0.18)"
+                  : "none",
+            }}
+          >
+            이번 주
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleChangeWeekMode("next")}
+            style={{
+              padding: "11px 18px",
+              borderRadius: "999px",
+              border: weekMode === "next" ? "none" : "1px solid #d1d5db",
+              background: weekMode === "next" ? "#111827" : "#ffffff",
+              color: weekMode === "next" ? "#ffffff" : "#111827",
+              fontWeight: 900,
+              cursor: "pointer",
+              boxShadow:
+                weekMode === "next"
+                  ? "0 8px 18px rgba(17, 24, 39, 0.18)"
+                  : "none",
+            }}
+          >
+            다음 주
+          </button>
+
+          <div
+            style={{
+              padding: "11px 14px",
+              borderRadius: "999px",
+              background: "#f3f4f6",
+              color: "#374151",
+              fontSize: "13px",
+              fontWeight: 800,
+            }}
+          >
+            {getWeekTitle(weekMode)} {weekStartDate} ~ {weekEndDate}
+          </div>
         </div>
 
         <div
@@ -932,7 +1019,7 @@ export default function ScheduleTab() {
                   {selectedEmployee.name}
                   {selectedEmployee.gender ? ` (${selectedEmployee.gender})` : ""}
                   {" · "}
-                  {weekStartDate} ~ {weekEndDate}
+                  {getWeekTitle(weekMode)} {weekStartDate} ~ {weekEndDate}
                 </div>
               </div>
 
@@ -1035,7 +1122,7 @@ export default function ScheduleTab() {
                   marginBottom: "16px",
                 }}
               >
-                수정 후 저장하면 해당 직원의 이번 주 스케줄이 변경됩니다.
+                수정 후 저장하면 해당 직원의 {getWeekTitle(weekMode)} 스케줄이 변경됩니다.
               </div>
 
               <div
