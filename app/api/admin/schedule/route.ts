@@ -5,7 +5,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
 
-    const date = (searchParams.get("date") || "").trim(); // ex: 2026-04-20
+    const date = (searchParams.get("date") || "").trim();
 
     if (!date) {
       return NextResponse.json(
@@ -26,10 +26,9 @@ export async function GET(request: NextRequest) {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // ✅ 직원 전체 조회
     const { data: employees, error: empError } = await supabase
       .from("employees")
-      .select("id, name")
+      .select("id, name, gender")
       .eq("is_active", true);
 
     if (empError) {
@@ -39,7 +38,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // ✅ 해당 날짜 포함된 주차 스케줄 조회
     const { data: schedules, error: schError } = await supabase
       .from("weekly_schedules")
       .select("*")
@@ -53,27 +51,22 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // 🔥 분류
     const available: any[] = [];
     const unavailable: any[] = [];
     const notSubmitted: any[] = [];
 
     for (const emp of employees || []) {
-      const schedule = schedules?.find(
-        (s) =>
-          s.name === emp.name // 현재 구조 기준 (나중에 employee_id로 바꾸면 더 좋음)
-      );
+      const schedule = schedules?.find((s) => s.name === emp.name);
 
-      // ❌ 아예 제출 안한 사람
       if (!schedule) {
         notSubmitted.push({
           id: emp.id,
           name: emp.name,
+          gender: emp.gender,
         });
         continue;
       }
 
-      // 🔍 해당 날짜에 출근 가능 여부 확인
       const isAvailable = schedule.schedule?.some(
         (d: any) => d.fullDate === date && d.available === true
       );
@@ -82,11 +75,13 @@ export async function GET(request: NextRequest) {
         available.push({
           id: emp.id,
           name: emp.name,
+          gender: emp.gender,
         });
       } else {
         unavailable.push({
           id: emp.id,
           name: emp.name,
+          gender: emp.gender,
         });
       }
     }
