@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -116,6 +116,30 @@ type WeeklyScheduleStatusResponse = {
     week_end_date?: string;
     schedule?: SubmittedScheduleDay[];
   } | null;
+};
+
+type WorkerContract = {
+  id: number | string;
+  employee_id?: number | string | null;
+  contract_type?: string | null;
+  contract_start_date?: string | null;
+  contract_end_date?: string | null;
+  content_html: string;
+  signature_employee?: string | null;
+  signed_at_employee?: string | null;
+  status: "draft" | "pending" | "signed" | string;
+};
+
+type WorkerContractResponse = {
+  success: boolean;
+  message?: string;
+  contract?: WorkerContract | null;
+};
+
+type SignContractResponse = {
+  success: boolean;
+  message?: string;
+  contract?: WorkerContract | null;
 };
 
 function getOrCreateDeviceId() {
@@ -477,10 +501,228 @@ export default function Home() {
   const [weekEndDate, setWeekEndDate] = useState("");
   const [isHolidayLoading, setIsHolidayLoading] = useState(true);
 
+  const [workerContract, setWorkerContract] = useState<WorkerContract | null>(
+    null
+  );
+  const [isContractLoading, setIsContractLoading] = useState(false);
+  const [isContractOpen, setIsContractOpen] = useState(false);
+  const [contractAgree, setContractAgree] = useState(false);
+  const [isSigningContract, setIsSigningContract] = useState(false);
+  const [signatureTouched, setSignatureTouched] = useState(false);
+  const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const isDrawingSignatureRef = useRef(false);
+
   const scheduleWeekTitle = useMemo(() => getScheduleWeekTitleInKst(), []);
 
   const clearEmployeeStorage = () => {
     localStorage.removeItem("employee");
+  };
+
+  const getCanvasPosition = (event: React.MouseEvent | React.TouchEvent) => {
+    const canvas = signatureCanvasRef.current;
+
+    if (!canvas) {
+      return null;
+    }
+
+    const rect = canvas.getBoundingClientRect();
+    const clientX =
+      "touches" in event
+        ? event.touches[0]?.clientX ?? event.changedTouches[0]?.clientX
+        : event.clientX;
+    const clientY =
+      "touches" in event
+        ? event.touches[0]?.clientY ?? event.changedTouches[0]?.clientY
+        : event.clientY;
+
+    if (typeof clientX !== "number" || typeof clientY !== "number") {
+      return null;
+    }
+
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY,
+    };
+  };
+
+  const startSignatureDrawing = (event: React.MouseEvent | React.TouchEvent) => {
+    event.preventDefault();
+
+    const canvas = signatureCanvasRef.current;
+    const position = getCanvasPosition(event);
+
+    if (!canvas || !position) {
+      return;
+    }
+
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      return;
+    }
+
+    isDrawingSignatureRef.current = true;
+    setSignatureTouched(true);
+
+    context.beginPath();
+    context.moveTo(position.x, position.y);
+  };
+
+  const drawSignature = (event: React.MouseEvent | React.TouchEvent) => {
+    event.preventDefault();
+
+    if (!isDrawingSignatureRef.current) {
+      return;
+    }
+
+    const canvas = signatureCanvasRef.current;
+    const position = getCanvasPosition(event);
+
+    if (!canvas || !position) {
+      return;
+    }
+
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      return;
+    }
+
+    context.lineWidth = 2.5;
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    context.strokeStyle = "#111827";
+    context.lineTo(position.x, position.y);
+    context.stroke();
+  };
+
+  const stopSignatureDrawing = () => {
+    isDrawingSignatureRef.current = false;
+
+    const canvas = signatureCanvasRef.current;
+    const context = canvas?.getContext("2d");
+
+    if (context) {
+      context.beginPath();
+    }
+  };
+
+  const clearSignature = () => {
+    const canvas = signatureCanvasRef.current;
+    const context = canvas?.getContext("2d");
+
+    if (!canvas || !context) {
+      return;
+    }
+
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    setSignatureTouched(false);
+  };
+
+  const fetchWorkerContract = async (currentEmployee: Employee) => {
+    if (!currentEmployee) {
+      return;
+    }
+
+    try {
+      setIsContractLoading(true);
+
+      const response = await fetch("/api/worker/contracts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        cache: "no-store",
+        body: JSON.stringify({
+          employeeId: currentEmployee.id,
+          name: currentEmployee.name,
+          birthDate: currentEmployee.birthDate,
+          phoneLast4: currentEmployee.phoneLast4,
+        }),
+      });
+
+      const data: WorkerContractResponse = await response.json();
+
+      if (data.success && data.contract) {
+        setWorkerContract(data.contract);
+        setIsContractOpen(data.contract.status === "pending");
+      } else {
+        setWorkerContract(null);
+        setIsContractOpen(false);
+      }
+    } catch (error) {
+      console.error("근로계약서 조회 실패:", error);
+      setWorkerContract(null);
+      setIsContractOpen(false);
+    } finally {
+      setIsContractLoading(false);
+    }
+  };
+
+  const handleSignContract = async () => {
+    if (!employee || !workerContract) {
+      alert("서명할 계약서가 없습니다.");
+      return;
+    }
+
+    if (!contractAgree) {
+      alert("계약 내용을 확인하고 동의 체크를 해주세요.");
+      return;
+    }
+
+    if (!signatureTouched) {
+      alert("서명란에 직접 서명해주세요.");
+      return;
+    }
+
+    const canvas = signatureCanvasRef.current;
+
+    if (!canvas) {
+      alert("서명 정보를 찾을 수 없습니다.");
+      return;
+    }
+
+    try {
+      setIsSigningContract(true);
+
+      const signatureImage = canvas.toDataURL("image/png");
+
+      const response = await fetch("/api/worker/contracts/sign", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contractId: workerContract.id,
+          employeeId: employee.id,
+          name: employee.name,
+          birthDate: employee.birthDate,
+          phoneLast4: employee.phoneLast4,
+          signature: signatureImage,
+          signatureEmployee: signatureImage,
+        }),
+      });
+
+      const data: SignContractResponse = await response.json();
+
+      if (!data.success) {
+        alert(data.message || "계약서 서명 저장에 실패했습니다.");
+        return;
+      }
+
+      setMessage("근로계약서 서명이 완료되었습니다.");
+      setContractAgree(false);
+      clearSignature();
+      await fetchWorkerContract(employee);
+    } catch (error) {
+      console.error("근로계약서 서명 실패:", error);
+      alert("계약서 서명 중 오류가 발생했습니다.");
+    } finally {
+      setIsSigningContract(false);
+    }
   };
 
   const fetchTodayAttendance = async (currentEmployee: Employee) => {
@@ -611,6 +853,7 @@ export default function Home() {
           localStorage.setItem("employee", JSON.stringify(connectedEmployee));
           setEmployee(connectedEmployee);
           fetchTodayAttendance(connectedEmployee);
+          fetchWorkerContract(connectedEmployee);
           return;
         }
 
@@ -786,6 +1029,13 @@ export default function Home() {
       alert("직원 정보가 없습니다. 다시 등록해주세요.");
       clearEmployeeStorage();
       router.push("/register-device");
+      return;
+    }
+
+    if (workerContract?.status === "pending") {
+      alert("근로계약서 확인 및 서명을 먼저 완료해주세요.");
+      setIsContractOpen(true);
+      setMessage("근로계약서 서명이 필요합니다.");
       return;
     }
 
@@ -999,6 +1249,145 @@ export default function Home() {
             <strong>{employee.name}</strong>님, 오늘도 좋은 하루 되세요.
           </p>
         </div>
+
+        {isContractLoading && (
+          <div style={contractLoadingCardStyle}>근로계약서 확인 중...</div>
+        )}
+
+        {workerContract && (
+          <div
+            style={
+              workerContract.status === "pending"
+                ? contractPendingCardStyle
+                : contractSignedCardStyle
+            }
+          >
+            <div style={contractHeaderRowStyle}>
+              <div style={contractTitleWrapStyle}>
+                <div
+                  style={
+                    workerContract.status === "pending"
+                      ? contractPendingIconStyle
+                      : contractSignedIconStyle
+                  }
+                >
+                  ✍️
+                </div>
+                <div>
+                  <div style={contractTitleStyle}>근로계약서</div>
+                  <div style={contractSubTitleStyle}>
+                    {workerContract.contract_type === "freelance_11"
+                      ? "11개월 용역계약서"
+                      : "일용직 7일 근로계약서"}
+                    {workerContract.contract_start_date &&
+                    workerContract.contract_end_date
+                      ? ` · ${workerContract.contract_start_date} ~ ${workerContract.contract_end_date}`
+                      : ""}
+                  </div>
+                </div>
+              </div>
+
+              <div
+                style={
+                  workerContract.status === "pending"
+                    ? contractPendingBadgeStyle
+                    : contractSignedBadgeStyle
+                }
+              >
+                {workerContract.status === "pending" ? "서명 필요" : "서명 완료"}
+              </div>
+            </div>
+
+            <div style={contractInfoTextStyle}>
+              {workerContract.status === "pending"
+                ? "근로계약서 내용을 확인하고 서명을 완료해야 출퇴근 기능을 사용할 수 있습니다."
+                : "서명이 완료된 계약서입니다."}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsContractOpen((prev) => !prev)}
+              style={
+                workerContract.status === "pending"
+                  ? contractOpenPendingButtonStyle
+                  : contractOpenSignedButtonStyle
+              }
+            >
+              {isContractOpen ? "계약서 접기" : "계약서 확인하기"}
+            </button>
+
+            {isContractOpen && (
+              <div style={contractViewerWrapStyle}>
+                <div
+                  style={contractHtmlBoxStyle}
+                  dangerouslySetInnerHTML={{
+                    __html: workerContract.content_html || "",
+                  }}
+                />
+
+                {workerContract.status === "pending" && (
+                  <div style={signatureBoxStyle}>
+                    <label style={contractAgreeLabelStyle}>
+                      <input
+                        type="checkbox"
+                        checked={contractAgree}
+                        onChange={(event) =>
+                          setContractAgree(event.target.checked)
+                        }
+                      />
+                      <span>
+                        위 근로계약서 내용을 모두 확인하였고 이에 동의합니다.
+                      </span>
+                    </label>
+
+                    <div style={signatureGuideStyle}>
+                      아래 서명란에 손가락으로 직접 서명해주세요.
+                    </div>
+
+                    <canvas
+                      ref={signatureCanvasRef}
+                      width={900}
+                      height={260}
+                      style={signatureCanvasStyle}
+                      onMouseDown={startSignatureDrawing}
+                      onMouseMove={drawSignature}
+                      onMouseUp={stopSignatureDrawing}
+                      onMouseLeave={stopSignatureDrawing}
+                      onTouchStart={startSignatureDrawing}
+                      onTouchMove={drawSignature}
+                      onTouchEnd={stopSignatureDrawing}
+                    />
+
+                    <div style={signatureButtonRowStyle}>
+                      <button
+                        type="button"
+                        onClick={clearSignature}
+                        style={signatureClearButtonStyle}
+                      >
+                        서명 지우기
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleSignContract}
+                        disabled={isSigningContract}
+                        style={{
+                          ...signatureSubmitButtonStyle,
+                          opacity: isSigningContract ? 0.7 : 1,
+                          cursor: isSigningContract
+                            ? "not-allowed"
+                            : "pointer",
+                        }}
+                      >
+                        {isSigningContract ? "서명 저장 중..." : "서명 완료"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         <div style={buttonRowStyle}>
           <button
@@ -1827,4 +2216,227 @@ const todaySummaryPillStyle: React.CSSProperties = {
   color: "#ffffff",
   fontSize: "13px",
   fontWeight: 700,
+};
+
+const contractLoadingCardStyle: React.CSSProperties = {
+  border: "1px solid #e5e7eb",
+  backgroundColor: "#f9fafb",
+  borderRadius: "16px",
+  padding: "16px",
+  marginBottom: "16px",
+  color: "#374151",
+  fontSize: "15px",
+  fontWeight: 700,
+};
+
+const contractBaseCardStyle: React.CSSProperties = {
+  borderRadius: "18px",
+  padding: "18px 16px",
+  marginBottom: "16px",
+};
+
+const contractPendingCardStyle: React.CSSProperties = {
+  ...contractBaseCardStyle,
+  backgroundColor: "#fff7ed",
+  border: "1px solid #fb923c",
+};
+
+const contractSignedCardStyle: React.CSSProperties = {
+  ...contractBaseCardStyle,
+  backgroundColor: "#f0fdf4",
+  border: "1px solid #86efac",
+};
+
+const contractHeaderRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: "12px",
+  marginBottom: "12px",
+};
+
+const contractTitleWrapStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "12px",
+};
+
+const contractPendingIconStyle: React.CSSProperties = {
+  width: "54px",
+  height: "54px",
+  minWidth: "54px",
+  borderRadius: "14px",
+  backgroundColor: "#f97316",
+  color: "#ffffff",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "26px",
+};
+
+const contractSignedIconStyle: React.CSSProperties = {
+  width: "54px",
+  height: "54px",
+  minWidth: "54px",
+  borderRadius: "14px",
+  backgroundColor: "#22c55e",
+  color: "#ffffff",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "26px",
+};
+
+const contractTitleStyle: React.CSSProperties = {
+  fontSize: "18px",
+  fontWeight: 800,
+  color: "#111827",
+  marginBottom: "4px",
+};
+
+const contractSubTitleStyle: React.CSSProperties = {
+  fontSize: "13px",
+  color: "#6b7280",
+  lineHeight: 1.5,
+  fontWeight: 700,
+};
+
+const contractPendingBadgeStyle: React.CSSProperties = {
+  padding: "8px 14px",
+  borderRadius: "999px",
+  backgroundColor: "#ffedd5",
+  color: "#c2410c",
+  fontSize: "14px",
+  fontWeight: 800,
+  whiteSpace: "nowrap",
+};
+
+const contractSignedBadgeStyle: React.CSSProperties = {
+  padding: "8px 14px",
+  borderRadius: "999px",
+  backgroundColor: "#dcfce7",
+  color: "#15803d",
+  fontSize: "14px",
+  fontWeight: 800,
+  whiteSpace: "nowrap",
+};
+
+const contractInfoTextStyle: React.CSSProperties = {
+  fontSize: "15px",
+  color: "#374151",
+  lineHeight: 1.6,
+  marginBottom: "14px",
+  fontWeight: 600,
+};
+
+const contractOpenPendingButtonStyle: React.CSSProperties = {
+  display: "block",
+  width: "100%",
+  border: "none",
+  textAlign: "center",
+  padding: "15px 18px",
+  borderRadius: "14px",
+  backgroundColor: "#f97316",
+  color: "#ffffff",
+  fontSize: "17px",
+  fontWeight: 800,
+  cursor: "pointer",
+};
+
+const contractOpenSignedButtonStyle: React.CSSProperties = {
+  display: "block",
+  width: "100%",
+  border: "none",
+  textAlign: "center",
+  padding: "15px 18px",
+  borderRadius: "14px",
+  backgroundColor: "#22c55e",
+  color: "#ffffff",
+  fontSize: "17px",
+  fontWeight: 800,
+  cursor: "pointer",
+};
+
+const contractViewerWrapStyle: React.CSSProperties = {
+  marginTop: "14px",
+  display: "flex",
+  flexDirection: "column",
+  gap: "14px",
+};
+
+const contractHtmlBoxStyle: React.CSSProperties = {
+  border: "1px solid #e5e7eb",
+  backgroundColor: "#ffffff",
+  borderRadius: "14px",
+  padding: "14px",
+  maxHeight: "420px",
+  overflow: "auto",
+  WebkitOverflowScrolling: "touch",
+  fontSize: "13px",
+};
+
+const signatureBoxStyle: React.CSSProperties = {
+  border: "1px solid #fed7aa",
+  backgroundColor: "#ffffff",
+  borderRadius: "14px",
+  padding: "14px",
+};
+
+const contractAgreeLabelStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "10px",
+  fontSize: "14px",
+  color: "#111827",
+  fontWeight: 700,
+  lineHeight: 1.5,
+  marginBottom: "12px",
+};
+
+const signatureGuideStyle: React.CSSProperties = {
+  fontSize: "13px",
+  color: "#6b7280",
+  fontWeight: 700,
+  marginBottom: "8px",
+};
+
+const signatureCanvasStyle: React.CSSProperties = {
+  width: "100%",
+  height: "160px",
+  border: "1px solid #d1d5db",
+  borderRadius: "12px",
+  backgroundColor: "#ffffff",
+  touchAction: "none",
+  display: "block",
+};
+
+const signatureButtonRowStyle: React.CSSProperties = {
+  display: "flex",
+  gap: "10px",
+  marginTop: "12px",
+};
+
+const signatureClearButtonStyle: React.CSSProperties = {
+  flex: 1,
+  border: "1px solid #d1d5db",
+  textAlign: "center",
+  padding: "14px 12px",
+  borderRadius: "14px",
+  backgroundColor: "#ffffff",
+  color: "#374151",
+  fontSize: "15px",
+  fontWeight: 800,
+  cursor: "pointer",
+};
+
+const signatureSubmitButtonStyle: React.CSSProperties = {
+  flex: 1,
+  border: "none",
+  textAlign: "center",
+  padding: "14px 12px",
+  borderRadius: "14px",
+  backgroundColor: "#111827",
+  color: "#ffffff",
+  fontSize: "15px",
+  fontWeight: 800,
 };

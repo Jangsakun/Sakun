@@ -3,6 +3,7 @@
 import { CSSProperties, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import ScheduleTab from "./components/ScheduleTab";
+import ContractTab from "./components/ContractTab";
 
 type AdminRecord = {
   id: number;
@@ -1867,6 +1868,10 @@ export default function AdminPage() {
                   </table>
                 </div>
               )}
+            </section>
+
+            <section style={{ ...cardStyle, marginBottom: "20px" }}>
+              <ContractTab />
             </section>
 
             <section style={cardStyle}>
