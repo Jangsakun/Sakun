@@ -147,9 +147,6 @@ function EmployeeAllowanceCard({
   onSaved: () => Promise<void>;
   setParentMessage: (message: string) => void;
 }) {
-  const [hourlyWage, setHourlyWage] = useState(
-    String(employee.hourly_wage ?? 10320)
-  );
   const [weeklyAllowanceStatus, setWeeklyAllowanceStatus] = useState(
     employee.weekly_allowance_status || "검토필요"
   );
@@ -172,7 +169,6 @@ function EmployeeAllowanceCard({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          hourlyWage: Number(hourlyWage || 0),
           weeklyAllowanceStatus,
           weeklyAllowanceReason,
           weeklyAllowanceNote,
@@ -182,89 +178,68 @@ function EmployeeAllowanceCard({
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        setParentMessage(data.message || "저장에 실패했습니다.");
+        setParentMessage(data.message || "저장 실패");
         return;
       }
 
-      setParentMessage(`${employee.name} 직원 정보가 저장되었습니다.`);
+      setParentMessage(`${employee.name} 저장 완료`);
       await onSaved();
     } catch {
-      setParentMessage("저장 중 오류가 발생했습니다.");
+      setParentMessage("오류 발생");
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div className="rounded-2xl bg-white p-5 shadow-sm">
-      <div className="mb-4">
-        <h2 className="text-lg font-bold text-gray-900">{employee.name}</h2>
-      </div>
+    <div className="rounded-xl bg-white px-4 py-3 shadow-sm border border-gray-200">
+      {/* 1줄 구조 */}
+      <div className="flex items-center gap-3 flex-wrap">
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-       <div>
-  <label className="mb-2 block text-sm font-medium text-gray-700">
-    시급
-  </label>
-  <input
-    type="text"
-    value={hourlyWage}
-    readOnly
-    className="w-full rounded-xl border border-gray-300 bg-gray-100 px-4 py-3 outline-none cursor-not-allowed"
-    placeholder="10320"
-  />
-</div>
-
-        <div>
-          <label className="mb-2 block text-sm font-medium text-gray-700">
-            주휴수당 상태
-          </label>
-          <select
-            value={weeklyAllowanceStatus}
-            onChange={(e) => setWeeklyAllowanceStatus(e.target.value)}
-            className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-black"
-          >
-            <option value="대상">대상</option>
-            <option value="비대상">비대상</option>
-            <option value="검토필요">검토필요</option>
-          </select>
+        {/* 이름 */}
+        <div className="w-[120px] font-semibold text-gray-900">
+          {employee.name}
         </div>
 
-        <div className="md:col-span-2">
-          <label className="mb-2 block text-sm font-medium text-gray-700">
-            비대상 사유
-          </label>
-          <input
-            type="text"
-            value={weeklyAllowanceReason}
-            onChange={(e) => setWeeklyAllowanceReason(e.target.value)}
-            placeholder="예: 계약조건상 비대상"
-            className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-black"
-          />
-        </div>
+        {/* 상태 */}
+        <select
+          value={weeklyAllowanceStatus}
+          onChange={(e) => setWeeklyAllowanceStatus(e.target.value)}
+          className="h-10 rounded-lg border px-3 text-sm"
+        >
+          <option value="대상">대상</option>
+          <option value="비대상">비대상</option>
+          <option value="검토필요">검토필요</option>
+        </select>
 
-        <div className="md:col-span-2 xl:col-span-4">
-          <label className="mb-2 block text-sm font-medium text-gray-700">
-            관리자 메모
-          </label>
-          <textarea
-            value={weeklyAllowanceNote}
-            onChange={(e) => setWeeklyAllowanceNote(e.target.value)}
-            placeholder="관리자 내부 메모"
-            rows={3}
-            className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-black"
-          />
-        </div>
-      </div>
+        {/* 비대상 사유 */}
+        <input
+          type="text"
+          value={weeklyAllowanceReason}
+          onChange={(e) => setWeeklyAllowanceReason(e.target.value)}
+          placeholder="비대상 사유"
+          className="flex-1 min-w-[160px] h-10 rounded-lg border px-3 text-sm"
+        />
 
-      <div className="mt-4 flex justify-end">
+        {/* 저장 */}
         <button
           onClick={handleSave}
           disabled={saving}
-          className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
+          className="h-10 px-4 rounded-lg bg-blue-600 text-white text-sm font-semibold"
         >
-          {saving ? "저장 중..." : "저장하기"}
+          {saving ? "저장중" : "저장"}
         </button>
+      </div>
+
+      {/* 관리자 메모 (작게) */}
+      <div className="mt-2">
+        <textarea
+          value={weeklyAllowanceNote}
+          onChange={(e) => setWeeklyAllowanceNote(e.target.value)}
+          placeholder="관리자 메모"
+          rows={2}
+          className="w-full rounded-lg border px-3 py-2 text-sm"
+        />
       </div>
     </div>
   );
