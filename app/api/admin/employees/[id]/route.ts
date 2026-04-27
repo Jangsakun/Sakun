@@ -11,6 +11,10 @@ export async function PATCH(
 
     const {
       name,
+      phone,
+      resident_number,
+      bank_name,
+      account_number,
       birthDate,
       phoneLast4,
       hourlyWage,
@@ -42,9 +46,13 @@ export async function PATCH(
 
     const updatePayload: Record<string, unknown> = {};
 
-    if (typeof name === "string") {
-      updatePayload.name = name.trim();
-    }
+    if (typeof name === "string") updatePayload.name = name.trim();
+    if (typeof phone === "string") updatePayload.phone = phone.trim();
+    if (typeof resident_number === "string")
+      updatePayload.resident_number = resident_number.trim();
+    if (typeof bank_name === "string") updatePayload.bank_name = bank_name.trim();
+    if (typeof account_number === "string")
+      updatePayload.account_number = account_number.trim();
 
     if (typeof birthDate === "string") {
       updatePayload.birth_date = birthDate.trim();
@@ -68,13 +76,6 @@ export async function PATCH(
     }
 
     if (typeof weeklyAllowanceStatus === "string") {
-      if (!["대상", "비대상", "검토필요"].includes(weeklyAllowanceStatus)) {
-        return NextResponse.json(
-          { success: false, message: "주휴수당 상태값이 올바르지 않습니다." },
-          { status: 400 }
-        );
-      }
-
       updatePayload.weekly_allowance_status = weeklyAllowanceStatus;
     }
 
@@ -86,6 +87,14 @@ export async function PATCH(
       updatePayload.weekly_allowance_note = weeklyAllowanceNote.trim();
     }
 
+    if (typeof contract_start_date === "string") {
+      updatePayload.contract_start_date = contract_start_date.trim() || null;
+    }
+
+    if (typeof contract_end_date === "string") {
+      updatePayload.contract_end_date = contract_end_date.trim() || null;
+    }
+
     const { error } = await supabase
       .from("employees")
       .update(updatePayload)
@@ -93,7 +102,7 @@ export async function PATCH(
 
     if (error) {
       return NextResponse.json(
-        { success: false, message: error.message },
+        { success: false, message: error.message, debug: updatePayload },
         { status: 500 }
       );
     }
@@ -101,14 +110,12 @@ export async function PATCH(
     return NextResponse.json({
       success: true,
       message: "직원 정보가 수정되었습니다.",
+      updated: updatePayload,
     });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.";
 
-    return NextResponse.json(
-      { success: false, message },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, message }, { status: 500 });
   }
 }
