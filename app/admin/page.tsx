@@ -2369,7 +2369,7 @@ const employeeTableStyle: CSSProperties = {
   width: "100%",
   borderCollapse: "separate",
   borderSpacing: 0,
-  minWidth: "1650px",
+  minWidth: "1100px",
 };
 
 const thStyle: CSSProperties = {
