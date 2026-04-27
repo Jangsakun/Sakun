@@ -368,14 +368,10 @@ export async function POST(request: NextRequest) {
           lunchDeducted,
           checkInRecordId: checkIn.id ? String(checkIn.id) : null,
           checkOutRecordId: finalCheckOut?.id ? String(finalCheckOut.id) : null,
-          checkInText: `${formatTimeKst(rawCheckInDate)} → ${formatTimeKst(
-            normalizedCheckInDate
-          )}`,
-          checkOutText: finalCheckOut
-            ? `${formatTimeKst(rawCheckOutDate)} → ${formatTimeKst(
-                normalizedCheckOutDate
-              )}`
-            : "퇴근 전",
+       checkInText: formatTimeKst(normalizedCheckInDate),
+checkOutText: finalCheckOut
+  ? formatTimeKst(normalizedCheckOutDate)
+  : "퇴근 전",
           workText: formatMinutesToText(paidMinutes),
           lunchText: lunchDeducted ? "점심 1시간 제외" : "-",
         };
