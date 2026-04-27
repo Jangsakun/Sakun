@@ -2281,9 +2281,9 @@ const inputStyle: CSSProperties = {
 };
 
 const smallInputStyle: CSSProperties = {
-  padding: "8px 10px",
+  padding: "6px 8px",
   width: "100%",
-  minWidth: "110px",
+  minWidth: "90px",
   borderRadius: "10px",
   border: "1px solid #d1d5db",
   outline: "none",
@@ -2374,8 +2374,8 @@ const employeeTableStyle: CSSProperties = {
 
 const thStyle: CSSProperties = {
   textAlign: "left",
-  padding: "14px 16px",
-  fontSize: "13px",
+  padding: "10px 12px",
+  fontSize: "12px",
   fontWeight: 800,
   color: "#475569",
   backgroundColor: "#f8fafc",
@@ -2383,8 +2383,8 @@ const thStyle: CSSProperties = {
 };
 
 const tdStyle: CSSProperties = {
-  padding: "14px 16px",
-  fontSize: "14px",
+  padding: "10px 12px",
+  fontSize: "13px",
   color: "#111827",
   borderBottom: "1px solid #e5e7eb",
   verticalAlign: "middle",
