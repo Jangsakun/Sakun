@@ -17,6 +17,8 @@ export async function PATCH(
       weeklyAllowanceStatus,
       weeklyAllowanceReason,
       weeklyAllowanceNote,
+      contract_start_date,
+      contract_end_date,
     } = body;
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
