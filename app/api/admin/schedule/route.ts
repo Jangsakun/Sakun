@@ -12,39 +12,14 @@ function createSupabaseAdmin() {
   return createClient(supabaseUrl, serviceRoleKey);
 }
 
-export async function POST(request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    const body = await request.json();
+    const { searchParams } = new URL(request.url);
+    const date = (searchParams.get("date") || "").trim();
 
-    const { name, birthDate, phoneLast4, weekStartDate, weekEndDate, schedule } =
-      body;
-
-    const trimmedName = String(name || "").trim();
-    const trimmedBirthDate = String(birthDate || "").trim();
-    const trimmedPhoneLast4 = String(phoneLast4 || "").trim();
-
-    if (
-      !trimmedName ||
-      !trimmedBirthDate ||
-      !trimmedPhoneLast4 ||
-      !weekStartDate ||
-      !weekEndDate
-    ) {
+    if (!date) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "필수값이 누락되었습니다.",
-        },
-        { status: 400 }
-      );
-    }
-
-    if (!Array.isArray(schedule) || schedule.length === 0) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "제출할 스케줄이 없습니다.",
-        },
+        { success: false, message: "date가 필요합니다." },
         { status: 400 }
       );
     }
@@ -58,20 +33,159 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: employee, error: empError } = await supabase
+    const { data: employees, error: empError } = await supabase
       .from("employees")
-      .select("id, name, birth_date, phone_last4, gender, is_active")
-      .eq("name", trimmedName)
-      .eq("birth_date", trimmedBirthDate)
-      .eq("phone_last4", trimmedPhoneLast4)
-      .maybeSingle();
+      .select("id, name, gender")
+      .eq("is_active", true);
 
     if (empError) {
+      return NextResponse.json(
+        { success: false, message: empError.message },
+        { status: 500 }
+      );
+    }
+
+    const { data: schedules, error: schError } = await supabase
+      .from("weekly_schedules")
+      .select("*")
+      .lte("week_start_date", date)
+      .gte("week_end_date", date);
+
+    if (schError) {
+      return NextResponse.json(
+        { success: false, message: schError.message },
+        { status: 500 }
+      );
+    }
+
+    const available: any[] = [];
+    const unavailable: any[] = [];
+    const notSubmitted: any[] = [];
+
+    for (const emp of employees || []) {
+      const scheduleRow = schedules?.find((s) => {
+        if (s.employee_id && emp.id) {
+          return String(s.employee_id) === String(emp.id);
+        }
+
+        return s.name === emp.name;
+      });
+
+      const weeklySchedule = Array.isArray(scheduleRow?.schedule)
+        ? scheduleRow.schedule
+        : [];
+
+      if (!scheduleRow) {
+        notSubmitted.push({
+          id: emp.id,
+          name: emp.name,
+          gender: emp.gender,
+          schedule: [],
+        });
+        continue;
+      }
+
+      const isAvailable = weeklySchedule.some(
+        (d: any) => d.fullDate === date && d.available === true
+      );
+
+      const employeePayload = {
+        id: emp.id,
+        name: emp.name,
+        gender: emp.gender,
+        schedule: weeklySchedule,
+      };
+
+      if (isAvailable) {
+        available.push(employeePayload);
+      } else {
+        unavailable.push(employeePayload);
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        available,
+        unavailable,
+        notSubmitted,
+        summary: {
+          total: employees?.length || 0,
+          available: available.length,
+          unavailable: unavailable.length,
+          notSubmitted: notSubmitted.length,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("admin schedule GET error:", error);
+
+    return NextResponse.json(
+      { success: false, message: "서버 오류" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json();
+
+    const { employeeId, name, gender, weekStartDate, weekEndDate, schedule } =
+      body;
+
+    const trimmedName = String(name || "").trim();
+    const trimmedGender = gender ? String(gender).trim() : null;
+
+    if (!trimmedName) {
+      return NextResponse.json(
+        { success: false, message: "직원 이름이 필요합니다." },
+        { status: 400 }
+      );
+    }
+
+    if (!weekStartDate || !weekEndDate) {
+      return NextResponse.json(
+        { success: false, message: "주차 시작일과 종료일이 필요합니다." },
+        { status: 400 }
+      );
+    }
+
+    if (!Array.isArray(schedule)) {
+      return NextResponse.json(
+        { success: false, message: "스케줄 형식이 올바르지 않습니다." },
+        { status: 400 }
+      );
+    }
+
+    const supabase = createSupabaseAdmin();
+
+    if (!supabase) {
+      return NextResponse.json(
+        { success: false, message: "환경변수 없음" },
+        { status: 500 }
+      );
+    }
+
+    let employeeQuery = supabase
+      .from("employees")
+      .select("id, name, gender, is_active");
+
+    if (employeeId) {
+      employeeQuery = employeeQuery.eq("id", employeeId);
+    } else {
+      employeeQuery = employeeQuery.eq("name", trimmedName);
+    }
+
+    const { data: employee, error: employeeError } =
+      await employeeQuery.maybeSingle();
+
+    if (employeeError) {
       return NextResponse.json(
         {
           success: false,
           message: "직원 확인 중 오류가 발생했습니다.",
-          debug: empError.message,
+          debug: employeeError.message,
         },
         { status: 500 }
       );
@@ -79,13 +193,13 @@ export async function POST(request: NextRequest) {
 
     if (!employee) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "직원 정보를 찾을 수 없습니다.",
-        },
+        { success: false, message: "직원을 찾을 수 없습니다." },
         { status: 404 }
       );
     }
+
+    const finalEmployeeId = employee.id;
+    const finalGender = employee.gender || trimmedGender;
 
     const normalizedSchedule = schedule.map((item: any) => ({
       day: String(item.day || item.dayLabel || ""),
@@ -99,9 +213,7 @@ export async function POST(request: NextRequest) {
     const { data: existingSchedule, error: findError } = await supabase
       .from("weekly_schedules")
       .select("id")
-      .eq("name", trimmedName)
-      .eq("birth_date", trimmedBirthDate)
-      .eq("phone_last4", trimmedPhoneLast4)
+      .eq("employee_id", finalEmployeeId)
       .eq("week_start_date", weekStartDate)
       .eq("week_end_date", weekEndDate)
       .maybeSingle();
@@ -121,11 +233,9 @@ export async function POST(request: NextRequest) {
       const { error: updateError } = await supabase
         .from("weekly_schedules")
         .update({
-          employee_id: employee.id,
-          name: trimmedName,
-          birth_date: trimmedBirthDate,
-          phone_last4: trimmedPhoneLast4,
-          gender: employee.gender || null,
+          employee_id: finalEmployeeId,
+          name: employee.name || trimmedName,
+          gender: finalGender,
           week_start_date: weekStartDate,
           week_end_date: weekEndDate,
           schedule: normalizedSchedule,
@@ -149,18 +259,18 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const { error: insertError } = await supabase.from("weekly_schedules").insert([
-      {
-        employee_id: employee.id,
-        name: trimmedName,
-        birth_date: trimmedBirthDate,
-        phone_last4: trimmedPhoneLast4,
-        gender: employee.gender || null,
-        week_start_date: weekStartDate,
-        week_end_date: weekEndDate,
-        schedule: normalizedSchedule,
-      },
-    ]);
+    const { error: insertError } = await supabase
+      .from("weekly_schedules")
+      .insert([
+        {
+          employee_id: finalEmployeeId,
+          name: employee.name || trimmedName,
+          gender: finalGender,
+          week_start_date: weekStartDate,
+          week_end_date: weekEndDate,
+          schedule: normalizedSchedule,
+        },
+      ]);
 
     if (insertError) {
       return NextResponse.json(
@@ -175,10 +285,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: "스케줄 제출이 완료되었습니다.",
+      message: "스케줄이 생성되었습니다.",
     });
   } catch (error) {
-    console.error("worker schedule POST error:", error);
+    console.error("admin schedule PATCH error:", error);
 
     return NextResponse.json(
       {
