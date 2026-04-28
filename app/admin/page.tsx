@@ -861,6 +861,113 @@ export default function AdminPage() {
     window.URL.revokeObjectURL(url);
   };
 
+
+  const downloadPayrollSummaryCsv = () => {
+    if (payrollRows.length === 0) {
+      alert("다운로드할 급여 데이터가 없습니다.");
+      return;
+    }
+
+    const grouped = new Map<
+      string,
+      {
+        employeeName: string;
+        residentNumber: string;
+        bankName: string;
+        accountNumber: string;
+        period: string;
+        totalHours: number;
+        hourlyWage: number;
+        basePay: number;
+        weeklyAllowance: number;
+        grossPay: number;
+        netPay: number;
+      }
+    >();
+
+    payrollRows.forEach((row) => {
+      const employee = employeeMap.get(Number(row.employeeId));
+      const key = row.employeeId;
+
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          employeeName: row.employeeName,
+          residentNumber: employee?.resident_number || "-",
+          bankName: employee?.bank_name || "-",
+          accountNumber: employee?.account_number || "-",
+          period: `${startDate} ~ ${endDate}`,
+          totalHours: 0,
+          hourlyWage: row.hourlyWage,
+          basePay: 0,
+          weeklyAllowance: 0,
+          grossPay: 0,
+          netPay: 0,
+        });
+      }
+
+      const target = grouped.get(key);
+
+      if (!target) return;
+
+      target.totalHours += row.totalHours || 0;
+      target.basePay += row.basePay || 0;
+      target.weeklyAllowance += row.weeklyAllowance || 0;
+      target.grossPay += row.grossPay || 0;
+      target.netPay += row.netPay || 0;
+    });
+
+    const headers = [
+      "이름",
+      "주민번호",
+      "은행",
+      "계좌번호",
+      "조회 기간",
+      "총 근무시간",
+      "시급",
+      "기본급 합계",
+      "주휴수당 합계",
+      "세전 급여 합계",
+      "세후 급여 합계",
+    ];
+
+    const rows = Array.from(grouped.values()).map((row) => [
+      row.employeeName,
+      row.residentNumber,
+      row.bankName,
+      row.accountNumber,
+      row.period,
+      row.totalHours.toFixed(2),
+      String(row.hourlyWage),
+      String(Math.round(row.basePay)),
+      String(Math.round(row.weeklyAllowance)),
+      String(Math.round(row.grossPay)),
+      String(Math.round(row.netPay)),
+    ]);
+
+    const csvContent = [headers, ...rows]
+      .map((line) =>
+        line
+          .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
+          .join(",")
+      )
+      .join("\n");
+
+    const blob = new Blob(["\ufeff" + csvContent], {
+      type: "text/csv;charset=utf-8;",
+    });
+
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const fileName = `payroll_summary_${startDate}_${endDate}.csv`;
+
+    link.href = url;
+    link.setAttribute("download", fileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  };
+
   return (
     <main style={pageStyle}>
       <div style={containerStyle}>
@@ -1487,7 +1594,14 @@ export default function AdminPage() {
 
               <div style={sectionHeaderButtonWrapStyle}>
                 <button onClick={downloadPayrollCsv} style={primaryButtonStyle}>
-                  엑셀 다운로드
+                  상세 엑셀 다운로드
+                </button>
+
+                <button
+                  onClick={downloadPayrollSummaryCsv}
+                  style={primaryButtonStyle}
+                >
+                  직원별 합산 다운로드
                 </button>
               </div>
             </div>
