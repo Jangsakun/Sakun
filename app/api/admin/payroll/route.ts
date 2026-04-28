@@ -340,17 +340,33 @@ export async function POST(request: Request) {
     const weekly: Record<string, WeeklyPayrollRow> = {};
 
     for (const row of dailyWorks) {
-      const d = new Date(`${row.date}T00:00:00+09:00`);
+  const d = new Date(`${row.date}T00:00:00+09:00`);
 
-      const day = d.getDay();
-      const monday = new Date(d);
-      monday.setDate(d.getDate() - ((day + 6) % 7));
+const dayText = d.toLocaleDateString("en-US", {
+  timeZone: "Asia/Seoul",
+  weekday: "short",
+});
 
-      const sunday = new Date(monday);
-      sunday.setDate(monday.getDate() + 6);
+const dayMap: Record<string, number> = {
+  Sun: 0,
+  Mon: 1,
+  Tue: 2,
+  Wed: 3,
+  Thu: 4,
+  Fri: 5,
+  Sat: 6,
+};
 
-      const weekStart = formatKST(monday);
-      const weekEnd = formatKST(sunday);
+const day = dayMap[dayText] ?? 1;
+
+const monday = new Date(`${row.date}T00:00:00+09:00`);
+monday.setDate(monday.getDate() - (day === 0 ? 6 : day - 1));
+
+const sunday = new Date(monday);
+sunday.setDate(monday.getDate() + 6);
+
+const weekStart = formatKST(monday);
+const weekEnd = formatKST(sunday);
 
       const key = `${row.employeeId}_${weekStart}`;
 
