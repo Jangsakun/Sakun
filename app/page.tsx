@@ -1637,13 +1637,28 @@ export default function Home() {
                       : scheduleMiniEmptyDotStyle
                   }
                 >
-                  {day.isHoliday
-                    ? "공휴일"
-                    : day.available
-                    ? day.shift === "night"
-                      ? "야간"
-                      : "주간"
-                    : "•"}
+        {day.isHoliday ? (
+  <span style={{ color: "#ef4444", fontWeight: 700 }}>공휴일</span>
+) : day.available ? (
+  <div
+    style={{
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: "6px",
+      padding: "3px 8px",
+      borderRadius: "999px",
+      fontSize: "11px",
+      fontWeight: 700,
+      background: day.shift === "night" ? "#ede9fe" : "#e0f2fe",
+      color: day.shift === "night" ? "#6d28d9" : "#0369a1",
+    }}
+  >
+    {day.shift === "night" ? "🌙 야간" : "☀️ 주간"}
+  </div>
+) : (
+  <span style={{ color: "#9ca3af" }}>-</span>
+)}
                 </div>
               </div>
             ))}
