@@ -932,15 +932,15 @@ export default function ScheduleTab() {
                     chipColor: "#be185d",
                   })}
 
-                  {renderAvailableGroup({
-                    title: "여자 야간",
-                    employees: femaleNightAvailableEmployees,
-                    borderColor: "#ddd6fe",
-                    headerBg: "#f5f3ff",
-                    headerColor: "#6d28d9",
-                    chipBg: "#ede9fe",
-                    chipColor: "#6d28d9",
-                  })}
+               {renderAvailableGroup({
+  title: "여자 야간",
+  employees: femaleNightAvailableEmployees,
+  borderColor: "#fbcfe8",
+  headerBg: "#fdf2f8",
+  headerColor: "#db2777",
+  chipBg: "#fce7f3",
+  chipColor: "#be185d",
+})}
                 </div>
 
                 {(unknownDayAvailableEmployees.length > 0 ||
