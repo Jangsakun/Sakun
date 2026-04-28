@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+type ShiftType = "day" | "night";
+
 function createSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -10,6 +12,20 @@ function createSupabaseAdmin() {
   }
 
   return createClient(supabaseUrl, serviceRoleKey);
+}
+
+function normalizeShift(value: unknown): ShiftType {
+  const normalized = String(value || "").toLowerCase().trim();
+
+  if (normalized === "night" || normalized === "야간") {
+    return "night";
+  }
+
+  return "day";
+}
+
+function getShiftLabel(shift: ShiftType) {
+  return shift === "night" ? "야간" : "주간";
 }
 
 export async function POST(request: NextRequest) {
@@ -110,14 +126,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const normalizedSchedule = schedule.map((item: any) => ({
-      day: String(item.day || item.dayLabel || ""),
-      label: String(item.label || item.dateLabel || ""),
-      dayLabel: String(item.dayLabel || item.day || ""),
-      dateLabel: String(item.dateLabel || item.label || ""),
-      fullDate: String(item.fullDate || ""),
-      available: Boolean(item.available),
-    }));
+    const normalizedSchedule = schedule.map((item: any) => {
+      const shift = normalizeShift(item.shift || item.shiftType || item.shiftLabel);
+
+      return {
+        day: String(item.day || item.dayLabel || ""),
+        label: String(item.label || item.dateLabel || ""),
+        dayLabel: String(item.dayLabel || item.day || ""),
+        dateLabel: String(item.dateLabel || item.label || ""),
+        fullDate: String(item.fullDate || ""),
+        available: Boolean(item.available),
+        shift,
+        shiftType: shift,
+        shiftLabel: getShiftLabel(shift),
+      };
+    });
 
     const { data: existingSchedule, error: findError } = await supabase
       .from("weekly_schedules")

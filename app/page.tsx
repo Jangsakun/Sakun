@@ -85,6 +85,8 @@ type HolidayItem = {
   name?: string;
 };
 
+type ShiftType = "day" | "night";
+
 type WeeklyScheduleInput = {
   key: string;
   dayLabel: string;
@@ -93,6 +95,7 @@ type WeeklyScheduleInput = {
   isHoliday: boolean;
   holidayName: string;
   available: boolean;
+  shift: ShiftType | null;
 };
 
 type SubmittedScheduleDay = {
@@ -100,6 +103,9 @@ type SubmittedScheduleDay = {
   dateLabel?: string;
   fullDate?: string;
   available?: boolean;
+  shift?: ShiftType | null;
+  shiftType?: ShiftType | null;
+  shiftLabel?: string;
 };
 
 type WeeklyScheduleStatusResponse = {
@@ -453,6 +459,7 @@ function createWeekdaysWithHolidayInfo(holidays: HolidayItem[]) {
       isHoliday: Boolean(matchedHoliday),
       holidayName: matchedHoliday?.localName || matchedHoliday?.name || "",
       available: false,
+      shift: null,
     };
   });
 }
@@ -474,9 +481,17 @@ function applySubmittedScheduleToWeek(
       (item) => item.fullDate === day.fullDate && item.available
     );
 
+    const submittedShift =
+      matched?.shift === "night" || matched?.shiftType === "night"
+        ? "night"
+        : matched?.shift === "day" || matched?.shiftType === "day"
+        ? "day"
+        : null;
+
     return {
       ...day,
       available: Boolean(matched),
+      shift: matched ? submittedShift || "day" : null,
     };
   });
 }
@@ -797,12 +812,38 @@ export default function Home() {
         setScheduleOpen(false);
 
         if (Array.isArray(currentWeeklySchedule) && currentWeeklySchedule.length) {
-          setWeeklySchedule(
-            applySubmittedScheduleToWeek(
-              currentWeeklySchedule,
-              data.schedule?.schedule
-            )
+          const submittedDays: SubmittedScheduleDay[] = Array.isArray(
+            data.schedule?.schedule
+          )
+            ? data.schedule.schedule
+            : [];
+
+          const mergedSchedule: WeeklyScheduleInput[] = currentWeeklySchedule.map(
+            (day) => {
+              if (day.isHoliday) {
+                return day;
+              }
+
+              const matched = submittedDays.find(
+                (item) => item.fullDate === day.fullDate && item.available
+              );
+
+              const submittedShift: ShiftType | null =
+                matched?.shift === "night" || matched?.shiftType === "night"
+                  ? "night"
+                  : matched?.shift === "day" || matched?.shiftType === "day"
+                  ? "day"
+                  : null;
+
+              return {
+                ...day,
+                available: Boolean(matched),
+                shift: matched ? submittedShift || "day" : null,
+              };
+            }
           );
+
+          setWeeklySchedule(mergedSchedule);
         }
       } else {
         setScheduleStatus("pending");
@@ -941,6 +982,7 @@ export default function Home() {
             isHoliday: false,
             holidayName: "",
             available: false,
+            shift: null,
           };
         });
 
@@ -1023,6 +1065,12 @@ export default function Home() {
 
   const selectedScheduleCount = useMemo(() => {
     return weeklySchedule.filter((day) => !day.isHoliday && day.available).length;
+  }, [weeklySchedule]);
+
+  const selectedNightScheduleCount = useMemo(() => {
+    return weeklySchedule.filter(
+      (day) => !day.isHoliday && day.available && day.shift === "night"
+    ).length;
   }, [weeklySchedule]);
 
   const sendAttendance = async (type: "check-in" | "check-out") => {
@@ -1159,9 +1207,27 @@ export default function Home() {
       prev.map((day) => {
         if (day.key !== key || day.isHoliday) return day;
 
+        const nextAvailable = !day.available;
+
         return {
           ...day,
-          available: !day.available,
+          available: nextAvailable,
+          shift: nextAvailable ? day.shift || "day" : null,
+        };
+      })
+    );
+  };
+
+  const handleShiftChange = (key: string, shift: ShiftType) => {
+    if (scheduleStatus === "submitted") return;
+
+    setWeeklySchedule((prev) =>
+      prev.map((day) => {
+        if (day.key !== key || day.isHoliday || !day.available) return day;
+
+        return {
+          ...day,
+          shift,
         };
       })
     );
@@ -1181,6 +1247,9 @@ export default function Home() {
         dateLabel: day.dateLabel,
         fullDate: day.fullDate,
         available: true,
+        shift: day.shift || "day",
+        shiftType: day.shift || "day",
+        shiftLabel: day.shift === "night" ? "야간" : "주간",
       }));
 
     if (activeDays.length === 0) {
@@ -1547,7 +1616,7 @@ export default function Home() {
               {isScheduleChecking
                 ? "잠시만 기다려주세요."
                 : isSchedulePending
-                ? "아래에서 출근 가능 요일만 선택 후 제출해주세요."
+                ? "아래에서 출근 가능 요일과 주간/야간을 선택 후 제출해주세요."
                 : "한 번 제출한 뒤에는 관리자만 수정할 수 있습니다."}
             </div>
           </div>
@@ -1568,7 +1637,13 @@ export default function Home() {
                       : scheduleMiniEmptyDotStyle
                   }
                 >
-                  {day.isHoliday ? "공휴일" : "•"}
+                  {day.isHoliday
+                    ? "공휴일"
+                    : day.available
+                    ? day.shift === "night"
+                      ? "야간"
+                      : "주간"
+                    : "•"}
                 </div>
               </div>
             ))}
@@ -1608,6 +1683,34 @@ export default function Home() {
                         />
                         <span>출근 가능</span>
                       </label>
+
+                      {day.available && (
+                        <div style={scheduleShiftButtonRowStyle}>
+                          <button
+                            type="button"
+                            onClick={() => handleShiftChange(day.key, "day")}
+                            style={
+                              day.shift === "day"
+                                ? scheduleShiftSelectedButtonStyle
+                                : scheduleShiftButtonStyle
+                            }
+                          >
+                            주간
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleShiftChange(day.key, "night")}
+                            style={
+                              day.shift === "night"
+                                ? scheduleNightSelectedButtonStyle
+                                : scheduleShiftButtonStyle
+                            }
+                          >
+                            야간
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     <div
@@ -1617,7 +1720,11 @@ export default function Home() {
                           : scheduleUnselectedBadgeStyle
                       }
                     >
-                      {day.available ? "선택됨" : "미선택"}
+                      {day.available
+                        ? day.shift === "night"
+                          ? "야간"
+                          : "주간"
+                        : "미선택"}
                     </div>
                   </div>
                 );
@@ -1625,6 +1732,11 @@ export default function Home() {
 
               <div style={scheduleHelperTextStyle}>
                 선택된 출근 가능 요일: <strong>{selectedScheduleCount}일</strong>
+                {selectedNightScheduleCount > 0 && (
+                  <>
+                    {" "}/ 야간: <strong>{selectedNightScheduleCount}일</strong>
+                  </>
+                )}
               </div>
 
               <button
@@ -2015,6 +2127,37 @@ const scheduleCheckboxLabelStyle: React.CSSProperties = {
   fontWeight: 600,
 };
 
+const scheduleShiftButtonRowStyle: React.CSSProperties = {
+  display: "flex",
+  gap: "8px",
+  flexWrap: "wrap",
+};
+
+const scheduleShiftButtonStyle: React.CSSProperties = {
+  border: "1px solid #d1d5db",
+  borderRadius: "999px",
+  backgroundColor: "#ffffff",
+  color: "#374151",
+  padding: "8px 12px",
+  fontSize: "13px",
+  fontWeight: 800,
+  cursor: "pointer",
+};
+
+const scheduleShiftSelectedButtonStyle: React.CSSProperties = {
+  ...scheduleShiftButtonStyle,
+  border: "1px solid #ef4444",
+  backgroundColor: "#fee2e2",
+  color: "#dc2626",
+};
+
+const scheduleNightSelectedButtonStyle: React.CSSProperties = {
+  ...scheduleShiftButtonStyle,
+  border: "1px solid #6366f1",
+  backgroundColor: "#e0e7ff",
+  color: "#4338ca",
+};
+
 const scheduleEditorDashStyle: React.CSSProperties = {
   fontSize: "18px",
   color: "#9ca3af",
@@ -2129,6 +2272,7 @@ const todaySummarySectionStyle: React.CSSProperties = {
   backgroundColor: "#f8fbff",
   borderRadius: "16px",
   padding: "14px",
+  marginBottom: "16px",
 };
 
 const todaySummaryHeaderStyle: React.CSSProperties = {

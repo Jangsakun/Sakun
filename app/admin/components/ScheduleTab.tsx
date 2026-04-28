@@ -2,11 +2,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+type ShiftType = "day" | "night";
+
 type ScheduleDay = {
   day: string;
   label: string;
+  dayLabel?: string;
+  dateLabel?: string;
   fullDate: string;
   available: boolean;
+  shift?: ShiftType | null;
+  shiftType?: ShiftType | null;
+  shiftLabel?: string | null;
 };
 
 type EmployeeItem = {
@@ -108,6 +115,48 @@ function getWeekTitle(weekMode: WeekMode) {
   return weekMode === "current" ? "이번 주" : "다음 주";
 }
 
+function normalizeShift(value: unknown): ShiftType {
+  const normalized = String(value || "").toLowerCase().trim();
+
+  if (normalized === "night" || normalized === "야간") {
+    return "night";
+  }
+
+  return "day";
+}
+
+function getShiftLabel(shift: ShiftType) {
+  return shift === "night" ? "야간" : "주간";
+}
+
+function getScheduleItemShift(item?: ScheduleDay | null): ShiftType {
+  return normalizeShift(item?.shift || item?.shiftType || item?.shiftLabel);
+}
+
+function getEmployeeShiftForDate(employee: EmployeeItem, selectedDate: string): ShiftType {
+  const matched = employee.schedule?.find(
+    (item) => item.fullDate === selectedDate && item.available
+  );
+
+  return getScheduleItemShift(matched);
+}
+
+function filterByGenderAndShift(
+  employees: EmployeeItem[],
+  selectedDate: string,
+  gender: "남성" | "여성" | "unknown",
+  shift: ShiftType
+) {
+  return employees.filter((emp) => {
+    const genderMatched =
+      gender === "unknown"
+        ? emp.gender !== "남성" && emp.gender !== "여성"
+        : emp.gender === gender;
+
+    return genderMatched && getEmployeeShiftForDate(emp, selectedDate) === shift;
+  });
+}
+
 export default function ScheduleTab() {
   const [weekMode, setWeekMode] = useState<WeekMode>("current");
 
@@ -157,19 +206,41 @@ export default function ScheduleTab() {
     );
   }, [employeeSearch, allEmployees]);
 
-  const maleAvailableEmployees = useMemo(() => {
-    return (data?.available || []).filter((emp) => emp.gender === "남성");
-  }, [data]);
+  const maleDayAvailableEmployees = useMemo(() => {
+    return filterByGenderAndShift(data?.available || [], selectedDate, "남성", "day");
+  }, [data, selectedDate]);
 
-  const femaleAvailableEmployees = useMemo(() => {
-    return (data?.available || []).filter((emp) => emp.gender === "여성");
-  }, [data]);
+  const maleNightAvailableEmployees = useMemo(() => {
+    return filterByGenderAndShift(data?.available || [], selectedDate, "남성", "night");
+  }, [data, selectedDate]);
 
-  const unknownGenderAvailableEmployees = useMemo(() => {
+  const femaleDayAvailableEmployees = useMemo(() => {
+    return filterByGenderAndShift(data?.available || [], selectedDate, "여성", "day");
+  }, [data, selectedDate]);
+
+  const femaleNightAvailableEmployees = useMemo(() => {
+    return filterByGenderAndShift(data?.available || [], selectedDate, "여성", "night");
+  }, [data, selectedDate]);
+
+  const unknownDayAvailableEmployees = useMemo(() => {
+    return filterByGenderAndShift(data?.available || [], selectedDate, "unknown", "day");
+  }, [data, selectedDate]);
+
+  const unknownNightAvailableEmployees = useMemo(() => {
+    return filterByGenderAndShift(data?.available || [], selectedDate, "unknown", "night");
+  }, [data, selectedDate]);
+
+  const dayAvailableCount = useMemo(() => {
     return (data?.available || []).filter(
-      (emp) => emp.gender !== "남성" && emp.gender !== "여성"
-    );
-  }, [data]);
+      (emp) => getEmployeeShiftForDate(emp, selectedDate) === "day"
+    ).length;
+  }, [data, selectedDate]);
+
+  const nightAvailableCount = useMemo(() => {
+    return (data?.available || []).filter(
+      (emp) => getEmployeeShiftForDate(emp, selectedDate) === "night"
+    ).length;
+  }, [data, selectedDate]);
 
   const fetchSchedule = async (date: string) => {
     if (!date) return;
@@ -220,7 +291,7 @@ export default function ScheduleTab() {
   };
 
   const openEditModal = (employee: EmployeeItem) => {
-    const selectedAvailableDates = new Set<string>();
+    const selectedAvailableMap = new Map<string, ShiftType>();
 
     const matchedEmployee = [
       ...(data?.available || []),
@@ -240,7 +311,7 @@ export default function ScheduleTab() {
           item.fullDate >= weekStartDate &&
           item.fullDate <= weekEndDate
         ) {
-          selectedAvailableDates.add(item.fullDate);
+          selectedAvailableMap.set(item.fullDate, getScheduleItemShift(item));
         }
       });
     } else {
@@ -250,7 +321,7 @@ export default function ScheduleTab() {
             String(emp.id ?? emp.name) === String(employee.id ?? employee.name)
         )
       ) {
-        selectedAvailableDates.add(selectedDate);
+        selectedAvailableMap.set(selectedDate, getEmployeeShiftForDate(employee, selectedDate));
       }
     }
 
@@ -258,7 +329,10 @@ export default function ScheduleTab() {
       day: day.day,
       label: day.label,
       fullDate: day.value,
-      available: selectedAvailableDates.has(day.value),
+      available: selectedAvailableMap.has(day.value),
+      shift: selectedAvailableMap.get(day.value) || "day",
+      shiftType: selectedAvailableMap.get(day.value) || "day",
+      shiftLabel: getShiftLabel(selectedAvailableMap.get(day.value) || "day"),
     }));
 
     setSelectedEmployee(employee);
@@ -274,11 +348,33 @@ export default function ScheduleTab() {
 
   const toggleEditSchedule = (fullDate: string) => {
     setEditSchedule((prev) =>
+      prev.map((item) => {
+        if (item.fullDate !== fullDate) return item;
+
+        const nextAvailable = !item.available;
+        const nextShift = nextAvailable ? item.shift || "day" : item.shift || "day";
+
+        return {
+          ...item,
+          available: nextAvailable,
+          shift: nextShift,
+          shiftType: nextShift,
+          shiftLabel: getShiftLabel(nextShift),
+        };
+      })
+    );
+  };
+
+  const changeEditScheduleShift = (fullDate: string, shift: ShiftType) => {
+    setEditSchedule((prev) =>
       prev.map((item) =>
         item.fullDate === fullDate
           ? {
               ...item,
-              available: !item.available,
+              available: true,
+              shift,
+              shiftType: shift,
+              shiftLabel: getShiftLabel(shift),
             }
           : item
       )
@@ -305,12 +401,21 @@ export default function ScheduleTab() {
           gender: selectedEmployee.gender || null,
           weekStartDate,
           weekEndDate,
-          schedule: editSchedule.map((item) => ({
-            day: item.day,
-            label: item.label,
-            fullDate: item.fullDate,
-            available: item.available,
-          })),
+          schedule: editSchedule.map((item) => {
+            const shift = item.available ? getScheduleItemShift(item) : "day";
+
+            return {
+              day: item.day,
+              label: item.label,
+              dayLabel: item.day,
+              dateLabel: item.label,
+              fullDate: item.fullDate,
+              available: item.available,
+              shift,
+              shiftType: shift,
+              shiftLabel: getShiftLabel(shift),
+            };
+          }),
         }),
       });
 
@@ -343,43 +448,50 @@ export default function ScheduleTab() {
     }
   }, [selectedDate]);
 
- useEffect(() => {
-  if (!selectedEmployee) return;
+  useEffect(() => {
+    if (!selectedEmployee) return;
 
-  const matchedEmployee = [
-    ...(data?.available || []),
-    ...(data?.unavailable || []),
-    ...(data?.notSubmitted || []),
-  ].find(
-    (emp) =>
-      String(emp.id ?? emp.name) ===
-      String(selectedEmployee.id ?? selectedEmployee.name)
-  );
+    const matchedEmployee = [
+      ...(data?.available || []),
+      ...(data?.unavailable || []),
+      ...(data?.notSubmitted || []),
+    ].find(
+      (emp) =>
+        String(emp.id ?? emp.name) ===
+        String(selectedEmployee.id ?? selectedEmployee.name)
+    );
 
-  const selectedAvailableDates = new Set<string>();
+    const selectedAvailableMap = new Map<string, ShiftType>();
 
-  if (Array.isArray(matchedEmployee?.schedule)) {
-    matchedEmployee.schedule.forEach((item) => {
-      if (
-        item.available === true &&
-        item.fullDate &&
-        item.fullDate >= weekStartDate &&
-        item.fullDate <= weekEndDate
-      ) {
-        selectedAvailableDates.add(item.fullDate);
-      }
+    if (Array.isArray(matchedEmployee?.schedule)) {
+      matchedEmployee.schedule.forEach((item) => {
+        if (
+          item.available === true &&
+          item.fullDate &&
+          item.fullDate >= weekStartDate &&
+          item.fullDate <= weekEndDate
+        ) {
+          selectedAvailableMap.set(item.fullDate, getScheduleItemShift(item));
+        }
+      });
+    }
+
+    const newSchedule = days.map((day) => {
+      const shift = selectedAvailableMap.get(day.value) || "day";
+
+      return {
+        day: day.day,
+        label: day.label,
+        fullDate: day.value,
+        available: selectedAvailableMap.has(day.value),
+        shift,
+        shiftType: shift,
+        shiftLabel: getShiftLabel(shift),
+      };
     });
-  }
 
-  const newSchedule = days.map((day) => ({
-    day: day.day,
-    label: day.label,
-    fullDate: day.value,
-    available: selectedAvailableDates.has(day.value),
-  }));
-
-  setEditSchedule(newSchedule);
-}, [weekMode, data, selectedEmployee, days, weekStartDate, weekEndDate]);
+    setEditSchedule(newSchedule);
+  }, [weekMode, data, selectedEmployee, days, weekStartDate, weekEndDate]);
 
   useEffect(() => {
     setShowUnavailable(false);
@@ -395,6 +507,108 @@ export default function ScheduleTab() {
     setShowUnavailable(false);
     setShowNotSubmitted(false);
     fetchSchedule(selectedDate);
+  };
+
+  const renderEmployeeChip = (
+    emp: EmployeeItem,
+    index: number,
+    bgColor: string,
+    textColor: string,
+    showShift = true
+  ) => {
+    const shift = getEmployeeShiftForDate(emp, selectedDate);
+
+    return (
+      <button
+        key={`${emp.id ?? emp.name}-${index}`}
+        type="button"
+        onClick={() => openEditModal(emp)}
+        style={{
+          padding: "6px 10px",
+          borderRadius: "999px",
+          background: bgColor,
+          fontSize: "13px",
+          color: textColor,
+          fontWeight: 700,
+          border: "none",
+          cursor: "pointer",
+        }}
+      >
+        {emp.name}
+        {showShift && (
+          <span
+            style={{
+              marginLeft: "6px",
+              fontSize: "11px",
+              fontWeight: 900,
+            }}
+          >
+            {getShiftLabel(shift)}
+          </span>
+        )}
+      </button>
+    );
+  };
+
+  const renderAvailableGroup = ({
+    title,
+    employees,
+    borderColor,
+    headerBg,
+    headerColor,
+    chipBg,
+    chipColor,
+  }: {
+    title: string;
+    employees: EmployeeItem[];
+    borderColor: string;
+    headerBg: string;
+    headerColor: string;
+    chipBg: string;
+    chipColor: string;
+  }) => {
+    return (
+      <div
+        style={{
+          border: `1px solid ${borderColor}`,
+          borderRadius: "10px",
+          background: "#ffffff",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            padding: "9px 12px",
+            background: headerBg,
+            color: headerColor,
+            fontSize: "13px",
+            fontWeight: 800,
+            borderBottom: `1px solid ${borderColor}`,
+          }}
+        >
+          {title} {employees.length}명
+        </div>
+
+        <div
+          style={{
+            padding: "12px",
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "8px",
+            minHeight: "54px",
+            alignItems: "flex-start",
+          }}
+        >
+          {employees.length === 0 ? (
+            <span style={{ color: "#9ca3af", fontSize: "13px" }}>없음</span>
+          ) : (
+            employees.map((emp, index) =>
+              renderEmployeeChip(emp, index, chipBg, chipColor, false)
+            )
+          )}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -672,7 +886,7 @@ export default function ScheduleTab() {
             }}
           >
             <div style={{ fontWeight: 700, marginBottom: "12px" }}>
-              🟢 출근 가능 {data.summary.available}명
+              🟢 출근 가능 {data.summary.available}명 / 주간 {dayAvailableCount}명 / 야간 {nightAvailableCount}명
             </div>
 
             {data.available.length === 0 ? (
@@ -688,176 +902,76 @@ export default function ScheduleTab() {
                     gap: "10px",
                   }}
                 >
-                  <div
-                    style={{
-                      border: "1px solid #bfdbfe",
-                      borderRadius: "10px",
-                      background: "#ffffff",
-                      overflow: "hidden",
-                    }}
-                  >
-                    <div
-                      style={{
-                        padding: "9px 12px",
-                        background: "#eff6ff",
-                        color: "#1d4ed8",
-                        fontSize: "13px",
-                        fontWeight: 800,
-                        borderBottom: "1px solid #bfdbfe",
-                      }}
-                    >
-                      남자 {maleAvailableEmployees.length}명 출근
-                    </div>
+                  {renderAvailableGroup({
+                    title: "남자 주간",
+                    employees: maleDayAvailableEmployees,
+                    borderColor: "#bfdbfe",
+                    headerBg: "#eff6ff",
+                    headerColor: "#1d4ed8",
+                    chipBg: "#dbeafe",
+                    chipColor: "#1d4ed8",
+                  })}
 
-                    <div
-                      style={{
-                        padding: "12px",
-                        display: "flex",
-                        flexWrap: "wrap",
-                        gap: "8px",
-                        minHeight: "54px",
-                        alignItems: "flex-start",
-                      }}
-                    >
-                      {maleAvailableEmployees.length === 0 ? (
-                        <span style={{ color: "#9ca3af", fontSize: "13px" }}>
-                          없음
-                        </span>
-                      ) : (
-                        maleAvailableEmployees.map((emp, index) => (
-                          <button
-                            key={`${emp.id ?? emp.name}-${index}`}
-                            type="button"
-                            onClick={() => openEditModal(emp)}
-                            style={{
-                              padding: "6px 10px",
-                              borderRadius: "999px",
-                              background: "#dbeafe",
-                              fontSize: "13px",
-                              color: "#1d4ed8",
-                              fontWeight: 700,
-                              border: "none",
-                              cursor: "pointer",
-                            }}
-                          >
-                            {emp.name}
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  </div>
+                  {renderAvailableGroup({
+                    title: "남자 야간",
+                    employees: maleNightAvailableEmployees,
+                    borderColor: "#c7d2fe",
+                    headerBg: "#eef2ff",
+                    headerColor: "#4338ca",
+                    chipBg: "#e0e7ff",
+                    chipColor: "#4338ca",
+                  })}
 
-                  <div
-                    style={{
-                      border: "1px solid #fbcfe8",
-                      borderRadius: "10px",
-                      background: "#ffffff",
-                      overflow: "hidden",
-                    }}
-                  >
-                    <div
-                      style={{
-                        padding: "9px 12px",
-                        background: "#fdf2f8",
-                        color: "#db2777",
-                        fontSize: "13px",
-                        fontWeight: 800,
-                        borderBottom: "1px solid #fbcfe8",
-                      }}
-                    >
-                      여자 {femaleAvailableEmployees.length}명 출근
-                    </div>
+                  {renderAvailableGroup({
+                    title: "여자 주간",
+                    employees: femaleDayAvailableEmployees,
+                    borderColor: "#fbcfe8",
+                    headerBg: "#fdf2f8",
+                    headerColor: "#db2777",
+                    chipBg: "#fce7f3",
+                    chipColor: "#be185d",
+                  })}
 
-                    <div
-                      style={{
-                        padding: "12px",
-                        display: "flex",
-                        flexWrap: "wrap",
-                        gap: "8px",
-                        minHeight: "54px",
-                        alignItems: "flex-start",
-                      }}
-                    >
-                      {femaleAvailableEmployees.length === 0 ? (
-                        <span style={{ color: "#9ca3af", fontSize: "13px" }}>
-                          없음
-                        </span>
-                      ) : (
-                        femaleAvailableEmployees.map((emp, index) => (
-                          <button
-                            key={`${emp.id ?? emp.name}-${index}`}
-                            type="button"
-                            onClick={() => openEditModal(emp)}
-                            style={{
-                              padding: "6px 10px",
-                              borderRadius: "999px",
-                              background: "#fce7f3",
-                              fontSize: "13px",
-                              color: "#be185d",
-                              fontWeight: 700,
-                              border: "none",
-                              cursor: "pointer",
-                            }}
-                          >
-                            {emp.name}
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  </div>
+                  {renderAvailableGroup({
+                    title: "여자 야간",
+                    employees: femaleNightAvailableEmployees,
+                    borderColor: "#ddd6fe",
+                    headerBg: "#f5f3ff",
+                    headerColor: "#6d28d9",
+                    chipBg: "#ede9fe",
+                    chipColor: "#6d28d9",
+                  })}
                 </div>
 
-                {unknownGenderAvailableEmployees.length > 0 && (
+                {(unknownDayAvailableEmployees.length > 0 ||
+                  unknownNightAvailableEmployees.length > 0) && (
                   <div
                     style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                      gap: "10px",
                       marginTop: "10px",
-                      border: "1px solid #d1d5db",
-                      borderRadius: "10px",
-                      background: "#ffffff",
-                      overflow: "hidden",
                     }}
                   >
-                    <div
-                      style={{
-                        padding: "9px 12px",
-                        background: "#f9fafb",
-                        color: "#4b5563",
-                        fontSize: "13px",
-                        fontWeight: 800,
-                        borderBottom: "1px solid #d1d5db",
-                      }}
-                    >
-                      성별 미등록 {unknownGenderAvailableEmployees.length}명 출근
-                    </div>
+                    {renderAvailableGroup({
+                      title: "성별 미등록 주간",
+                      employees: unknownDayAvailableEmployees,
+                      borderColor: "#d1d5db",
+                      headerBg: "#f9fafb",
+                      headerColor: "#4b5563",
+                      chipBg: "#e5e7eb",
+                      chipColor: "#374151",
+                    })}
 
-                    <div
-                      style={{
-                        padding: "12px",
-                        display: "flex",
-                        flexWrap: "wrap",
-                        gap: "8px",
-                      }}
-                    >
-                      {unknownGenderAvailableEmployees.map((emp, index) => (
-                        <button
-                          key={`${emp.id ?? emp.name}-${index}`}
-                          type="button"
-                          onClick={() => openEditModal(emp)}
-                          style={{
-                            padding: "6px 10px",
-                            borderRadius: "999px",
-                            background: "#e5e7eb",
-                            fontSize: "13px",
-                            color: "#374151",
-                            fontWeight: 700,
-                            border: "none",
-                            cursor: "pointer",
-                          }}
-                        >
-                          {emp.name}
-                        </button>
-                      ))}
-                    </div>
+                    {renderAvailableGroup({
+                      title: "성별 미등록 야간",
+                      employees: unknownNightAvailableEmployees,
+                      borderColor: "#d1d5db",
+                      headerBg: "#f9fafb",
+                      headerColor: "#4b5563",
+                      chipBg: "#e5e7eb",
+                      chipColor: "#374151",
+                    })}
                   </div>
                 )}
               </>
@@ -909,25 +1023,9 @@ export default function ScheduleTab() {
                       marginTop: "10px",
                     }}
                   >
-                    {data.unavailable.map((emp, index) => (
-                      <button
-                        key={`${emp.id ?? emp.name}-${index}`}
-                        type="button"
-                        onClick={() => openEditModal(emp)}
-                        style={{
-                          padding: "6px 10px",
-                          borderRadius: "999px",
-                          background: "#fee2e2",
-                          fontSize: "13px",
-                          color: "#991b1b",
-                          fontWeight: 700,
-                          border: "none",
-                          cursor: "pointer",
-                        }}
-                      >
-                        {emp.name}
-                      </button>
-                    ))}
+                    {data.unavailable.map((emp, index) =>
+                      renderEmployeeChip(emp, index, "#fee2e2", "#991b1b")
+                    )}
                   </div>
                 )}
               </>
@@ -978,25 +1076,9 @@ export default function ScheduleTab() {
                       marginTop: "10px",
                     }}
                   >
-                    {data.notSubmitted.map((emp, index) => (
-                      <button
-                        key={`${emp.id ?? emp.name}-${index}`}
-                        type="button"
-                        onClick={() => openEditModal(emp)}
-                        style={{
-                          padding: "6px 10px",
-                          borderRadius: "999px",
-                          background: "#e5e7eb",
-                          fontSize: "13px",
-                          color: "#374151",
-                          fontWeight: 700,
-                          border: "none",
-                          cursor: "pointer",
-                        }}
-                      >
-                        {emp.name}
-                      </button>
-                    ))}
+                    {data.notSubmitted.map((emp, index) =>
+                      renderEmployeeChip(emp, index, "#e5e7eb", "#374151", false)
+                    )}
                   </div>
                 )}
               </>
@@ -1035,7 +1117,7 @@ export default function ScheduleTab() {
           <div
             style={{
               width: "100%",
-              maxWidth: "520px",
+              maxWidth: "560px",
               background: "#ffffff",
               borderRadius: "18px",
               boxShadow: "0 20px 60px rgba(15, 23, 42, 0.28)",
@@ -1147,66 +1229,130 @@ export default function ScheduleTab() {
                   marginBottom: "16px",
                 }}
               >
-                {editSchedule.map((item, index) => (
-                  <label
-                    key={item.fullDate}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "70px 1fr 130px",
-                      gap: "10px",
-                      alignItems: "center",
-                      padding: "14px",
-                      borderBottom:
-                        index === editSchedule.length - 1
-                          ? "none"
-                          : "1px solid #e5e7eb",
-                      cursor: "pointer",
-                      background: item.available ? "#eff6ff" : "#ffffff",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontWeight: 800,
-                        color: "#111827",
-                      }}
-                    >
-                      {item.day}
-                    </span>
+                {editSchedule.map((item, index) => {
+                  const currentShift = getScheduleItemShift(item);
 
-                    <span
+                  return (
+                    <div
+                      key={item.fullDate}
                       style={{
-                        color: "#374151",
-                        fontSize: "14px",
-                      }}
-                    >
-                      {item.label}
-                    </span>
-
-                    <span
-                      style={{
-                        display: "flex",
+                        display: "grid",
+                        gridTemplateColumns: "70px 1fr 210px",
+                        gap: "10px",
                         alignItems: "center",
-                        gap: "8px",
-                        justifyContent: "flex-end",
-                        color: item.available ? "#2563eb" : "#6b7280",
-                        fontWeight: 800,
-                        fontSize: "14px",
+                        padding: "14px",
+                        borderBottom:
+                          index === editSchedule.length - 1
+                            ? "none"
+                            : "1px solid #e5e7eb",
+                        background: item.available ? "#eff6ff" : "#ffffff",
                       }}
                     >
-                      <input
-                        type="checkbox"
-                        checked={item.available}
-                        onChange={() => toggleEditSchedule(item.fullDate)}
+                      <span
                         style={{
-                          width: "18px",
-                          height: "18px",
-                          cursor: "pointer",
+                          fontWeight: 800,
+                          color: "#111827",
                         }}
-                      />
-                      출근 가능
-                    </span>
-                  </label>
-                ))}
+                      >
+                        {item.day}
+                      </span>
+
+                      <span
+                        style={{
+                          color: "#374151",
+                          fontSize: "14px",
+                        }}
+                      >
+                        {item.label}
+                      </span>
+
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          justifyContent: "flex-end",
+                          flexWrap: "wrap",
+                          color: item.available ? "#2563eb" : "#6b7280",
+                          fontWeight: 800,
+                          fontSize: "14px",
+                        }}
+                      >
+                        <label
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={item.available}
+                            onChange={() => toggleEditSchedule(item.fullDate)}
+                            style={{
+                              width: "18px",
+                              height: "18px",
+                              cursor: "pointer",
+                            }}
+                          />
+                          출근 가능
+                        </label>
+
+                        {item.available && (
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: "6px",
+                            }}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => changeEditScheduleShift(item.fullDate, "day")}
+                              style={{
+                                padding: "6px 10px",
+                                borderRadius: "999px",
+                                border:
+                                  currentShift === "day"
+                                    ? "1px solid #2563eb"
+                                    : "1px solid #d1d5db",
+                                background:
+                                  currentShift === "day" ? "#dbeafe" : "#ffffff",
+                                color:
+                                  currentShift === "day" ? "#1d4ed8" : "#374151",
+                                fontWeight: 900,
+                                cursor: "pointer",
+                              }}
+                            >
+                              주간
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => changeEditScheduleShift(item.fullDate, "night")}
+                              style={{
+                                padding: "6px 10px",
+                                borderRadius: "999px",
+                                border:
+                                  currentShift === "night"
+                                    ? "1px solid #6366f1"
+                                    : "1px solid #d1d5db",
+                                background:
+                                  currentShift === "night" ? "#e0e7ff" : "#ffffff",
+                                color:
+                                  currentShift === "night" ? "#4338ca" : "#374151",
+                                fontWeight: 900,
+                                cursor: "pointer",
+                              }}
+                            >
+                              야간
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
               <div
@@ -1222,6 +1368,7 @@ export default function ScheduleTab() {
                 }}
               >
                 수정 후 저장하면 해당 직원의 {getWeekTitle(weekMode)} 스케줄이 변경됩니다.
+                출근 가능으로 체크한 날은 주간/야간도 함께 선택해주세요.
               </div>
 
               <div

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+type ShiftType = "day" | "night";
+
 function createSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -10,6 +12,40 @@ function createSupabaseAdmin() {
   }
 
   return createClient(supabaseUrl, serviceRoleKey);
+}
+
+function normalizeShift(value: unknown): ShiftType {
+  const normalized = String(value || "").toLowerCase().trim();
+
+  if (normalized === "night" || normalized === "야간") {
+    return "night";
+  }
+
+  return "day";
+}
+
+function getShiftLabel(shift: ShiftType) {
+  return shift === "night" ? "야간" : "주간";
+}
+
+function normalizeScheduleItem(item: any) {
+  const shift = normalizeShift(item?.shift || item?.shiftType || item?.shiftLabel);
+
+  return {
+    day: String(item?.day || item?.dayLabel || ""),
+    label: String(item?.label || item?.dateLabel || ""),
+    dayLabel: String(item?.dayLabel || item?.day || ""),
+    dateLabel: String(item?.dateLabel || item?.label || ""),
+    fullDate: String(item?.fullDate || ""),
+    available: Boolean(item?.available),
+    shift,
+    shiftType: shift,
+    shiftLabel: getShiftLabel(shift),
+  };
+}
+
+function getScheduleForDate(schedule: any[], date: string) {
+  return schedule.find((item) => item.fullDate === date) || null;
 }
 
 export async function GET(request: NextRequest) {
@@ -72,7 +108,7 @@ export async function GET(request: NextRequest) {
       });
 
       const weeklySchedule = Array.isArray(scheduleRow?.schedule)
-        ? scheduleRow.schedule
+        ? scheduleRow.schedule.map((item: any) => normalizeScheduleItem(item))
         : [];
 
       if (!scheduleRow) {
@@ -81,19 +117,33 @@ export async function GET(request: NextRequest) {
           name: emp.name,
           gender: emp.gender,
           schedule: [],
+          selectedDateSchedule: null,
+          shift: null,
+          shiftType: null,
+          shiftLabel: "",
         });
         continue;
       }
 
-      const isAvailable = weeklySchedule.some(
-        (d: any) => d.fullDate === date && d.available === true
-      );
+      const selectedDateSchedule = getScheduleForDate(weeklySchedule, date);
+      const isAvailable = selectedDateSchedule?.available === true;
+      const selectedShift = isAvailable
+        ? normalizeShift(
+            selectedDateSchedule?.shift ||
+              selectedDateSchedule?.shiftType ||
+              selectedDateSchedule?.shiftLabel
+          )
+        : null;
 
       const employeePayload = {
         id: emp.id,
         name: emp.name,
         gender: emp.gender,
         schedule: weeklySchedule,
+        selectedDateSchedule,
+        shift: selectedShift,
+        shiftType: selectedShift,
+        shiftLabel: selectedShift ? getShiftLabel(selectedShift) : "",
       };
 
       if (isAvailable) {
@@ -114,6 +164,8 @@ export async function GET(request: NextRequest) {
           available: available.length,
           unavailable: unavailable.length,
           notSubmitted: notSubmitted.length,
+          dayAvailable: available.filter((emp) => emp.shift === "day").length,
+          nightAvailable: available.filter((emp) => emp.shift === "night").length,
         },
       },
     });
@@ -201,14 +253,9 @@ export async function PATCH(request: NextRequest) {
     const finalEmployeeId = employee.id;
     const finalGender = employee.gender || trimmedGender;
 
-    const normalizedSchedule = schedule.map((item: any) => ({
-      day: String(item.day || item.dayLabel || ""),
-      label: String(item.label || item.dateLabel || ""),
-      dayLabel: String(item.dayLabel || item.day || ""),
-      dateLabel: String(item.dateLabel || item.label || ""),
-      fullDate: String(item.fullDate || ""),
-      available: Boolean(item.available),
-    }));
+    const normalizedSchedule = schedule.map((item: any) =>
+      normalizeScheduleItem(item)
+    );
 
     const { data: existingSchedule, error: findError } = await supabase
       .from("weekly_schedules")
