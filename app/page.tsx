@@ -1446,6 +1446,56 @@ export default function Home() {
           </div>
         </Link>
 
+        <div style={statusBoxStyle}>
+          <div style={statusHeaderStyle}>현재 상태</div>
+          <p style={statusTextStyle}>{message || "대기 중"}</p>
+        </div>
+
+        <div style={todaySummarySectionStyle}>
+          <div style={todaySummaryHeaderStyle}>
+            <div style={todaySummaryTitleWrapStyle}>
+              <div style={todaySummaryIconStyle}>🗓️</div>
+              <div style={todaySummaryTitleStyle}>오늘 기록</div>
+            </div>
+          </div>
+
+          {todayRecords.length === 0 ? (
+            <div style={todaySummaryEmptyStyle}>오늘 기록이 없습니다.</div>
+          ) : (
+            <div style={todaySummaryGridStyle}>
+              <div style={todaySummaryItemStyle}>
+                <div style={todaySummaryLabelStyle}>출근 시간</div>
+                <div style={todaySummaryValueStyle}>
+                  {todaySummary.checkIn || "-"}
+                </div>
+                <div style={todaySummaryPillStyle}>출근 완료</div>
+              </div>
+
+              <div style={todaySummaryDividerStyle} />
+
+              <div style={todaySummaryItemStyle}>
+                <div style={todaySummaryLabelStyle}>퇴근 시간</div>
+                <div style={todaySummaryValueStyle}>
+                  {todaySummary.checkOut || "-"}
+                </div>
+                <div style={todaySummaryPillStyle}>
+                  {todaySummary.checkOut ? "퇴근 완료" : "퇴근 전"}
+                </div>
+              </div>
+
+              <div style={todaySummaryDividerStyle} />
+
+              <div style={todaySummaryItemStyle}>
+                <div style={todaySummaryLabelStyle}>총 근무시간</div>
+                <div style={todaySummaryValueStyle}>
+                  {todaySummary.totalWorkMinutes > 0
+                    ? formatMinutesToKorean(todaySummary.totalWorkMinutes)
+                    : "-"}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
         <div
           style={
             isSchedulePending ? schedulePendingCardStyle : scheduleDoneCardStyle
@@ -1628,56 +1678,6 @@ export default function Home() {
           )}
         </div>
 
-        <div style={statusBoxStyle}>
-          <div style={statusHeaderStyle}>현재 상태</div>
-          <p style={statusTextStyle}>{message || "대기 중"}</p>
-        </div>
-
-        <div style={todaySummarySectionStyle}>
-          <div style={todaySummaryHeaderStyle}>
-            <div style={todaySummaryTitleWrapStyle}>
-              <div style={todaySummaryIconStyle}>🗓️</div>
-              <div style={todaySummaryTitleStyle}>오늘 기록</div>
-            </div>
-          </div>
-
-          {todayRecords.length === 0 ? (
-            <div style={todaySummaryEmptyStyle}>오늘 기록이 없습니다.</div>
-          ) : (
-            <div style={todaySummaryGridStyle}>
-              <div style={todaySummaryItemStyle}>
-                <div style={todaySummaryLabelStyle}>출근 시간</div>
-                <div style={todaySummaryValueStyle}>
-                  {todaySummary.checkIn || "-"}
-                </div>
-                <div style={todaySummaryPillStyle}>출근 완료</div>
-              </div>
-
-              <div style={todaySummaryDividerStyle} />
-
-              <div style={todaySummaryItemStyle}>
-                <div style={todaySummaryLabelStyle}>퇴근 시간</div>
-                <div style={todaySummaryValueStyle}>
-                  {todaySummary.checkOut || "-"}
-                </div>
-                <div style={todaySummaryPillStyle}>
-                  {todaySummary.checkOut ? "퇴근 완료" : "퇴근 전"}
-                </div>
-              </div>
-
-              <div style={todaySummaryDividerStyle} />
-
-              <div style={todaySummaryItemStyle}>
-                <div style={todaySummaryLabelStyle}>총 근무시간</div>
-                <div style={todaySummaryValueStyle}>
-                  {todaySummary.totalWorkMinutes > 0
-                    ? formatMinutesToKorean(todaySummary.totalWorkMinutes)
-                    : "-"}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
       </section>
     </main>
   );
