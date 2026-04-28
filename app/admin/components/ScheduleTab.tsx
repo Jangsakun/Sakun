@@ -514,7 +514,7 @@ export default function ScheduleTab() {
     index: number,
     bgColor: string,
     textColor: string,
-    showShift = true
+    showShift = false
   ) => {
     const shift = getEmployeeShiftForDate(emp, selectedDate);
 
