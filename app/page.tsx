@@ -191,10 +191,10 @@ function formatTimeLabel(hour: number, minute: number) {
 function getCheckoutAvailability(date = new Date()): CheckoutAvailability {
   const { hour, minute } = getKstParts(date);
 
-  if (hour < 18) {
+  if (hour < 17) {
     return {
       enabled: true,
-      notice: "18시 이후 퇴근은 30분 단위로 10분 동안만 가능합니다.",
+      notice: "17시 이후 퇴근은 30분 단위로 10분 동안만 가능합니다.",
       nextAvailableLabel: "",
     };
   }
@@ -222,7 +222,7 @@ function getCheckoutAvailability(date = new Date()): CheckoutAvailability {
 
   return {
     enabled: false,
-    notice: "18시 이후 퇴근은 30분 단위로 10분 동안만 가능합니다.",
+    notice: "17시 이후 퇴근은 30분 단위로 10분 동안만 가능합니다.",
     nextAvailableLabel: formatTimeLabel(nextHour, nextMinute),
   };
 }
@@ -295,6 +295,8 @@ function normalizeDisplayCheckIn(value: string) {
   const end0910Window = 9 * 60 + 10;
   const start0930Window = 9 * 60 + 11;
   const end0930Window = 9 * 60 + 30;
+  const start1800Window = 17 * 60 + 50;
+  const end1800Window = 18 * 60 + 10;
 
   if (totalMinutes >= start0900Window && totalMinutes <= end0910Window) {
     return createSeoulDateTime(dateKey, 9, 0);
@@ -302,6 +304,11 @@ function normalizeDisplayCheckIn(value: string) {
 
   if (totalMinutes >= start0930Window && totalMinutes <= end0930Window) {
     return createSeoulDateTime(dateKey, 9, 30);
+  }
+
+  // 야간 출근자: 17:50 ~ 18:10 출근 시 18:00으로 계산
+  if (totalMinutes >= start1800Window && totalMinutes <= end1800Window) {
+    return createSeoulDateTime(dateKey, 18, 0);
   }
 
   return source;
@@ -312,7 +319,7 @@ function normalizeDisplayCheckOut(value: string) {
   const dateKey = getSeoulDateKey(source);
   const { hour, minute } = getSeoulHourMinute(source);
 
-  if (hour >= 18) {
+  if (hour >= 17) {
     if (minute <= 10) {
       return createSeoulDateTime(dateKey, hour, 0);
     }
@@ -1493,7 +1500,7 @@ export default function Home() {
           <div style={noticeTextStyle}>
             {checkoutAvailability.notice}
             <br />
-            18시 이전 퇴근은 관리자에게 문의 바랍니다.
+            17시 이전 퇴근은 관리자에게 문의 바랍니다.
             {!checkoutAvailability.enabled &&
               checkoutAvailability.nextAvailableLabel && (
                 <>
