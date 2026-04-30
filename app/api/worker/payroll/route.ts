@@ -84,6 +84,8 @@ function normalizeCheckIn(value: string) {
   const end0910 = 9 * 60 + 10;
   const start0930 = 9 * 60 + 11;
   const end0930 = 9 * 60 + 30;
+  const start1800 = 17 * 60 + 50;
+  const end1800 = 18 * 60 + 10;
 
   if (totalMinutes >= start0900 && totalMinutes <= end0910) {
     return createKstDateTime(dateKey, 9, 0);
@@ -91,6 +93,10 @@ function normalizeCheckIn(value: string) {
 
   if (totalMinutes >= start0930 && totalMinutes <= end0930) {
     return createKstDateTime(dateKey, 9, 30);
+  }
+
+  if (totalMinutes >= start1800 && totalMinutes <= end1800) {
+    return createKstDateTime(dateKey, 18, 0);
   }
 
   return source;
@@ -101,7 +107,7 @@ function normalizeCheckOut(value: string) {
   const dateKey = formatDateKeyKst(source);
   const { hour, minute } = getKstHourMinute(source);
 
-  if (hour >= 18) {
+  if (hour >= 17) {
     if (minute <= 10) {
       return createKstDateTime(dateKey, hour, 0);
     }
@@ -319,14 +325,9 @@ export async function POST(request: NextRequest) {
           };
         }
 
-        const rawCheckInDate = new Date(checkIn.checked_at);
         const normalizedCheckInDate = normalizeCheckIn(checkIn.checked_at);
 
         const finalCheckOut = checkOut || null;
-        const rawCheckOutDate = finalCheckOut
-          ? new Date(finalCheckOut.checked_at)
-          : new Date();
-
         const normalizedCheckOutDate = finalCheckOut
           ? normalizeCheckOut(finalCheckOut.checked_at)
           : new Date();
@@ -368,10 +369,10 @@ export async function POST(request: NextRequest) {
           lunchDeducted,
           checkInRecordId: checkIn.id ? String(checkIn.id) : null,
           checkOutRecordId: finalCheckOut?.id ? String(finalCheckOut.id) : null,
-       checkInText: formatTimeKst(normalizedCheckInDate),
-checkOutText: finalCheckOut
-  ? formatTimeKst(normalizedCheckOutDate)
-  : "퇴근 전",
+          checkInText: formatTimeKst(normalizedCheckInDate),
+          checkOutText: finalCheckOut
+            ? formatTimeKst(normalizedCheckOutDate)
+            : "퇴근 전",
           workText: formatMinutesToText(paidMinutes),
           lunchText: lunchDeducted ? "점심 1시간 제외" : "-",
         };
