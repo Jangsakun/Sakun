@@ -88,6 +88,8 @@ function normalizeCheckInTime(value: string) {
   const end0910Window = 9 * 60 + 10;
   const start0911Window = 9 * 60 + 11;
   const end0930Window = 9 * 60 + 30;
+  const start1800Window = 17 * 60 + 50;
+  const end1800Window = 18 * 60 + 10;
 
   if (totalMinutes >= start0900Window && totalMinutes <= end0910Window) {
     return createKSTDateTime(dateKey, 9, 0);
@@ -95,6 +97,10 @@ function normalizeCheckInTime(value: string) {
 
   if (totalMinutes >= start0911Window && totalMinutes <= end0930Window) {
     return createKSTDateTime(dateKey, 9, 30);
+  }
+
+  if (totalMinutes >= start1800Window && totalMinutes <= end1800Window) {
+    return createKSTDateTime(dateKey, 18, 0);
   }
 
   return source;
@@ -105,7 +111,7 @@ function normalizeCheckOutTime(value: string) {
   const dateKey = formatKST(source);
   const { hour, minute } = getKSTHourMinute(source);
 
-  if (hour >= 18) {
+  if (hour >= 17) {
     if (minute <= 10) {
       return createKSTDateTime(dateKey, hour, 0);
     }
@@ -340,33 +346,33 @@ export async function POST(request: Request) {
     const weekly: Record<string, WeeklyPayrollRow> = {};
 
     for (const row of dailyWorks) {
-  const d = new Date(`${row.date}T00:00:00+09:00`);
+      const d = new Date(`${row.date}T00:00:00+09:00`);
 
-const dayText = d.toLocaleDateString("en-US", {
-  timeZone: "Asia/Seoul",
-  weekday: "short",
-});
+      const dayText = d.toLocaleDateString("en-US", {
+        timeZone: "Asia/Seoul",
+        weekday: "short",
+      });
 
-const dayMap: Record<string, number> = {
-  Sun: 0,
-  Mon: 1,
-  Tue: 2,
-  Wed: 3,
-  Thu: 4,
-  Fri: 5,
-  Sat: 6,
-};
+      const dayMap: Record<string, number> = {
+        Sun: 0,
+        Mon: 1,
+        Tue: 2,
+        Wed: 3,
+        Thu: 4,
+        Fri: 5,
+        Sat: 6,
+      };
 
-const day = dayMap[dayText] ?? 1;
+      const day = dayMap[dayText] ?? 1;
 
-const monday = new Date(`${row.date}T00:00:00+09:00`);
-monday.setDate(monday.getDate() - (day === 0 ? 6 : day - 1));
+      const monday = new Date(`${row.date}T00:00:00+09:00`);
+      monday.setDate(monday.getDate() - (day === 0 ? 6 : day - 1));
 
-const sunday = new Date(monday);
-sunday.setDate(monday.getDate() + 6);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
 
-const weekStart = formatKST(monday);
-const weekEnd = formatKST(sunday);
+      const weekStart = formatKST(monday);
+      const weekEnd = formatKST(sunday);
 
       const key = `${row.employeeId}_${weekStart}`;
 
