@@ -55,18 +55,28 @@ function toKstDateFromParts(
   return new Date(utcMillis);
 }
 
+/**
+ * 🔥 출근 시간 반올림 로직 (핵심)
+ */
 function normalizeCheckInTime(checkedAt: string): Date {
   const originalDate = new Date(checkedAt);
   const { year, month, day, hour, minute } = getKstDateParts(originalDate);
 
   const totalMinutes = hour * 60 + minute;
 
+  // 9시
   if (totalMinutes >= 8 * 60 + 45 && totalMinutes <= 9 * 60 + 10) {
     return toKstDateFromParts(year, month, day, 9, 0, 0);
   }
 
+  // 9시30
   if (totalMinutes >= 9 * 60 + 11 && totalMinutes <= 9 * 60 + 30) {
     return toKstDateFromParts(year, month, day, 9, 30, 0);
+  }
+
+  // 🔥 야간 출근 (17:50 ~ 18:10 → 18:00)
+  if (totalMinutes >= 17 * 60 + 50 && totalMinutes <= 18 * 60 + 10) {
+    return toKstDateFromParts(year, month, day, 18, 0, 0);
   }
 
   return originalDate;
@@ -135,19 +145,16 @@ export async function POST(request: Request) {
       companyLng
     );
 
-    // GPS 기준
     const MAX_DISTANCE = 150;
     const BUFFER_DISTANCE = 200;
     const MAX_ACCURACY = 80;
     const BLOCK_ACCURACY = 120;
 
-    // 정확도 너무 낮으면 차단
     if (parsedAccuracy !== null && parsedAccuracy > BLOCK_ACCURACY) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "GPS 정확도가 낮습니다. 다시 시도해주세요.",
+          message: "GPS 정확도가 낮습니다. 다시 시도해주세요.",
         },
         { status: 400 }
       );
@@ -221,10 +228,9 @@ export async function POST(request: Request) {
       lat: parsedLat,
       lng: parsedLng,
       checked_at: normalizedCheckedAt,
+      accuracy: parsedAccuracy,
+      distance: Math.round(distance),
     };
-
-    payload.accuracy = parsedAccuracy;
-    payload.distance = Math.round(distance);
 
     const { error } = await supabase
       .from("attendance_records")

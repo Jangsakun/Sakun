@@ -27,6 +27,17 @@ function getKstDateParts(date: Date) {
   };
 }
 
+function toKstDateFromParts(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number
+) {
+  const utcMillis = Date.UTC(year, month - 1, day, hour - 9, minute, 0, 0);
+  return new Date(utcMillis);
+}
+
 function formatTimeLabel(hour: number, minute: number) {
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
@@ -35,8 +46,9 @@ function getNextCheckoutWindowLabel(hour: number, minute: number) {
   let nextHour = hour;
   let nextMinute = 0;
 
-  if (minute >= 11 && minute <= 29) nextMinute = 30;
-  else if (minute >= 41) {
+  if (minute >= 11 && minute <= 29) {
+    nextMinute = 30;
+  } else if (minute >= 41) {
     nextHour += 1;
     nextMinute = 0;
   }
@@ -47,16 +59,19 @@ function getNextCheckoutWindowLabel(hour: number, minute: number) {
 function isCheckoutAllowedAtKst(date: Date) {
   const { hour, minute } = getKstDateParts(date);
 
-  if (hour < 18)
-  return {
-    allowed: false,
-    message: "18시 이후부터 퇴근 가능합니다.",
-  };
+  if (hour < 17) {
+    return {
+      allowed: false,
+      message: "17시 이후부터 퇴근 가능합니다.",
+    };
+  }
 
   const ok =
     (minute >= 0 && minute <= 10) || (minute >= 30 && minute <= 40);
 
-  if (ok) return { allowed: true, message: "" };
+  if (ok) {
+    return { allowed: true, message: "" };
+  }
 
   return {
     allowed: false,
@@ -65,6 +80,21 @@ function isCheckoutAllowedAtKst(date: Date) {
       minute
     )}`,
   };
+}
+
+function normalizeCheckOutTime(checkedAt: string): Date {
+  const originalDate = new Date(checkedAt);
+  const { year, month, day, hour, minute } = getKstDateParts(originalDate);
+
+  if (minute <= 10) {
+    return toKstDateFromParts(year, month, day, hour, 0);
+  }
+
+  if (minute <= 40) {
+    return toKstDateFromParts(year, month, day, hour, 30);
+  }
+
+  return toKstDateFromParts(year, month, day, hour + 1, 0);
 }
 
 function getKstDayRangeFromIso(isoString: string) {
@@ -170,19 +200,26 @@ export async function POST(request: Request) {
 
     let ok = false;
 
-    if (distance <= MAX_DISTANCE) ok = true;
-    else if (
+    if (distance <= MAX_DISTANCE) {
+      ok = true;
+    } else if (
       distance <= BUFFER_DISTANCE &&
       parsedAccuracy !== null &&
       parsedAccuracy <= MAX_ACCURACY
-    )
+    ) {
       ok = true;
+    }
 
     if (!ok) {
       return NextResponse.json(
         {
           success: false,
-          message: `회사 반경 밖 (${Math.round(distance)}m)`,
+          message:
+            parsedAccuracy === null
+              ? `회사 반경 밖 (${Math.round(distance)}m)`
+              : `회사 반경 밖 (${Math.round(distance)}m / 정확도 ${Math.round(
+                  parsedAccuracy
+                )}m)`,
         },
         { status: 400 }
       );
@@ -223,16 +260,17 @@ export async function POST(request: Request) {
       );
     }
 
+    const normalizedCheckedAt = normalizeCheckOutTime(checkedAt).toISOString();
+
     const payload: any = {
       employee_id: employee.id,
       record_type: "check_out",
       lat: parsedLat,
       lng: parsedLng,
-      checked_at: checkedAt,
+      checked_at: normalizedCheckedAt,
+      accuracy: parsedAccuracy,
+      distance: Math.round(distance),
     };
-
-    payload.accuracy = parsedAccuracy;
-    payload.distance = Math.round(distance);
 
     const { error } = await supabase
       .from("attendance_records")
@@ -250,6 +288,7 @@ export async function POST(request: Request) {
       message: `퇴근 완료 (${Math.round(distance)}m)`,
       distance: Math.round(distance),
       accuracy: parsedAccuracy,
+      normalizedCheckedAt,
     });
   } catch (error) {
     return NextResponse.json(
