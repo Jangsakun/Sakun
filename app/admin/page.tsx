@@ -764,8 +764,8 @@ export default function AdminPage() {
     const rows = groupedAttendanceRows.map((row) => [
       row.employeeName,
       formatDate(row.date),
-      formatTime(row.checkIn),
-      formatTime(row.checkOut),
+      formatCheckInTime(row.checkIn),
+      formatCheckOutTime(row.checkOut),
       formatWorkMinutes(row.workMinutes),
       row.hourlyWage ? String(row.hourlyWage) : "0",
       row.grossPay !== null ? String(row.grossPay) : "-",
@@ -1222,7 +1222,7 @@ export default function AdminPage() {
                                 style={dateTimeInputStyle}
                               />
                             ) : (
-                              formatTime(row.checkIn)
+                              formatCheckInTime(row.checkIn)
                             )}
                           </td>
 
@@ -1237,7 +1237,7 @@ export default function AdminPage() {
                                 style={dateTimeInputStyle}
                               />
                             ) : (
-                              formatTime(row.checkOut)
+                              formatCheckOutTime(row.checkOut)
                             )}
                           </td>
 
@@ -2032,6 +2032,8 @@ function normalizeAttendanceCheckIn(value: string) {
   const end0910Window = 9 * 60 + 10;
   const start0911Window = 9 * 60 + 11;
   const end0930Window = 9 * 60 + 30;
+  const start1800Window = 17 * 60 + 50;
+  const end1800Window = 18 * 60 + 10;
 
   if (minutes >= start0900Window && minutes <= end0910Window) {
     return createSeoulDateTime(dateKey, 9, 0);
@@ -2039,6 +2041,10 @@ function normalizeAttendanceCheckIn(value: string) {
 
   if (minutes >= start0911Window && minutes <= end0930Window) {
     return createSeoulDateTime(dateKey, 9, 30);
+  }
+
+  if (minutes >= start1800Window && minutes <= end1800Window) {
+    return createSeoulDateTime(dateKey, 18, 0);
   }
 
   return source;
@@ -2059,7 +2065,7 @@ function normalizeAttendanceCheckOut(value: string) {
   const hour = Number(hourText);
   const minute = Number(minuteText);
 
-  if (hour >= 18) {
+  if (hour >= 17) {
     if (minute <= 10) {
       return createSeoulDateTime(dateKey, hour, 0);
     }
@@ -2082,6 +2088,16 @@ function formatTime(value: string | null) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatCheckInTime(value: string | null) {
+  if (!value) return "-";
+  return formatTime(normalizeAttendanceCheckIn(value).toISOString());
+}
+
+function formatCheckOutTime(value: string | null) {
+  if (!value) return "-";
+  return formatTime(normalizeAttendanceCheckOut(value).toISOString());
 }
 
 function formatDate(value: string) {
