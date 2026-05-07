@@ -1049,14 +1049,22 @@ export default function Home() {
       const checkInDate = normalizeDisplayCheckIn(firstCheckIn.checked_at);
       const checkOutDate = normalizeDisplayCheckOut(lastCheckOut.checked_at);
 
-      const diff = Math.max(
-        0,
-        Math.floor(
-          (checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60)
-        )
-      );
+     let diff = Math.max(
+  0,
+  Math.floor(
+    (checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60)
+  )
+);
 
-      totalWorkMinutes = diff;
+const checkInMinutes = getSeoulHourMinute(checkInDate).totalMinutes;
+const checkOutMinutes = getSeoulHourMinute(checkOutDate).totalMinutes;
+
+// 점심시간 차감: 12:30 이전 출근 + 13:30 이후 퇴근이면 1시간 차감
+if (checkInMinutes <= 12 * 60 + 30 && checkOutMinutes >= 13 * 60 + 30) {
+  diff -= 60;
+}
+
+totalWorkMinutes = Math.max(0, diff);
     }
 
     return {
