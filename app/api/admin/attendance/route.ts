@@ -77,11 +77,14 @@ export async function POST(request: Request) {
     );
   }
 }
+
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
 
-    const { employeeId, date, checkInTime, checkOutTime } = body;
+    const { employeeName, date, checkInTime, checkOutTime } = body;
+
+    const trimmedEmployeeName = String(employeeName || "").trim();
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -93,7 +96,7 @@ export async function PUT(request: Request) {
       );
     }
 
-    if (!employeeId || !date || !checkInTime) {
+    if (!trimmedEmployeeName || !date || !checkInTime) {
       return NextResponse.json(
         { success: false, message: "직원, 날짜, 출근시간은 필수입니다." },
         { status: 400 }
@@ -102,9 +105,42 @@ export async function PUT(request: Request) {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
+    const { data: employees, error: employeeError } = await supabase
+      .from("employees")
+      .select("id, name, is_active")
+      .eq("name", trimmedEmployeeName)
+      .eq("is_active", true);
+
+    if (employeeError) {
+      return NextResponse.json(
+        { success: false, message: `직원 조회 실패: ${employeeError.message}` },
+        { status: 500 }
+      );
+    }
+
+    if (!employees || employees.length === 0) {
+      return NextResponse.json(
+        { success: false, message: "직원을 찾을 수 없습니다." },
+        { status: 404 }
+      );
+    }
+
+    if (employees.length > 1) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "같은 이름의 직원이 여러 명 있습니다. 직원 관리에서 이름을 구분해서 수정하거나 ID 방식이 필요합니다.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const employee = employees[0];
+
     const rows = [
       {
-        employee_id: Number(employeeId),
+        employee_id: employee.id,
         record_type: "check_in",
         checked_at: new Date(`${date}T${checkInTime}:00+09:00`).toISOString(),
         lat: null,
@@ -114,7 +150,7 @@ export async function PUT(request: Request) {
 
     if (checkOutTime) {
       rows.push({
-        employee_id: Number(employeeId),
+        employee_id: employee.id,
         record_type: "check_out",
         checked_at: new Date(`${date}T${checkOutTime}:00+09:00`).toISOString(),
         lat: null,
