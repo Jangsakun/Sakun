@@ -157,7 +157,7 @@ export default function AdminPage() {
   const [editCheckOutTime, setEditCheckOutTime] = useState("");
   const [attendanceSaving, setAttendanceSaving] = useState(false);
 
-const [manualEmployeeId, setManualEmployeeId] = useState("");
+const [manualEmployeeName, setManualEmployeeName] = useState("");
 const [manualDate, setManualDate] = useState("");
 const [manualCheckInTime, setManualCheckInTime] = useState("");
 const [manualCheckOutTime, setManualCheckOutTime] = useState("");
@@ -1126,100 +1126,190 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
     </div>
 
     <div
+  style={{
+    marginTop: "24px",
+    marginBottom: "24px",
+    padding: "22px",
+    borderRadius: "20px",
+    border: "1px solid #bbf7d0",
+    background: "linear-gradient(to bottom right, #f0fdf4, #ffffff)",
+  }}
+>
+  <div
+    style={{
+      display: "flex",
+      alignItems: "center",
+      gap: "8px",
+      marginBottom: "8px",
+    }}
+  >
+    <span
       style={{
-        display: "grid",
-        gridTemplateColumns: "1.2fr 1fr 1fr 1fr auto",
-        gap: "12px",
-        marginTop: "20px",
-        marginBottom: "20px",
-        alignItems: "end",
+        width: "24px",
+        height: "24px",
+        borderRadius: "999px",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "#d1fae5",
+        color: "#059669",
+        fontSize: "18px",
+        fontWeight: 800,
       }}
     >
-      <div>
-        <label style={labelStyle}>직원 ID</label>
-        <input
-          type="number"
-          value={manualEmployeeId}
-          onChange={(e) => setManualEmployeeId(e.target.value)}
-          placeholder="직원 ID 입력"
-          style={inputStyle}
-        />
-      </div>
+      +
+    </span>
 
-      <div>
-        <label style={labelStyle}>날짜</label>
-        <input
-          type="date"
-          value={manualDate}
-          onChange={(e) => setManualDate(e.target.value)}
-          style={inputStyle}
-        />
-      </div>
+    <h3
+      style={{
+        margin: 0,
+        fontSize: "20px",
+        fontWeight: 800,
+        color: "#059669",
+      }}
+    >
+      수동 출퇴근 추가
+    </h3>
+  </div>
 
-      <div>
-        <label style={labelStyle}>출근시간</label>
-        <input
-          type="time"
-          value={manualCheckInTime}
-          onChange={(e) => setManualCheckInTime(e.target.value)}
-          style={inputStyle}
-        />
-      </div>
+  <p
+    style={{
+      margin: "0 0 20px 0",
+      color: "#64748b",
+      fontSize: "14px",
+      lineHeight: 1.5,
+    }}
+  >
+    직원 이름과 시간을 직접 입력하여 출퇴근 기록을 추가할 수 있습니다.
+  </p>
 
-      <div>
-        <label style={labelStyle}>퇴근시간</label>
-        <input
-          type="time"
-          value={manualCheckOutTime}
-          onChange={(e) => setManualCheckOutTime(e.target.value)}
-          style={inputStyle}
-        />
-      </div>
-
-      <button
-        onClick={async () => {
-          try {
-            const response = await fetch("/api/admin/attendance", {
-              method: "PUT",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                employeeId: manualEmployeeId,
-                date: manualDate,
-                checkInTime: manualCheckInTime,
-                checkOutTime: manualCheckOutTime,
-              }),
-            });
-
-            const data = await response.json();
-
-            if (!data.success) {
-              alert(data.message || "추가 실패");
-              return;
-            }
-
-            alert("출퇴근 기록이 추가되었습니다.");
-
-            setManualEmployeeId("");
-            setManualDate("");
-            setManualCheckInTime("");
-            setManualCheckOutTime("");
-
-            fetchRecords();
-          } catch (error) {
-            console.error(error);
-            alert("추가 중 오류 발생");
-          }
-        }}
+  <div
+    style={{
+      display: "grid",
+      gridTemplateColumns: "1.3fr 1fr 1fr 1fr auto",
+      gap: "14px",
+      alignItems: "end",
+    }}
+  >
+    <div>
+      <label style={labelStyle}>직원 이름</label>
+      <input
+        type="text"
+        value={manualEmployeeName}
+        onChange={(e) => setManualEmployeeName(e.target.value)}
+        placeholder="직원 이름 입력"
         style={{
-          ...primaryButtonStyle,
-          height: "48px",
+          ...inputStyle,
+          height: "52px",
+          borderRadius: "14px",
+          backgroundColor: "#ffffff",
         }}
-      >
-        기록 추가
-      </button>
+      />
     </div>
+
+    <div>
+      <label style={labelStyle}>날짜</label>
+      <input
+        type="date"
+        value={manualDate}
+        onChange={(e) => setManualDate(e.target.value)}
+        style={{
+          ...inputStyle,
+          height: "52px",
+          borderRadius: "14px",
+          backgroundColor: "#ffffff",
+        }}
+      />
+    </div>
+
+    <div>
+      <label style={labelStyle}>출근시간</label>
+      <input
+        type="time"
+        value={manualCheckInTime}
+        onChange={(e) => setManualCheckInTime(e.target.value)}
+        style={{
+          ...inputStyle,
+          height: "52px",
+          borderRadius: "14px",
+          backgroundColor: "#ffffff",
+        }}
+      />
+    </div>
+
+    <div>
+      <label style={labelStyle}>퇴근시간 (선택)</label>
+      <input
+        type="time"
+        value={manualCheckOutTime}
+        onChange={(e) => setManualCheckOutTime(e.target.value)}
+        style={{
+          ...inputStyle,
+          height: "52px",
+          borderRadius: "14px",
+          backgroundColor: "#ffffff",
+        }}
+      />
+    </div>
+
+    <button
+      onClick={async () => {
+        try {
+          if (!manualEmployeeName || !manualDate || !manualCheckInTime) {
+            alert("직원 이름, 날짜, 출근시간은 필수입니다.");
+            return;
+          }
+
+          const response = await fetch("/api/admin/attendance", {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              employeeName: manualEmployeeName,
+              date: manualDate,
+              checkInTime: manualCheckInTime,
+              checkOutTime: manualCheckOutTime,
+            }),
+          });
+
+          const data = await response.json();
+
+          if (!data.success) {
+            alert(data.message || "추가 실패");
+            return;
+          }
+
+          alert("출퇴근 기록이 추가되었습니다.");
+
+          setManualEmployeeName("");
+          setManualDate("");
+          setManualCheckInTime("");
+          setManualCheckOutTime("");
+
+          fetchRecords();
+        } catch (error) {
+          console.error(error);
+          alert("추가 중 오류 발생");
+        }
+      }}
+      style={{
+        height: "52px",
+        minWidth: "120px",
+        border: "none",
+        borderRadius: "14px",
+        background: "linear-gradient(to right, #10b981, #22c55e)",
+        color: "#ffffff",
+        fontWeight: 800,
+        fontSize: "15px",
+        cursor: "pointer",
+        boxShadow: "0 10px 20px rgba(16,185,129,0.18)",
+      }}
+    >
+      기록 추가
+    </button>
+  </div>
+</div>
         
             <div style={paySummaryWrapStyle}>
               <div style={paySummaryCardStyle}>
