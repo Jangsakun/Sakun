@@ -77,3 +77,72 @@ export async function POST(request: Request) {
     );
   }
 }
+export async function PUT(request: Request) {
+  try {
+    const body = await request.json();
+
+    const { employeeId, date, checkInTime, checkOutTime } = body;
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!supabaseUrl || !serviceRoleKey) {
+      return NextResponse.json(
+        { success: false, message: "환경변수 없음" },
+        { status: 500 }
+      );
+    }
+
+    if (!employeeId || !date || !checkInTime) {
+      return NextResponse.json(
+        { success: false, message: "직원, 날짜, 출근시간은 필수입니다." },
+        { status: 400 }
+      );
+    }
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+    const rows = [
+      {
+        employee_id: Number(employeeId),
+        record_type: "check_in",
+        checked_at: new Date(`${date}T${checkInTime}:00+09:00`).toISOString(),
+        lat: null,
+        lng: null,
+      },
+    ];
+
+    if (checkOutTime) {
+      rows.push({
+        employee_id: Number(employeeId),
+        record_type: "check_out",
+        checked_at: new Date(`${date}T${checkOutTime}:00+09:00`).toISOString(),
+        lat: null,
+        lng: null,
+      });
+    }
+
+    const { error } = await supabase.from("attendance_records").insert(rows);
+
+    if (error) {
+      return NextResponse.json(
+        { success: false, message: `수동 추가 실패: ${error.message}` },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: "출퇴근 기록이 추가되었습니다.",
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        success: false,
+        message:
+          error instanceof Error ? error.message : "출퇴근 수동 추가 에러",
+      },
+      { status: 500 }
+    );
+  }
+}

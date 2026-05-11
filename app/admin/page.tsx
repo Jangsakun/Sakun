@@ -157,6 +157,11 @@ export default function AdminPage() {
   const [editCheckOutTime, setEditCheckOutTime] = useState("");
   const [attendanceSaving, setAttendanceSaving] = useState(false);
 
+const [manualEmployeeId, setManualEmployeeId] = useState("");
+const [manualDate, setManualDate] = useState("");
+const [manualCheckInTime, setManualCheckInTime] = useState("");
+const [manualCheckOutTime, setManualCheckOutTime] = useState("");
+
   const [reconnectLoadingId, setReconnectLoadingId] = useState<number | null>(
     null
   );
@@ -1101,25 +1106,121 @@ export default function AdminPage() {
         </div>
 
         {tab === "attendance" && (
-          <section style={cardStyle}>
-            <div style={sectionHeaderStyle}>
-              <div>
-                <h2 style={sectionTitleStyle}>출퇴근 기록</h2>
-                <p style={sectionDescriptionStyle}>
-                  근무시간에 비례한 세전/세후 급여를 함께 확인하고 CSV로 다운로드할 수 있습니다.
-                </p>
-              </div>
+  <section style={cardStyle}>
+    <div style={sectionHeaderStyle}>
+      <div>
+        <h2 style={sectionTitleStyle}>출퇴근 기록</h2>
+        <p style={sectionDescriptionStyle}>
+          근무시간에 비례한 세전/세후 급여를 함께 확인하고 CSV로 다운로드할 수 있습니다.
+        </p>
+      </div>
 
-              <div style={sectionHeaderButtonWrapStyle}>
-                <button
-                  onClick={downloadAttendanceCsv}
-                  style={primaryButtonStyle}
-                >
-                  엑셀 다운로드
-                </button>
-              </div>
-            </div>
+      <div style={sectionHeaderButtonWrapStyle}>
+        <button
+          onClick={downloadAttendanceCsv}
+          style={primaryButtonStyle}
+        >
+          엑셀 다운로드
+        </button>
+      </div>
+    </div>
 
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "1.2fr 1fr 1fr 1fr auto",
+        gap: "12px",
+        marginTop: "20px",
+        marginBottom: "20px",
+        alignItems: "end",
+      }}
+    >
+      <div>
+        <label style={labelStyle}>직원 ID</label>
+        <input
+          type="number"
+          value={manualEmployeeId}
+          onChange={(e) => setManualEmployeeId(e.target.value)}
+          placeholder="직원 ID 입력"
+          style={inputStyle}
+        />
+      </div>
+
+      <div>
+        <label style={labelStyle}>날짜</label>
+        <input
+          type="date"
+          value={manualDate}
+          onChange={(e) => setManualDate(e.target.value)}
+          style={inputStyle}
+        />
+      </div>
+
+      <div>
+        <label style={labelStyle}>출근시간</label>
+        <input
+          type="time"
+          value={manualCheckInTime}
+          onChange={(e) => setManualCheckInTime(e.target.value)}
+          style={inputStyle}
+        />
+      </div>
+
+      <div>
+        <label style={labelStyle}>퇴근시간</label>
+        <input
+          type="time"
+          value={manualCheckOutTime}
+          onChange={(e) => setManualCheckOutTime(e.target.value)}
+          style={inputStyle}
+        />
+      </div>
+
+      <button
+        onClick={async () => {
+          try {
+            const response = await fetch("/api/admin/attendance", {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                employeeId: manualEmployeeId,
+                date: manualDate,
+                checkInTime: manualCheckInTime,
+                checkOutTime: manualCheckOutTime,
+              }),
+            });
+
+            const data = await response.json();
+
+            if (!data.success) {
+              alert(data.message || "추가 실패");
+              return;
+            }
+
+            alert("출퇴근 기록이 추가되었습니다.");
+
+            setManualEmployeeId("");
+            setManualDate("");
+            setManualCheckInTime("");
+            setManualCheckOutTime("");
+
+            fetchRecords();
+          } catch (error) {
+            console.error(error);
+            alert("추가 중 오류 발생");
+          }
+        }}
+        style={{
+          ...primaryButtonStyle,
+          height: "48px",
+        }}
+      >
+        기록 추가
+      </button>
+    </div>
+        
             <div style={paySummaryWrapStyle}>
               <div style={paySummaryCardStyle}>
                 <div style={paySummaryLabelStyle}>세전 급여 합계</div>
