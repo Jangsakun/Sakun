@@ -1241,7 +1241,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
     </div>
 
     <div>
-      <label style={labelStyle}>퇴근시간 (선택)</label>
+      <label style={labelStyle}>퇴근시간</label>
       <input
         type="time"
         value={manualCheckOutTime}
@@ -2582,6 +2582,8 @@ const labelStyle: CSSProperties = {
   fontSize: "13px",
   fontWeight: 700,
   color: "#374151",
+  marginBottom: "8px",
+  display: "block",
 };
 
 const inputStyle: CSSProperties = {
