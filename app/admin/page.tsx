@@ -1129,7 +1129,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
   style={{
     marginTop: "24px",
     marginBottom: "24px",
-    padding: "22px",
+    padding: "20px",
     borderRadius: "20px",
     border: "1px solid #bbf7d0",
     background: "linear-gradient(to bottom right, #f0fdf4, #ffffff)",
@@ -1145,15 +1145,15 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
   >
     <span
       style={{
-        width: "24px",
-        height: "24px",
+        width: "22px",
+        height: "22px",
         borderRadius: "999px",
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
         backgroundColor: "#d1fae5",
         color: "#059669",
-        fontSize: "18px",
+        fontSize: "16px",
         fontWeight: 800,
       }}
     >
@@ -1163,7 +1163,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
     <h3
       style={{
         margin: 0,
-        fontSize: "20px",
+        fontSize: "19px",
         fontWeight: 800,
         color: "#059669",
       }}
@@ -1174,9 +1174,9 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
 
   <p
     style={{
-      margin: "0 0 20px 0",
+      margin: "0 0 18px 0",
       color: "#64748b",
-      fontSize: "14px",
+      fontSize: "13px",
       lineHeight: 1.5,
     }}
   >
@@ -1186,8 +1186,8 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
   <div
     style={{
       display: "grid",
-      gridTemplateColumns: "1.3fr 1fr 1fr 1fr auto",
-      gap: "14px",
+      gridTemplateColumns: "1.1fr 0.8fr 0.75fr 0.75fr auto",
+      gap: "12px",
       alignItems: "end",
     }}
   >
@@ -1200,9 +1200,10 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
         placeholder="직원 이름 입력"
         style={{
           ...inputStyle,
-          height: "52px",
-          borderRadius: "14px",
+          height: "44px",
+          borderRadius: "12px",
           backgroundColor: "#ffffff",
+          fontSize: "14px",
         }}
       />
     </div>
@@ -1215,9 +1216,10 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
         onChange={(e) => setManualDate(e.target.value)}
         style={{
           ...inputStyle,
-          height: "52px",
-          borderRadius: "14px",
+          height: "44px",
+          borderRadius: "12px",
           backgroundColor: "#ffffff",
+          fontSize: "14px",
         }}
       />
     </div>
@@ -1230,9 +1232,10 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
         onChange={(e) => setManualCheckInTime(e.target.value)}
         style={{
           ...inputStyle,
-          height: "52px",
-          borderRadius: "14px",
+          height: "44px",
+          borderRadius: "12px",
           backgroundColor: "#ffffff",
+          fontSize: "14px",
         }}
       />
     </div>
@@ -1245,9 +1248,10 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
         onChange={(e) => setManualCheckOutTime(e.target.value)}
         style={{
           ...inputStyle,
-          height: "52px",
-          borderRadius: "14px",
+          height: "44px",
+          borderRadius: "12px",
           backgroundColor: "#ffffff",
+          fontSize: "14px",
         }}
       />
     </div>
@@ -1294,16 +1298,16 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
         }
       }}
       style={{
-        height: "52px",
-        minWidth: "120px",
+        height: "44px",
+        minWidth: "108px",
         border: "none",
-        borderRadius: "14px",
+        borderRadius: "12px",
         background: "linear-gradient(to right, #10b981, #22c55e)",
         color: "#ffffff",
         fontWeight: 800,
-        fontSize: "15px",
+        fontSize: "14px",
         cursor: "pointer",
-        boxShadow: "0 10px 20px rgba(16,185,129,0.18)",
+        boxShadow: "0 8px 16px rgba(16,185,129,0.16)",
       }}
     >
       기록 추가
