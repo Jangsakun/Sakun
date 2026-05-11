@@ -2136,27 +2136,16 @@ function toDateTimeLocalValue(value: string | null) {
   if (!value) return "";
 
   const date = new Date(value);
-  const year = date.toLocaleString("en-CA", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-  });
-  const month = date.toLocaleString("en-CA", {
-    timeZone: "Asia/Seoul",
-    month: "2-digit",
-  });
-  const day = date.toLocaleString("en-CA", {
-    timeZone: "Asia/Seoul",
-    day: "2-digit",
-  });
-  const hour = date.toLocaleString("en-GB", {
-    timeZone: "Asia/Seoul",
-    hour: "2-digit",
-    hour12: false,
-  });
-  const minute = date.toLocaleString("en-GB", {
-    timeZone: "Asia/Seoul",
-    minute: "2-digit",
-  });
+
+  if (Number.isNaN(date.getTime())) return "";
+
+  const seoulDate = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+
+  const year = seoulDate.getUTCFullYear();
+  const month = String(seoulDate.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(seoulDate.getUTCDate()).padStart(2, "0");
+  const hour = String(seoulDate.getUTCHours()).padStart(2, "0");
+  const minute = String(seoulDate.getUTCMinutes()).padStart(2, "0");
 
   return `${year}-${month}-${day}T${hour}:${minute}`;
 }
