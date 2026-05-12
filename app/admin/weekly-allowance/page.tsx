@@ -3,11 +3,14 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+type WorkplaceName = "장사꾼" | "헤모즈";
+
 type Employee = {
   id: string;
   name: string;
   birth_date: string;
   phone_last4: string;
+  workplace_name?: string | null;
   hourly_wage?: number | null;
   weekly_allowance_status?: string | null;
   weekly_allowance_reason?: string | null;
@@ -20,6 +23,8 @@ export default function AdminWeeklyAllowancePage() {
   const [message, setMessage] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("전체");
+  const [selectedWorkplace, setSelectedWorkplace] =
+    useState<WorkplaceName>("장사꾼");
 
   const fetchEmployees = async () => {
     setLoading(true);
@@ -52,13 +57,15 @@ export default function AdminWeeklyAllowancePage() {
     return employees.filter((employee) => {
       const name = String(employee.name || "").toLowerCase();
       const status = employee.weekly_allowance_status || "검토필요";
+      const workplaceName = employee.workplace_name || "장사꾼";
 
       const matchesKeyword = !keyword || name.includes(keyword);
       const matchesStatus = statusFilter === "전체" || status === statusFilter;
+      const matchesWorkplace = workplaceName === selectedWorkplace;
 
-      return matchesKeyword && matchesStatus;
+      return matchesKeyword && matchesStatus && matchesWorkplace;
     });
-  }, [employees, searchTerm, statusFilter]);
+  }, [employees, searchTerm, statusFilter, selectedWorkplace]);
 
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-6 text-gray-900">
@@ -85,6 +92,44 @@ export default function AdminWeeklyAllowancePage() {
               새로고침
             </button>
           </div>
+        </div>
+
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="text-sm font-bold text-gray-800">근무지</span>
+
+          <button
+            type="button"
+            onClick={() => setSelectedWorkplace("장사꾼")}
+            className={
+              selectedWorkplace === "장사꾼"
+                ? "rounded-xl bg-black px-5 py-3 text-sm font-bold text-white shadow"
+                : "rounded-xl border border-gray-300 bg-white px-5 py-3 text-sm font-bold text-gray-900"
+            }
+          >
+            장사꾼
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSelectedWorkplace("헤모즈")}
+            className={
+              selectedWorkplace === "헤모즈"
+                ? "rounded-xl bg-black px-5 py-3 text-sm font-bold text-white shadow"
+                : "rounded-xl border border-gray-300 bg-white px-5 py-3 text-sm font-bold text-gray-900"
+            }
+          >
+            헤모즈
+          </button>
+
+          <span
+            className={
+              selectedWorkplace === "헤모즈"
+                ? "ml-auto rounded-full bg-pink-100 px-4 py-2 text-sm font-bold text-pink-700"
+                : "ml-auto rounded-full bg-sky-100 px-4 py-2 text-sm font-bold text-sky-700"
+            }
+          >
+            현재 조회: {selectedWorkplace}
+          </span>
         </div>
 
         <div className="mb-5 grid gap-3 md:grid-cols-[1fr_180px]">
@@ -124,10 +169,11 @@ export default function AdminWeeklyAllowancePage() {
           </div>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-gray-200">
-            <table className="w-full min-w-[1000px] border-collapse bg-white text-sm">
+            <table className="w-full min-w-[1080px] border-collapse bg-white text-sm">
               <thead className="bg-gray-50">
                 <tr className="border-b border-gray-200">
                   <th className="px-4 py-3 text-left font-semibold">직원</th>
+                  <th className="px-4 py-3 text-left font-semibold">근무지</th>
                   <th className="px-4 py-3 text-left font-semibold">시급</th>
                   <th className="px-4 py-3 text-left font-semibold">주휴수당 상태</th>
                   <th className="px-4 py-3 text-left font-semibold">비대상 사유</th>
@@ -219,10 +265,24 @@ function EmployeeAllowanceRow({
       ? "bg-red-50 text-red-600"
       : "bg-orange-50 text-orange-600";
 
+  const workplaceName = employee.workplace_name || "장사꾼";
+
   return (
     <>
       <tr className="border-b border-gray-200">
         <td className="px-4 py-3 font-bold text-gray-900">{employee.name}</td>
+
+        <td className="px-4 py-3">
+          <span
+            className={
+              workplaceName === "헤모즈"
+                ? "rounded-full bg-pink-100 px-3 py-1 text-xs font-bold text-pink-700"
+                : "rounded-full bg-sky-100 px-3 py-1 text-xs font-bold text-sky-700"
+            }
+          >
+            {workplaceName}
+          </span>
+        </td>
 
         <td className="px-4 py-3 text-gray-900">
           {(employee.hourly_wage ?? 10320).toLocaleString("ko-KR")}원
@@ -283,7 +343,7 @@ function EmployeeAllowanceRow({
 
       {memoOpen && (
         <tr className="border-b border-gray-200 bg-white">
-          <td colSpan={6} className="px-4 py-3">
+          <td colSpan={7} className="px-4 py-3">
             <label className="mb-2 block text-sm font-semibold text-gray-700">
               관리자 메모
             </label>
