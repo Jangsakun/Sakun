@@ -253,7 +253,7 @@ export default function ScheduleTab() {
 
       const params = new URLSearchParams({
         date,
-        workplaceName: selectedWorkplace,
+        workplace: selectedWorkplace,
       });
 
       const res = await fetch(`/api/admin/schedule?${params.toString()}`, {
@@ -731,7 +731,6 @@ export default function ScheduleTab() {
             marginBottom: "14px",
           }}
         >
-          관리자는 요일과 상관없이 이번 주 / 다음 주 스케줄을 자유롭게 조회하고 수정할 수 있습니다.
           월요일 00시가 지나면 다음 주가 자동으로 이번 주로 롤링됩니다.
         </div>
 
