@@ -630,132 +630,143 @@ export default function ScheduleTab() {
   };
 
   return (
-    <div style={{ marginTop: "20px" }}>
+    <div style={{ marginTop: "16px" }}>
       <div
         style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: "12px",
-          flexWrap: "wrap",
-          marginBottom: "16px",
+          border: "1px solid #e5e7eb",
+          borderRadius: "16px",
+          background: "#ffffff",
+          overflow: "hidden",
+          marginBottom: "18px",
+          boxShadow: "0 8px 22px rgba(15, 23, 42, 0.04)",
         }}
       >
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            gap: "10px",
+            justifyContent: "space-between",
+            gap: "14px",
             flexWrap: "wrap",
+            padding: "14px 16px",
+            borderBottom: "1px solid #eef2f7",
           }}
         >
-          <span
+          <div
             style={{
-              fontSize: "15px",
-              fontWeight: 900,
-              color: "#111827",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              flexWrap: "wrap",
             }}
           >
-            근무지
-          </span>
+            <span
+              style={{
+                fontSize: "14px",
+                fontWeight: 900,
+                color: "#111827",
+              }}
+            >
+              근무지
+            </span>
 
-          <button
-            type="button"
-            onClick={() => handleChangeWorkplace("장사꾼")}
+            <button
+              type="button"
+              onClick={() => handleChangeWorkplace("장사꾼")}
+              style={{
+                height: "40px",
+                padding: "0 18px",
+                borderRadius: "999px",
+                border:
+                  selectedWorkplace === "장사꾼"
+                    ? "1px solid #111827"
+                    : "1px solid #d1d5db",
+                background:
+                  selectedWorkplace === "장사꾼" ? "#111827" : "#ffffff",
+                color: selectedWorkplace === "장사꾼" ? "#ffffff" : "#111827",
+                fontSize: "14px",
+                fontWeight: 900,
+                cursor: "pointer",
+                boxShadow:
+                  selectedWorkplace === "장사꾼"
+                    ? "0 8px 18px rgba(17, 24, 39, 0.16)"
+                    : "none",
+              }}
+            >
+              장사꾼
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleChangeWorkplace("헤모즈")}
+              style={{
+                height: "40px",
+                padding: "0 18px",
+                borderRadius: "999px",
+                border:
+                  selectedWorkplace === "헤모즈"
+                    ? "1px solid #111827"
+                    : "1px solid #d1d5db",
+                background:
+                  selectedWorkplace === "헤모즈" ? "#111827" : "#ffffff",
+                color: selectedWorkplace === "헤모즈" ? "#ffffff" : "#111827",
+                fontSize: "14px",
+                fontWeight: 900,
+                cursor: "pointer",
+                boxShadow:
+                  selectedWorkplace === "헤모즈"
+                    ? "0 8px 18px rgba(17, 24, 39, 0.16)"
+                    : "none",
+              }}
+            >
+              헤모즈
+            </button>
+          </div>
+
+          <div
             style={{
-              padding: "11px 18px",
+              display: "inline-flex",
+              alignItems: "center",
+              height: "38px",
+              padding: "0 14px",
               borderRadius: "999px",
-              border:
-                selectedWorkplace === "장사꾼"
-                  ? "none"
-                  : "1px solid #d1d5db",
-              background:
-                selectedWorkplace === "장사꾼" ? "#111827" : "#ffffff",
-              color: selectedWorkplace === "장사꾼" ? "#ffffff" : "#111827",
+              background: selectedWorkplace === "헤모즈" ? "#fce7f3" : "#e0f2fe",
+              color: selectedWorkplace === "헤모즈" ? "#be185d" : "#0369a1",
+              fontSize: "13px",
               fontWeight: 900,
-              cursor: "pointer",
-              boxShadow:
-                selectedWorkplace === "장사꾼"
-                  ? "0 8px 18px rgba(17, 24, 39, 0.18)"
-                  : "none",
+              whiteSpace: "nowrap",
             }}
           >
-            장사꾼
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleChangeWorkplace("헤모즈")}
-            style={{
-              padding: "11px 18px",
-              borderRadius: "999px",
-              border:
-                selectedWorkplace === "헤모즈"
-                  ? "none"
-                  : "1px solid #d1d5db",
-              background:
-                selectedWorkplace === "헤모즈" ? "#111827" : "#ffffff",
-              color: selectedWorkplace === "헤모즈" ? "#ffffff" : "#111827",
-              fontWeight: 900,
-              cursor: "pointer",
-              boxShadow:
-                selectedWorkplace === "헤모즈"
-                  ? "0 8px 18px rgba(17, 24, 39, 0.18)"
-                  : "none",
-            }}
-          >
-            헤모즈
-          </button>
-        </div>
-
-        <div
-          style={{
-            padding: "10px 14px",
-            borderRadius: "999px",
-            background: selectedWorkplace === "헤모즈" ? "#fce7f3" : "#e0f2fe",
-            color: selectedWorkplace === "헤모즈" ? "#be185d" : "#0369a1",
-            fontSize: "13px",
-            fontWeight: 900,
-          }}
-        >
-          현재 조회: {selectedWorkplace}
-        </div>
-      </div>
-
-      <div style={{ marginBottom: "18px" }}>
-        <div
-          style={{
-            fontSize: "14px",
-            color: "#6b7280",
-            lineHeight: 1.5,
-            marginBottom: "14px",
-          }}
-        >
-          월요일 00시가 지나면 다음 주가 자동으로 이번 주로 롤링됩니다.
+            현재 조회: {selectedWorkplace}
+          </div>
         </div>
 
         <div
           style={{
             display: "flex",
+            alignItems: "center",
             gap: "10px",
             flexWrap: "wrap",
-            marginBottom: "16px",
+            padding: "14px 16px",
+            borderBottom: "1px solid #eef2f7",
           }}
         >
           <button
             type="button"
             onClick={() => handleChangeWeekMode("current")}
             style={{
-              padding: "11px 18px",
+              height: "40px",
+              padding: "0 18px",
               borderRadius: "999px",
-              border: weekMode === "current" ? "none" : "1px solid #d1d5db",
+              border: weekMode === "current" ? "1px solid #111827" : "1px solid #d1d5db",
               background: weekMode === "current" ? "#111827" : "#ffffff",
               color: weekMode === "current" ? "#ffffff" : "#111827",
+              fontSize: "14px",
               fontWeight: 900,
               cursor: "pointer",
               boxShadow:
                 weekMode === "current"
-                  ? "0 8px 18px rgba(17, 24, 39, 0.18)"
+                  ? "0 8px 18px rgba(17, 24, 39, 0.16)"
                   : "none",
             }}
           >
@@ -766,16 +777,18 @@ export default function ScheduleTab() {
             type="button"
             onClick={() => handleChangeWeekMode("next")}
             style={{
-              padding: "11px 18px",
+              height: "40px",
+              padding: "0 18px",
               borderRadius: "999px",
-              border: weekMode === "next" ? "none" : "1px solid #d1d5db",
+              border: weekMode === "next" ? "1px solid #111827" : "1px solid #d1d5db",
               background: weekMode === "next" ? "#111827" : "#ffffff",
               color: weekMode === "next" ? "#ffffff" : "#111827",
+              fontSize: "14px",
               fontWeight: 900,
               cursor: "pointer",
               boxShadow:
                 weekMode === "next"
-                  ? "0 8px 18px rgba(17, 24, 39, 0.18)"
+                  ? "0 8px 18px rgba(17, 24, 39, 0.16)"
                   : "none",
             }}
           >
@@ -784,15 +797,36 @@ export default function ScheduleTab() {
 
           <div
             style={{
-              padding: "11px 14px",
+              display: "inline-flex",
+              alignItems: "center",
+              height: "40px",
+              padding: "0 14px",
               borderRadius: "999px",
               background: "#f3f4f6",
               color: "#374151",
               fontSize: "13px",
-              fontWeight: 800,
+              fontWeight: 900,
+              whiteSpace: "nowrap",
             }}
           >
             {getWeekTitle(weekMode)} {weekStartDate} ~ {weekEndDate}
+          </div>
+
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              minHeight: "40px",
+              padding: "0 12px",
+              borderRadius: "999px",
+              background: "#f9fafb",
+              color: "#6b7280",
+              fontSize: "13px",
+              fontWeight: 700,
+              marginLeft: "auto",
+            }}
+          >
+            월요일 00시가 지나면 다음 주가 자동으로 이번 주로 롤링됩니다.
           </div>
         </div>
 
@@ -803,7 +837,7 @@ export default function ScheduleTab() {
             alignItems: "center",
             gap: "12px",
             flexWrap: "wrap",
-            marginBottom: "20px",
+            padding: "14px 16px",
           }}
         >
           <div
@@ -816,15 +850,21 @@ export default function ScheduleTab() {
             {days.map((day) => (
               <button
                 key={day.value}
+                type="button"
                 onClick={() => setSelectedDate(day.value)}
                 style={{
-                  padding: "10px 14px",
+                  height: "40px",
+                  padding: "0 14px",
                   borderRadius: "10px",
-                  border: "none",
+                  border:
+                    selectedDate === day.value
+                      ? "1px solid #111827"
+                      : "1px solid #d1d5db",
                   background:
-                    selectedDate === day.value ? "#111827" : "#e5e7eb",
+                    selectedDate === day.value ? "#111827" : "#f3f4f6",
                   color: selectedDate === day.value ? "#ffffff" : "#111827",
-                  fontWeight: 700,
+                  fontSize: "14px",
+                  fontWeight: 800,
                   cursor: "pointer",
                 }}
               >
@@ -847,7 +887,8 @@ export default function ScheduleTab() {
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
               style={{
-                padding: "10px 14px",
+                height: "42px",
+                padding: "0 14px",
                 borderRadius: "10px",
                 border: "1px solid #d1d5db",
                 fontSize: "14px",
@@ -862,12 +903,14 @@ export default function ScheduleTab() {
               type="button"
               onClick={handleDateSearch}
               style={{
-                padding: "10px 16px",
+                height: "42px",
+                padding: "0 16px",
                 borderRadius: "10px",
                 border: "none",
                 background: "#111827",
                 color: "#ffffff",
-                fontWeight: 700,
+                fontSize: "14px",
+                fontWeight: 800,
                 cursor: "pointer",
               }}
             >
@@ -888,13 +931,15 @@ export default function ScheduleTab() {
                 onChange={(e) => setEmployeeSearch(e.target.value)}
                 style={{
                   width: "100%",
-                  padding: "10px 14px",
+                  height: "42px",
+                  padding: "0 14px",
                   borderRadius: "10px",
                   border: "1px solid #d1d5db",
                   fontSize: "14px",
                   color: "#111827",
                   backgroundColor: "#ffffff",
                   outline: "none",
+                  boxSizing: "border-box",
                 }}
               />
 
@@ -902,7 +947,7 @@ export default function ScheduleTab() {
                 <div
                   style={{
                     position: "absolute",
-                    top: "44px",
+                    top: "46px",
                     left: 0,
                     right: 0,
                     background: "#ffffff",
