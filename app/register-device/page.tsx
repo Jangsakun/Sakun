@@ -182,10 +182,6 @@ export default function RegisterDevicePage() {
                     <option value="장사꾼">장사꾼 (팔복동)</option>
                     <option value="헤모즈">헤모즈 (효자동)</option>
                   </select>
-
-                  <p className="mt-2 text-xs text-gray-500">
-                    실제 저장값은 장사꾼 / 헤모즈로 저장됩니다.
-                  </p>
                 </div>
 
                 <input

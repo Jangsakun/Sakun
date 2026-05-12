@@ -2,6 +2,19 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getDistanceInMeters } from "@/app/lib/geo";
 
+const WORKPLACES = [
+  {
+    name: "장사꾼",
+    lat: 35.85925533483926,
+    lng: 127.1046071646124,
+  },
+  {
+    name: "헤모즈",
+    lat: 35.8107177466899,
+    lng: 127.094791615869,
+  },
+];
+
 function getKstDateParts(date: Date) {
   const formatter = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Seoul",
@@ -112,6 +125,26 @@ function getKstDayRangeFromIso(isoString: string) {
   };
 }
 
+function getNearestWorkplaceDistance(parsedLat: number, parsedLng: number) {
+  const distances = WORKPLACES.map((workplace) => {
+    const distance = getDistanceInMeters(
+      parsedLat,
+      parsedLng,
+      workplace.lat,
+      workplace.lng
+    );
+
+    return {
+      ...workplace,
+      distance,
+    };
+  });
+
+  return distances.reduce((nearest, current) => {
+    return current.distance < nearest.distance ? current : nearest;
+  });
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -173,15 +206,8 @@ export async function POST(request: Request) {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
-    const companyLat = 35.85925533483926;
-    const companyLng = 127.1046071646124;
-
-    const distance = getDistanceInMeters(
-      parsedLat,
-      parsedLng,
-      companyLat,
-      companyLng
-    );
+    const nearestWorkplace = getNearestWorkplaceDistance(parsedLat, parsedLng);
+    const distance = nearestWorkplace.distance;
 
     const MAX_DISTANCE = 150;
     const BUFFER_DISTANCE = 200;
@@ -216,10 +242,12 @@ export async function POST(request: Request) {
           success: false,
           message:
             parsedAccuracy === null
-              ? `회사 반경 밖 (${Math.round(distance)}m)`
-              : `회사 반경 밖 (${Math.round(distance)}m / 정확도 ${Math.round(
-                  parsedAccuracy
-                )}m)`,
+              ? `회사 반경 밖 (${nearestWorkplace.name} 기준 ${Math.round(
+                  distance
+                )}m)`
+              : `회사 반경 밖 (${nearestWorkplace.name} 기준 ${Math.round(
+                  distance
+                )}m / 정확도 ${Math.round(parsedAccuracy)}m)`,
         },
         { status: 400 }
       );
@@ -285,7 +313,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: `퇴근 완료 (${Math.round(distance)}m)`,
+      message: `퇴근 완료 (${nearestWorkplace.name} 기준 ${Math.round(
+        distance
+      )}m)`,
       distance: Math.round(distance),
       accuracy: parsedAccuracy,
       normalizedCheckedAt,

@@ -2,6 +2,19 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getDistanceInMeters } from "@/app/lib/geo";
 
+const WORKPLACES = [
+  {
+    name: "장사꾼",
+    lat: 35.85925533483926,
+    lng: 127.1046071646124,
+  },
+  {
+    name: "헤모즈",
+    lat: 35.8107177466899,
+    lng: 127.094791615869,
+  },
+];
+
 function getKstDateParts(date: Date) {
   const formatter = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Seoul",
@@ -55,31 +68,45 @@ function toKstDateFromParts(
   return new Date(utcMillis);
 }
 
-/**
- * 🔥 출근 시간 반올림 로직 (핵심)
- */
 function normalizeCheckInTime(checkedAt: string): Date {
   const originalDate = new Date(checkedAt);
   const { year, month, day, hour, minute } = getKstDateParts(originalDate);
 
   const totalMinutes = hour * 60 + minute;
 
-  // 9시
   if (totalMinutes >= 8 * 60 + 45 && totalMinutes <= 9 * 60 + 10) {
     return toKstDateFromParts(year, month, day, 9, 0, 0);
   }
 
-  // 9시30
   if (totalMinutes >= 9 * 60 + 11 && totalMinutes <= 9 * 60 + 30) {
     return toKstDateFromParts(year, month, day, 9, 30, 0);
   }
 
-  // 🔥 야간 출근 (17:50 ~ 18:10 → 18:00)
   if (totalMinutes >= 17 * 60 + 50 && totalMinutes <= 18 * 60 + 10) {
     return toKstDateFromParts(year, month, day, 18, 0, 0);
   }
 
   return originalDate;
+}
+
+function getNearestWorkplaceDistance(parsedLat: number, parsedLng: number) {
+  const distances = WORKPLACES.map((workplace) => {
+    const distance = getDistanceInMeters(
+      parsedLat,
+      parsedLng,
+      workplace.lat,
+      workplace.lng
+    );
+
+    return {
+      ...workplace,
+      distance,
+    };
+  });
+
+  return distances.reduce((nearest, current) => {
+    return current.distance < nearest.distance ? current : nearest;
+  });
 }
 
 export async function POST(request: Request) {
@@ -135,15 +162,8 @@ export async function POST(request: Request) {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
-    const companyLat = 35.85925533483926;
-    const companyLng = 127.1046071646124;
-
-    const distance = getDistanceInMeters(
-      parsedLat,
-      parsedLng,
-      companyLat,
-      companyLng
-    );
+    const nearestWorkplace = getNearestWorkplaceDistance(parsedLat, parsedLng);
+    const distance = nearestWorkplace.distance;
 
     const MAX_DISTANCE = 150;
     const BUFFER_DISTANCE = 200;
@@ -178,8 +198,12 @@ export async function POST(request: Request) {
           success: false,
           message:
             parsedAccuracy === null
-              ? `회사 반경 밖입니다. (${Math.round(distance)}m)`
-              : `회사 반경 밖입니다. (${Math.round(distance)}m / 정확도 ${Math.round(parsedAccuracy)}m)`,
+              ? `회사 반경 밖입니다. (${nearestWorkplace.name} 기준 ${Math.round(
+                  distance
+                )}m)`
+              : `회사 반경 밖입니다. (${nearestWorkplace.name} 기준 ${Math.round(
+                  distance
+                )}m / 정확도 ${Math.round(parsedAccuracy)}m)`,
         },
         { status: 400 }
       );
@@ -232,9 +256,7 @@ export async function POST(request: Request) {
       distance: Math.round(distance),
     };
 
-    const { error } = await supabase
-      .from("attendance_records")
-      .insert([payload]);
+    const { error } = await supabase.from("attendance_records").insert([payload]);
 
     if (error) {
       return NextResponse.json(
@@ -245,7 +267,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: `출근 완료 (${Math.round(distance)}m)`,
+      message: `출근 완료 (${nearestWorkplace.name} 기준 ${Math.round(
+        distance
+      )}m)`,
       distance: Math.round(distance),
       accuracy: parsedAccuracy,
       normalizedCheckedAt,
