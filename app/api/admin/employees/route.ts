@@ -25,6 +25,7 @@ export async function GET() {
         resident_number,
         bank_name,
         account_number,
+        workplace_name,
         is_active,
         hourly_wage,
         weekly_allowance_status,
@@ -44,18 +45,21 @@ export async function GET() {
       );
     }
 
-    // 🔥 주민번호 마스킹 추가 (앞6 + 뒤1만 노출)
     const maskedData = (data || []).map((emp) => {
       const digits = (emp.resident_number || "").replace(/[^0-9]/g, "");
 
       let resident_number_masked = "-";
 
       if (digits.length === 13) {
-        resident_number_masked = `${digits.slice(0, 6)}-${digits.slice(6, 7)}******`;
+        resident_number_masked = `${digits.slice(0, 6)}-${digits.slice(
+          6,
+          7
+        )}******`;
       }
 
       return {
         ...emp,
+        workplace_name: emp.workplace_name || "장사꾼",
         resident_number_masked,
       };
     });
@@ -68,9 +72,6 @@ export async function GET() {
     const message =
       error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.";
 
-    return NextResponse.json(
-      { success: false, message },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, message }, { status: 500 });
   }
 }

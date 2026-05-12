@@ -15,6 +15,7 @@ export async function PATCH(
       resident_number,
       bank_name,
       account_number,
+      workplaceName,
       birthDate,
       phoneLast4,
       hourlyWage,
@@ -46,13 +47,41 @@ export async function PATCH(
 
     const updatePayload: Record<string, unknown> = {};
 
-    if (typeof name === "string") updatePayload.name = name.trim();
-    if (typeof phone === "string") updatePayload.phone = phone.trim();
-    if (typeof resident_number === "string")
+    if (typeof name === "string") {
+      updatePayload.name = name.trim();
+    }
+
+    if (typeof phone === "string") {
+      updatePayload.phone = phone.trim();
+    }
+
+    if (typeof resident_number === "string") {
       updatePayload.resident_number = resident_number.trim();
-    if (typeof bank_name === "string") updatePayload.bank_name = bank_name.trim();
-    if (typeof account_number === "string")
+    }
+
+    if (typeof bank_name === "string") {
+      updatePayload.bank_name = bank_name.trim();
+    }
+
+    if (typeof account_number === "string") {
       updatePayload.account_number = account_number.trim();
+    }
+
+    if (typeof workplaceName === "string") {
+      const trimmedWorkplaceName = workplaceName.trim();
+
+      if (
+        trimmedWorkplaceName !== "장사꾼" &&
+        trimmedWorkplaceName !== "헤모즈"
+      ) {
+        return NextResponse.json(
+          { success: false, message: "근무지 값이 올바르지 않습니다." },
+          { status: 400 }
+        );
+      }
+
+      updatePayload.workplace_name = trimmedWorkplaceName;
+    }
 
     if (typeof birthDate === "string") {
       updatePayload.birth_date = birthDate.trim();

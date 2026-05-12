@@ -24,6 +24,7 @@ type AdminRecord = {
     hourly_wage?: number;
     contract_start_date?: string | null;
     contract_end_date?: string | null;
+    workplace_name?: string | null;
   } | null;
 };
 
@@ -41,6 +42,7 @@ type Employee = {
   resident_number_masked?: string;
   bank_name: string;
   account_number: string;
+  workplace_name?: string | null;
   is_active: boolean;
   created_at?: string;
   hourly_wage?: number;
@@ -116,6 +118,10 @@ export default function AdminPage() {
     "attendance" | "employees" | "payroll" | "contracts" | "schedule"
   >("attendance");
 
+  const [selectedWorkplace, setSelectedWorkplace] = useState<
+    "전체" | "장사꾼" | "헤모즈"
+  >("전체");
+
   const [startDate, setStartDate] = useState(() => {
     const today = new Date();
     return today.toISOString().slice(0, 10);
@@ -149,6 +155,9 @@ export default function AdminPage() {
   const [editResidentNumber, setEditResidentNumber] = useState("");
   const [editBankName, setEditBankName] = useState("");
   const [editAccountNumber, setEditAccountNumber] = useState("");
+  const [editWorkplaceName, setEditWorkplaceName] = useState<"장사꾼" | "헤모즈">(
+    "장사꾼"
+  );
 
   const [editingAttendanceKey, setEditingAttendanceKey] = useState<
     string | null
@@ -325,10 +334,18 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
   }, [records, attendanceSearch]);
 
   const filteredEmployees = useMemo(() => {
-    return employees.filter((employee) =>
-      employee.name.toLowerCase().includes(employeeSearch.toLowerCase())
-    );
-  }, [employees, employeeSearch]);
+    return employees.filter((employee) => {
+      const matchesName = employee.name
+        .toLowerCase()
+        .includes(employeeSearch.toLowerCase());
+
+      const employeeWorkplace = employee.workplace_name || "장사꾼";
+      const matchesWorkplace =
+        selectedWorkplace === "전체" || employeeWorkplace === selectedWorkplace;
+
+      return matchesName && matchesWorkplace;
+    });
+  }, [employees, employeeSearch, selectedWorkplace]);
 
   const groupedAttendanceRows = useMemo(() => {
     const grouped = new Map<string, AdminRecord[]>();
@@ -505,6 +522,9 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
     setEditResidentNumber(employee.resident_number || "");
     setEditBankName(employee.bank_name || "");
     setEditAccountNumber(employee.account_number || "");
+    setEditWorkplaceName(
+      employee.workplace_name === "헤모즈" ? "헤모즈" : "장사꾼"
+    );
   };
 
   const cancelEdit = () => {
@@ -514,6 +534,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
     setEditResidentNumber("");
     setEditBankName("");
     setEditAccountNumber("");
+    setEditWorkplaceName("장사꾼");
   };
 
   const updateEmployee = async (employeeId: number) => {
@@ -529,6 +550,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
           resident_number: editResidentNumber,
           bank_name: editBankName,
           account_number: editAccountNumber,
+          workplaceName: editWorkplaceName,
         }),
       });
 
@@ -1538,6 +1560,23 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                 />
               </div>
 
+              <div style={fieldGroupStyle}>
+                <label style={labelStyle}>근무지 필터</label>
+                <select
+                  value={selectedWorkplace}
+                  onChange={(e) =>
+                    setSelectedWorkplace(
+                      e.target.value as "전체" | "장사꾼" | "헤모즈"
+                    )
+                  }
+                  style={inputStyle}
+                >
+                  <option value="전체">전체</option>
+                  <option value="장사꾼">장사꾼</option>
+                  <option value="헤모즈">헤모즈</option>
+                </select>
+              </div>
+
               <div style={fieldButtonGroupStyle}>
                 <button onClick={fetchEmployees} style={primaryButtonStyle}>
                   직원 새로고침
@@ -1561,6 +1600,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                       <th style={thStyle}>주민번호</th>
                       <th style={thStyle}>은행</th>
                       <th style={thStyle}>계좌번호</th>
+                      <th style={thStyle}>근무지</th>
                       <th style={thStyle}>시급</th>
                       <th style={thStyle}>상태</th>
                       <th style={thStyle}>기기 재연결</th>
@@ -1647,6 +1687,39 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                               />
                             ) : (
                               employee.account_number || "-"
+                            )}
+                          </td>
+
+                          <td style={tdStyle}>
+                            {isEditing ? (
+                              <select
+                                value={editWorkplaceName}
+                                onChange={(e) =>
+                                  setEditWorkplaceName(
+                                    e.target.value as "장사꾼" | "헤모즈"
+                                  )
+                                }
+                                style={smallInputStyle}
+                              >
+                                <option value="장사꾼">장사꾼</option>
+                                <option value="헤모즈">헤모즈</option>
+                              </select>
+                            ) : (
+                              <span
+                                style={{
+                                  ...badgeStyle,
+                                  backgroundColor:
+                                    employee.workplace_name === "헤모즈"
+                                      ? "#fce7f3"
+                                      : "#e0f2fe",
+                                  color:
+                                    employee.workplace_name === "헤모즈"
+                                      ? "#be185d"
+                                      : "#0369a1",
+                                }}
+                              >
+                                {employee.workplace_name || "장사꾼"}
+                              </span>
                             )}
                           </td>
 
