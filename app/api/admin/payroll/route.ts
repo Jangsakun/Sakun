@@ -7,12 +7,14 @@ type EmployeeNested =
       name: string;
       hourly_wage?: number | null;
       weekly_allowance_status?: string | null;
+      workplace_name?: string | null;
     }
   | {
       id: number;
       name: string;
       hourly_wage?: number | null;
       weekly_allowance_status?: string | null;
+      workplace_name?: string | null;
     }[]
   | null;
 
@@ -27,6 +29,7 @@ type AttendanceRecord = {
 type DailyWorkRow = {
   employeeId: number;
   employeeName: string;
+  workplaceName: string;
   date: string;
   hours: number;
   wage: number;
@@ -36,6 +39,7 @@ type DailyWorkRow = {
 type WeeklyPayrollRow = {
   employeeId: number;
   employeeName: string;
+  workplaceName: string;
   weekStart: string;
   weekEnd: string;
   totalHours: number;
@@ -269,7 +273,8 @@ export async function POST(request: Request) {
           id,
           name,
           hourly_wage,
-          weekly_allowance_status
+          weekly_allowance_status,
+          workplace_name
         )
       `)
       .gte("checked_at", `${startDate}T00:00:00+09:00`)
@@ -318,6 +323,7 @@ export async function POST(request: Request) {
       const employee = getEmployeeObject(items[0]?.employees);
       const employeeId = items[0]?.employee_id;
       const employeeName = employee?.name || "이름없음";
+      const workplaceName = employee?.workplace_name || "장사꾼";
 
       const wage =
         typeof employee?.hourly_wage === "number" && employee.hourly_wage > 0
@@ -336,6 +342,7 @@ export async function POST(request: Request) {
       dailyWorks.push({
         employeeId,
         employeeName,
+        workplaceName,
         date,
         hours,
         wage,
@@ -380,6 +387,7 @@ export async function POST(request: Request) {
         weekly[key] = {
           employeeId: row.employeeId,
           employeeName: row.employeeName,
+          workplaceName: row.workplaceName,
           weekStart,
           weekEnd,
           totalHours: 0,
@@ -409,6 +417,7 @@ export async function POST(request: Request) {
       return {
         employeeId: String(w.employeeId),
         employeeName: w.employeeName,
+        workplaceName: w.workplaceName,
         weekStart: w.weekStart,
         weekEnd: w.weekEnd,
         totalHours,

@@ -83,6 +83,7 @@ type AttendanceUpdateResponse = {
 type PayrollRow = {
   employeeId: string;
   employeeName: string;
+  workplaceName?: string | null;
   weekStart: string;
   weekEnd: string;
   totalHours: number;
@@ -510,8 +511,17 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
     return sum + (row.netPay || 0);
   }, 0);
 
+  const filteredPayrollRows = useMemo(() => {
+    return payrollRows.filter((row) => {
+      const employee = employeeMap.get(Number(row.employeeId));
+      const workplaceName = row.workplaceName || employee?.workplace_name || "장사꾼";
+
+      return selectedWorkplace === "전체" || workplaceName === selectedWorkplace;
+    });
+  }, [payrollRows, employeeMap, selectedWorkplace]);
+
   const payrollSummary = useMemo(() => {
-    return payrollRows.reduce(
+    return filteredPayrollRows.reduce(
       (acc, row) => {
         acc.totalHours += row.totalHours || 0;
         acc.basePay += row.basePay || 0;
@@ -528,7 +538,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
         netPay: 0,
       }
     );
-  }, [payrollRows]);
+  }, [filteredPayrollRows]);
 
   const startEdit = (employee: Employee) => {
     setEditingEmployeeId(employee.id);
@@ -842,13 +852,14 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
   };
 
   const downloadPayrollCsv = () => {
-    if (payrollRows.length === 0) {
+    if (filteredPayrollRows.length === 0) {
       alert("다운로드할 급여 데이터가 없습니다.");
       return;
     }
 
     const headers = [
       "이름",
+      "근무지",
       "주민번호",
       "은행",
       "계좌번호",
@@ -862,11 +873,13 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
       "세후 급여",
     ];
 
-    const rows = payrollRows.map((row) => {
+    const rows = filteredPayrollRows.map((row) => {
       const employee = employeeMap.get(Number(row.employeeId));
+      const workplaceName = row.workplaceName || employee?.workplace_name || "장사꾼";
 
       return [
         row.employeeName,
+        workplaceName,
         employee?.resident_number || "-",
         employee?.bank_name || "-",
         employee?.account_number || "-",
@@ -907,7 +920,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
 
 
   const downloadPayrollSummaryCsv = () => {
-    if (payrollRows.length === 0) {
+    if (filteredPayrollRows.length === 0) {
       alert("다운로드할 급여 데이터가 없습니다.");
       return;
     }
@@ -916,6 +929,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
       string,
       {
         employeeName: string;
+        workplaceName: string;
         residentNumber: string;
         bankName: string;
         accountNumber: string;
@@ -929,13 +943,15 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
       }
     >();
 
-    payrollRows.forEach((row) => {
+    filteredPayrollRows.forEach((row) => {
       const employee = employeeMap.get(Number(row.employeeId));
+      const workplaceName = row.workplaceName || employee?.workplace_name || "장사꾼";
       const key = row.employeeId;
 
       if (!grouped.has(key)) {
         grouped.set(key, {
           employeeName: row.employeeName,
+          workplaceName,
           residentNumber: employee?.resident_number || "-",
           bankName: employee?.bank_name || "-",
           accountNumber: employee?.account_number || "-",
@@ -962,6 +978,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
 
     const headers = [
       "이름",
+      "근무지",
       "주민번호",
       "은행",
       "계좌번호",
@@ -976,6 +993,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
 
     const rows = Array.from(grouped.values()).map((row) => [
       row.employeeName,
+      row.workplaceName,
       row.residentNumber,
       row.bankName,
       row.accountNumber,
@@ -1992,6 +2010,23 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                 />
               </div>
 
+              <div style={fieldGroupStyle}>
+                <label style={labelStyle}>근무지 필터</label>
+                <select
+                  value={selectedWorkplace}
+                  onChange={(e) =>
+                    setSelectedWorkplace(
+                      e.target.value as "전체" | "장사꾼" | "헤모즈"
+                    )
+                  }
+                  style={inputStyle}
+                >
+                  <option value="전체">전체</option>
+                  <option value="장사꾼">장사꾼</option>
+                  <option value="헤모즈">헤모즈</option>
+                </select>
+              </div>
+
               <div style={fieldButtonGroupStyle}>
                 <button onClick={fetchPayroll} style={primaryButtonStyle}>
                   조회하기
@@ -2007,7 +2042,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
               <div style={emptyBoxStyle}>급여 데이터를 불러오는 중입니다...</div>
             ) : payrollMessage ? (
               <div style={emptyBoxStyle}>{payrollMessage}</div>
-            ) : payrollRows.length === 0 ? (
+            ) : filteredPayrollRows.length === 0 ? (
               <div style={emptyBoxStyle}>급여 데이터가 없습니다.</div>
             ) : (
               <div style={tableScrollStyle}>
@@ -2015,6 +2050,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                   <thead>
                     <tr>
                       <th style={thStyle}>이름</th>
+                      <th style={thStyle}>근무지</th>
                       <th style={thStyle}>주민번호</th>
                       <th style={thStyle}>은행</th>
                       <th style={thStyle}>계좌번호</th>
@@ -2029,13 +2065,27 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                     </tr>
                   </thead>
                   <tbody>
-                    {payrollRows.map((row, index) => {
+                    {filteredPayrollRows.map((row, index) => {
                       const employee = employeeMap.get(Number(row.employeeId));
+                      const workplaceName = row.workplaceName || employee?.workplace_name || "장사꾼";
 
                       return (
                         <tr key={`${row.employeeId}-${row.weekStart}-${index}`}>
                           <td style={tdStyle}>
                             <span style={nameTextStyle}>{row.employeeName}</span>
+                          </td>
+                          <td style={tdStyle}>
+                            <span
+                              style={{
+                                ...badgeStyle,
+                                backgroundColor:
+                                  workplaceName === "헤모즈" ? "#fce7f3" : "#e0f2fe",
+                                color:
+                                  workplaceName === "헤모즈" ? "#be185d" : "#0369a1",
+                              }}
+                            >
+                              {workplaceName}
+                            </span>
                           </td>
                           <td style={tdStyle}>
                             {getMaskedResidentNumber(employee)}
