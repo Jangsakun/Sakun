@@ -520,6 +520,14 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
     });
   }, [payrollRows, employeeMap, selectedWorkplace]);
 
+  const filteredContractEmployees = useMemo(() => {
+    return employees.filter((employee) => {
+      const employeeWorkplace = employee.workplace_name || "장사꾼";
+
+      return selectedWorkplace === "전체" || employeeWorkplace === selectedWorkplace;
+    });
+  }, [employees, selectedWorkplace]);
+
   const payrollSummary = useMemo(() => {
     return filteredPayrollRows.reduce(
       (acc, row) => {
@@ -2151,7 +2159,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
       <strong>⚠️ 계약 종료일이 임박한 직원</strong>
 
       <div style={{ marginTop: "12px" }}>
-        {employees.filter((emp) => {
+        {filteredContractEmployees.filter((emp) => {
           if (!emp.contract_end_date) return false;
 
           const today = new Date();
@@ -2163,11 +2171,11 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
           return diffDays >= 0 && diffDays <= 7;
         }).length === 0 ? (
           <div style={{ color: "#6b7280", marginTop: "8px" }}>
-            현재 7일 이내 계약 종료 예정 직원이 없습니다.
+            현재 선택한 근무지 기준 7일 이내 계약 종료 예정 직원이 없습니다.
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {employees
+            {filteredContractEmployees
               .filter((emp) => {
                 if (!emp.contract_end_date) return false;
 
@@ -2188,6 +2196,8 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                     (1000 * 60 * 60 * 24)
                 );
 
+                const workplaceName = emp.workplace_name || "장사꾼";
+
                 return (
                   <div
                     key={emp.id}
@@ -2203,8 +2213,18 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                     }}
                   >
                     <span>
-                      <strong>{emp.name}</strong> /{" "}
-                      {formatPhone(emp.phone)}
+                      <strong>{emp.name}</strong> / {formatPhone(emp.phone)} /{" "}
+                      <span
+                        style={{
+                          ...badgeStyle,
+                          backgroundColor:
+                            workplaceName === "헤모즈" ? "#fce7f3" : "#e0f2fe",
+                          color:
+                            workplaceName === "헤모즈" ? "#be185d" : "#0369a1",
+                        }}
+                      >
+                        {workplaceName}
+                      </span>
                     </span>
                     <span>
                       종료일: {formatDate(emp.contract_end_date || "")} /{" "}
@@ -2228,96 +2248,139 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
         <div>
           <h2 style={sectionTitleStyle}>근로계약서 관리</h2>
           <p style={sectionDescriptionStyle}>
-            직원별 계약 시작일과 종료일을 관리할 수 있습니다.
+            직원별 계약 시작일과 종료일을 근무지 기준으로 관리할 수 있습니다.
           </p>
         </div>
       </div>
 
-      <div style={tableScrollStyle}>
-        <table style={employeeTableStyle}>
-          <thead>
-            <tr>
-              <th style={thStyle}>이름</th>
-              <th style={thStyle}>휴대폰번호</th>
-              <th style={thStyle}>주민번호</th>
-              <th style={thStyle}>계약 시작일</th>
-              <th style={thStyle}>계약 종료일</th>
-              <th style={thStyle}>관리</th>
-            </tr>
-          </thead>
+      <div style={filterRowStyle}>
+        <div style={fieldGroupStyle}>
+          <label style={labelStyle}>근무지 필터</label>
+          <select
+            value={selectedWorkplace}
+            onChange={(e) =>
+              setSelectedWorkplace(
+                e.target.value as "전체" | "장사꾼" | "헤모즈"
+              )
+            }
+            style={inputStyle}
+          >
+            <option value="전체">전체</option>
+            <option value="장사꾼">장사꾼</option>
+            <option value="헤모즈">헤모즈</option>
+          </select>
+        </div>
 
-          <tbody>
-            {employees.map((emp) => (
-              <tr key={emp.id}>
-                <td style={tdStyle}>{emp.name}</td>
-                <td style={tdStyle}>{formatPhone(emp.phone)}</td>
-                <td style={tdStyle}>
-                  {getMaskedResidentNumber(emp)}
-                </td>
-
-                <td style={tdStyle}>
-                  <input
-                    type="date"
-                    value={emp.contract_start_date || ""}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setEmployees((prev) =>
-                        prev.map((p) =>
-                          p.id === emp.id
-                            ? { ...p, contract_start_date: value }
-                            : p
-                        )
-                      );
-                    }}
-                    style={smallInputStyle}
-                  />
-                </td>
-
-                <td style={tdStyle}>
-                  <input
-                    type="date"
-                    value={emp.contract_end_date || ""}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setEmployees((prev) =>
-                        prev.map((p) =>
-                          p.id === emp.id
-                            ? { ...p, contract_end_date: value }
-                            : p
-                        )
-                      );
-                    }}
-                    style={smallInputStyle}
-                  />
-                </td>
-
-                <td style={tdStyle}>
-                  <button
-                    onClick={async () => {
-                      await fetch(`/api/admin/employees/${emp.id}`, {
-                        method: "PATCH",
-                        headers: {
-                          "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify({
-                          contract_start_date:
-                            emp.contract_start_date,
-                          contract_end_date:
-                            emp.contract_end_date,
-                        }),
-                      });
-                      alert("저장 완료");
-                    }}
-                    style={primarySmallButtonStyle}
-                  >
-                    저장
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div style={fieldButtonGroupStyle}>
+          <button onClick={fetchEmployees} style={primaryButtonStyle}>
+            직원 새로고침
+          </button>
+        </div>
       </div>
+
+      {filteredContractEmployees.length === 0 ? (
+        <div style={emptyBoxStyle}>선택한 근무지에 해당하는 직원이 없습니다.</div>
+      ) : (
+        <div style={tableScrollStyle}>
+          <table style={employeeTableStyle}>
+            <thead>
+              <tr>
+                <th style={thStyle}>이름</th>
+                <th style={thStyle}>근무지</th>
+                <th style={thStyle}>휴대폰번호</th>
+                <th style={thStyle}>주민번호</th>
+                <th style={thStyle}>계약 시작일</th>
+                <th style={thStyle}>계약 종료일</th>
+                <th style={thStyle}>관리</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {filteredContractEmployees.map((emp) => {
+                const workplaceName = emp.workplace_name || "장사꾼";
+
+                return (
+                  <tr key={emp.id}>
+                    <td style={tdStyle}>{emp.name}</td>
+                    <td style={tdStyle}>
+                      <span
+                        style={{
+                          ...badgeStyle,
+                          backgroundColor:
+                            workplaceName === "헤모즈" ? "#fce7f3" : "#e0f2fe",
+                          color:
+                            workplaceName === "헤모즈" ? "#be185d" : "#0369a1",
+                        }}
+                      >
+                        {workplaceName}
+                      </span>
+                    </td>
+                    <td style={tdStyle}>{formatPhone(emp.phone)}</td>
+                    <td style={tdStyle}>{getMaskedResidentNumber(emp)}</td>
+
+                    <td style={tdStyle}>
+                      <input
+                        type="date"
+                        value={emp.contract_start_date || ""}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setEmployees((prev) =>
+                            prev.map((p) =>
+                              p.id === emp.id
+                                ? { ...p, contract_start_date: value }
+                                : p
+                            )
+                          );
+                        }}
+                        style={smallInputStyle}
+                      />
+                    </td>
+
+                    <td style={tdStyle}>
+                      <input
+                        type="date"
+                        value={emp.contract_end_date || ""}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setEmployees((prev) =>
+                            prev.map((p) =>
+                              p.id === emp.id
+                                ? { ...p, contract_end_date: value }
+                                : p
+                            )
+                          );
+                        }}
+                        style={smallInputStyle}
+                      />
+                    </td>
+
+                    <td style={tdStyle}>
+                      <button
+                        onClick={async () => {
+                          await fetch(`/api/admin/employees/${emp.id}`, {
+                            method: "PATCH",
+                            headers: {
+                              "Content-Type": "application/json",
+                            },
+                            body: JSON.stringify({
+                              contract_start_date: emp.contract_start_date,
+                              contract_end_date: emp.contract_end_date,
+                            }),
+                          });
+                          alert("저장 완료");
+                        }}
+                        style={primarySmallButtonStyle}
+                      >
+                        저장
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   </>
 )}
