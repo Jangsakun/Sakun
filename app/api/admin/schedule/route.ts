@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 type ShiftType = "day" | "night";
+type WorkplaceName = "장사꾼" | "헤모즈";
 
 function createSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -12,6 +13,16 @@ function createSupabaseAdmin() {
   }
 
   return createClient(supabaseUrl, serviceRoleKey);
+}
+
+function normalizeWorkplace(value: unknown): WorkplaceName {
+  const normalized = String(value || "").trim();
+
+  if (normalized === "헤모즈") {
+    return "헤모즈";
+  }
+
+  return "장사꾼";
 }
 
 function normalizeShift(value: unknown): ShiftType {
@@ -52,6 +63,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const date = (searchParams.get("date") || "").trim();
+    const workplace = normalizeWorkplace(searchParams.get("workplace"));
 
     if (!date) {
       return NextResponse.json(
@@ -71,8 +83,9 @@ export async function GET(request: NextRequest) {
 
     const { data: employees, error: empError } = await supabase
       .from("employees")
-      .select("id, name, gender")
-      .eq("is_active", true);
+      .select("id, name, gender, workplace_name")
+      .eq("is_active", true)
+      .eq("workplace_name", workplace);
 
     if (empError) {
       return NextResponse.json(
@@ -116,6 +129,8 @@ export async function GET(request: NextRequest) {
           id: emp.id,
           name: emp.name,
           gender: emp.gender,
+          workplaceName: emp.workplace_name || workplace,
+          workplace_name: emp.workplace_name || workplace,
           schedule: [],
           selectedDateSchedule: null,
           shift: null,
@@ -139,6 +154,8 @@ export async function GET(request: NextRequest) {
         id: emp.id,
         name: emp.name,
         gender: emp.gender,
+        workplaceName: emp.workplace_name || workplace,
+        workplace_name: emp.workplace_name || workplace,
         schedule: weeklySchedule,
         selectedDateSchedule,
         shift: selectedShift,
@@ -156,6 +173,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
+        workplace,
         available,
         unavailable,
         notSubmitted,
@@ -165,7 +183,8 @@ export async function GET(request: NextRequest) {
           unavailable: unavailable.length,
           notSubmitted: notSubmitted.length,
           dayAvailable: available.filter((emp) => emp.shift === "day").length,
-          nightAvailable: available.filter((emp) => emp.shift === "night").length,
+          nightAvailable: available.filter((emp) => emp.shift === "night")
+            .length,
         },
       },
     });
@@ -221,7 +240,7 @@ export async function PATCH(request: NextRequest) {
 
     let employeeQuery = supabase
       .from("employees")
-      .select("id, name, gender, is_active");
+      .select("id, name, gender, is_active, workplace_name");
 
     if (employeeId) {
       employeeQuery = employeeQuery.eq("id", employeeId);

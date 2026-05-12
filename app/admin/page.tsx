@@ -1044,7 +1044,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
         <header style={headerStyle}>
           <div>
             <p style={eyebrowStyle}>Admin Dashboard</p>
-            <h1 style={titleStyle}>장사꾼 관리자 대시보드</h1>
+            <h1 style={titleStyle}>장사꾼/헤모즈 관리자 대시보드</h1>
             <p style={descriptionStyle}>
               직원 상태와 출퇴근 기록, 급여를 한 화면에서 관리할 수 있습니다.
             </p>

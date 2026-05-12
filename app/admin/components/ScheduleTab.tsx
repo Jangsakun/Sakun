@@ -52,6 +52,8 @@ type DayItem = {
 
 type WeekMode = "current" | "next";
 
+type WorkplaceName = "장사꾼" | "헤모즈";
+
 function getMondayOfCurrentWeekInKst() {
   const now = new Date();
   const seoulNow = new Date(
@@ -159,6 +161,7 @@ function filterByGenderAndShift(
 
 export default function ScheduleTab() {
   const [weekMode, setWeekMode] = useState<WeekMode>("current");
+  const [selectedWorkplace, setSelectedWorkplace] = useState<WorkplaceName>("장사꾼");
 
   const days = useMemo(() => getWeekDaysInKst(weekMode), [weekMode]);
 
@@ -248,7 +251,12 @@ export default function ScheduleTab() {
     try {
       setLoading(true);
 
-      const res = await fetch(`/api/admin/schedule?date=${date}`, {
+      const params = new URLSearchParams({
+        date,
+        workplaceName: selectedWorkplace,
+      });
+
+      const res = await fetch(`/api/admin/schedule?${params.toString()}`, {
         method: "GET",
         cache: "no-store",
       });
@@ -266,6 +274,15 @@ export default function ScheduleTab() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleChangeWorkplace = (nextWorkplace: WorkplaceName) => {
+    setSelectedWorkplace(nextWorkplace);
+    setShowUnavailable(false);
+    setShowNotSubmitted(false);
+    setSelectedEmployee(null);
+    setEditSchedule([]);
+    setEmployeeSearch("");
   };
 
   const handleChangeWeekMode = (nextWeekMode: WeekMode) => {
@@ -399,6 +416,7 @@ export default function ScheduleTab() {
           employeeId: selectedEmployee.id,
           name: selectedEmployee.name,
           gender: selectedEmployee.gender || null,
+          workplaceName: selectedWorkplace,
           weekStartDate,
           weekEndDate,
           schedule: editSchedule.map((item) => {
@@ -446,7 +464,7 @@ export default function ScheduleTab() {
     if (selectedDate) {
       fetchSchedule(selectedDate);
     }
-  }, [selectedDate]);
+  }, [selectedDate, selectedWorkplace]);
 
   useEffect(() => {
     if (!selectedEmployee) return;
@@ -613,6 +631,97 @@ export default function ScheduleTab() {
 
   return (
     <div style={{ marginTop: "20px" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: "12px",
+          flexWrap: "wrap",
+          marginBottom: "16px",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            flexWrap: "wrap",
+          }}
+        >
+          <span
+            style={{
+              fontSize: "15px",
+              fontWeight: 900,
+              color: "#111827",
+            }}
+          >
+            근무지
+          </span>
+
+          <button
+            type="button"
+            onClick={() => handleChangeWorkplace("장사꾼")}
+            style={{
+              padding: "11px 18px",
+              borderRadius: "999px",
+              border:
+                selectedWorkplace === "장사꾼"
+                  ? "none"
+                  : "1px solid #d1d5db",
+              background:
+                selectedWorkplace === "장사꾼" ? "#111827" : "#ffffff",
+              color: selectedWorkplace === "장사꾼" ? "#ffffff" : "#111827",
+              fontWeight: 900,
+              cursor: "pointer",
+              boxShadow:
+                selectedWorkplace === "장사꾼"
+                  ? "0 8px 18px rgba(17, 24, 39, 0.18)"
+                  : "none",
+            }}
+          >
+            장사꾼
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleChangeWorkplace("헤모즈")}
+            style={{
+              padding: "11px 18px",
+              borderRadius: "999px",
+              border:
+                selectedWorkplace === "헤모즈"
+                  ? "none"
+                  : "1px solid #d1d5db",
+              background:
+                selectedWorkplace === "헤모즈" ? "#111827" : "#ffffff",
+              color: selectedWorkplace === "헤모즈" ? "#ffffff" : "#111827",
+              fontWeight: 900,
+              cursor: "pointer",
+              boxShadow:
+                selectedWorkplace === "헤모즈"
+                  ? "0 8px 18px rgba(17, 24, 39, 0.18)"
+                  : "none",
+            }}
+          >
+            헤모즈
+          </button>
+        </div>
+
+        <div
+          style={{
+            padding: "10px 14px",
+            borderRadius: "999px",
+            background: selectedWorkplace === "헤모즈" ? "#fce7f3" : "#e0f2fe",
+            color: selectedWorkplace === "헤모즈" ? "#be185d" : "#0369a1",
+            fontSize: "13px",
+            fontWeight: 900,
+          }}
+        >
+          현재 조회: {selectedWorkplace}
+        </div>
+      </div>
+
       <div style={{ marginBottom: "18px" }}>
         <div
           style={{
@@ -1199,6 +1308,8 @@ export default function ScheduleTab() {
                 >
                   {selectedEmployee.name}
                   {selectedEmployee.gender ? ` (${selectedEmployee.gender})` : ""}
+                  {" · "}
+                  {selectedWorkplace}
                   {" · "}
                   {getWeekTitle(weekMode)} {weekStartDate} ~ {weekEndDate}
                 </div>
