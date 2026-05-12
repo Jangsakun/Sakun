@@ -22,6 +22,7 @@ export default function RegisterDevicePage() {
   const [residentNumber, setResidentNumber] = useState("");
   const [bankName, setBankName] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
+  const [workplaceName, setWorkplaceName] = useState("장사꾼");
   const [reconnectCode, setReconnectCode] = useState("");
   const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
 
@@ -33,7 +34,14 @@ export default function RegisterDevicePage() {
     "w-full h-12 border border-gray-200 rounded px-3 bg-white text-black placeholder-gray-400";
 
   const handleSubmit = async () => {
-    if (!name || !phone || !residentNumber || !bankName || !accountNumber) {
+    if (
+      !name ||
+      !phone ||
+      !residentNumber ||
+      !bankName ||
+      !accountNumber ||
+      !workplaceName
+    ) {
       setMessage("모든 항목을 입력해주세요.");
       return;
     }
@@ -65,6 +73,7 @@ export default function RegisterDevicePage() {
           residentNumber,
           bankName,
           accountNumber,
+          workplaceName,
           reconnectCode,
           deviceId,
         }),
@@ -160,6 +169,25 @@ export default function RegisterDevicePage() {
                   className={inputClassName}
                 />
 
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-800">
+                    근무지 선택
+                  </label>
+
+                  <select
+                    value={workplaceName}
+                    onChange={(e) => setWorkplaceName(e.target.value)}
+                    className={inputClassName}
+                  >
+                    <option value="장사꾼">장사꾼 (팔복동)</option>
+                    <option value="헤모즈">헤모즈 (효자동)</option>
+                  </select>
+
+                  <p className="mt-2 text-xs text-gray-500">
+                    실제 저장값은 장사꾼 / 헤모즈로 저장됩니다.
+                  </p>
+                </div>
+
                 <input
                   placeholder="재연결 코드 (휴대폰 변경 시만 입력)"
                   value={reconnectCode}
@@ -188,7 +216,7 @@ export default function RegisterDevicePage() {
                       <ul className="mt-2 space-y-1 text-xs text-gray-600">
                         <li>
                           - 수집항목: 이름, 휴대전화번호, 주민등록번호,
-                          은행명, 계좌번호
+                          은행명, 계좌번호, 근무지
                         </li>
                         <li>
                           - 이용목적: 근태관리, 급여 지급 및 관련 법적 의무

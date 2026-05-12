@@ -48,6 +48,7 @@ function getBirthDateFromResidentNumber(residentNumber: string) {
   const birthDate = `${century}${yy}-${mm}-${dd}`;
 
   const date = new Date(birthDate);
+
   if (Number.isNaN(date.getTime())) {
     return null;
   }
@@ -90,12 +91,14 @@ function getGenderFromResidentNumber(residentNumber: string) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+
     const {
       name,
       phone,
       residentNumber,
       bankName,
       accountNumber,
+      workplaceName,
       reconnectCode,
       deviceId,
     } = body;
@@ -105,9 +108,15 @@ export async function POST(request: Request) {
     const trimmedResidentNumber = String(residentNumber || "").trim();
     const trimmedBankName = String(bankName || "").trim();
     const trimmedAccountNumber = String(accountNumber || "").trim();
+
+    const trimmedWorkplaceName = String(
+      workplaceName || "장사꾼"
+    ).trim();
+
     const trimmedReconnectCode = String(reconnectCode || "")
       .trim()
       .toUpperCase();
+
     const trimmedDeviceId = String(deviceId || "").trim();
 
     const phoneDigits = trimmedPhone.replace(/[^0-9]/g, "");
@@ -259,7 +268,8 @@ export async function POST(request: Request) {
               id: existingEmployee.id,
               name: existingEmployee.name,
               phone: existingEmployee.phone,
-              residentNumberMasked: existingEmployee.resident_number_masked,
+              residentNumberMasked:
+                existingEmployee.resident_number_masked,
             },
           },
           { status: 409 }
@@ -270,7 +280,8 @@ export async function POST(request: Request) {
         return NextResponse.json(
           {
             success: false,
-            message: "발급된 재연결 코드가 없습니다. 관리자에게 요청해주세요.",
+            message:
+              "발급된 재연결 코드가 없습니다. 관리자에게 요청해주세요.",
           },
           { status: 400 }
         );
@@ -290,7 +301,8 @@ export async function POST(request: Request) {
         return NextResponse.json(
           {
             success: false,
-            message: "재연결 코드 만료시간이 없습니다. 다시 발급해주세요.",
+            message:
+              "재연결 코드 만료시간이 없습니다. 다시 발급해주세요.",
           },
           { status: 400 }
         );
@@ -304,7 +316,8 @@ export async function POST(request: Request) {
         return NextResponse.json(
           {
             success: false,
-            message: "재연결 코드가 만료되었습니다. 관리자에게 다시 요청해주세요.",
+            message:
+              "재연결 코드가 만료되었습니다. 관리자에게 다시 요청해주세요.",
           },
           { status: 400 }
         );
@@ -322,6 +335,7 @@ export async function POST(request: Request) {
           gender,
           bank_name: trimmedBankName,
           account_number: accountDigits,
+          workplace_name: trimmedWorkplaceName,
           reconnect_code: null,
           reconnect_expires_at: null,
         })
@@ -399,11 +413,13 @@ export async function POST(request: Request) {
           name: updatedEmployee.name,
           phone: updatedEmployee.phone,
           phoneLast4: updatedEmployee.phone_last4,
-          residentNumberMasked: updatedEmployee.resident_number_masked,
+          residentNumberMasked:
+            updatedEmployee.resident_number_masked,
           birthDate: updatedEmployee.birth_date,
           gender: updatedEmployee.gender,
           bankName: updatedEmployee.bank_name,
           accountNumber: updatedEmployee.account_number,
+          workplaceName: updatedEmployee.workplace_name,
         },
         reconnected: true,
       });
@@ -433,6 +449,7 @@ export async function POST(request: Request) {
           gender,
           bank_name: trimmedBankName,
           account_number: accountDigits,
+          workplace_name: trimmedWorkplaceName,
           hourly_wage: 10320,
           weekly_allowance_status: "비대상",
           is_active: true,
@@ -495,6 +512,7 @@ export async function POST(request: Request) {
         gender: data.gender,
         bankName: data.bank_name,
         accountNumber: data.account_number,
+        workplaceName: data.workplace_name,
       },
       reconnected: false,
     });
