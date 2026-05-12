@@ -60,6 +60,7 @@ type GroupedAttendanceRow = {
   key: string;
   employeeId: number;
   employeeName: string;
+  workplaceName: string;
   date: string;
   checkIn: string | null;
   checkOut: string | null;
@@ -322,16 +323,23 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
 
   const filteredRecords = useMemo(() => {
     return records
-      .filter((record) =>
-        (record.employees?.name || "")
+      .filter((record) => {
+        const matchesName = (record.employees?.name || "")
           .toLowerCase()
-          .includes(attendanceSearch.toLowerCase())
-      )
+          .includes(attendanceSearch.toLowerCase());
+
+        const employeeWorkplace = record.employees?.workplace_name || "장사꾼";
+
+        const matchesWorkplace =
+          selectedWorkplace === "전체" || employeeWorkplace === selectedWorkplace;
+
+        return matchesName && matchesWorkplace;
+      })
       .sort(
         (a, b) =>
           new Date(b.checked_at).getTime() - new Date(a.checked_at).getTime()
       );
-  }, [records, attendanceSearch]);
+  }, [records, attendanceSearch, selectedWorkplace]);
 
   const filteredEmployees = useMemo(() => {
     return employees.filter((employee) => {
@@ -371,6 +379,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
 
       const employeeName = sorted[0].employees?.name || "알 수 없음";
       const employeeId = sorted[0].employee_id;
+      const workplaceName = sorted[0].employees?.workplace_name || "장사꾼";
       const date = toSeoulDateKey(sorted[0].checked_at);
 
       const checkInRecord =
@@ -448,6 +457,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
         key,
         employeeId,
         employeeName,
+        workplaceName,
         date,
         checkIn: checkInRecord?.checked_at || null,
         checkOut: checkOutRecord?.checked_at || null,
@@ -479,9 +489,14 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
     (row) => row.checkOut !== null
   ).length;
 
-  const activeEmployeeCount = employees.filter(
-    (employee) => employee.is_active
-  ).length;
+  const activeEmployeeCount = employees.filter((employee) => {
+    const employeeWorkplace = employee.workplace_name || "장사꾼";
+
+    const matchesWorkplace =
+      selectedWorkplace === "전체" || employeeWorkplace === selectedWorkplace;
+
+    return employee.is_active && matchesWorkplace;
+  }).length;
 
   const incompleteAttendanceCount = groupedAttendanceRows.filter(
     (row) => row.checkIn === null || row.checkOut === null
@@ -778,6 +793,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
 
     const headers = [
       "이름",
+      "근무지",
       "날짜",
       "출근",
       "퇴근",
@@ -790,6 +806,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
 
     const rows = groupedAttendanceRows.map((row) => [
       row.employeeName,
+      row.workplaceName,
       formatDate(row.date),
       formatCheckInTime(row.checkIn),
       formatCheckOutTime(row.checkOut),
@@ -1385,6 +1402,23 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                 />
               </div>
 
+              <div style={fieldGroupStyle}>
+                <label style={labelStyle}>근무지 필터</label>
+                <select
+                  value={selectedWorkplace}
+                  onChange={(e) =>
+                    setSelectedWorkplace(
+                      e.target.value as "전체" | "장사꾼" | "헤모즈"
+                    )
+                  }
+                  style={inputStyle}
+                >
+                  <option value="전체">전체</option>
+                  <option value="장사꾼">장사꾼</option>
+                  <option value="헤모즈">헤모즈</option>
+                </select>
+              </div>
+
               <div style={fieldButtonGroupStyle}>
                 <button onClick={fetchRecords} style={primaryButtonStyle}>
                   조회하기
@@ -1404,6 +1438,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                   <thead>
                     <tr>
                       <th style={thStyle}>이름</th>
+                      <th style={thStyle}>근무지</th>
                       <th style={thStyle}>날짜</th>
                       <th style={thStyle}>출근</th>
                       <th style={thStyle}>퇴근</th>
@@ -1424,6 +1459,20 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                         <tr key={row.key}>
                           <td style={tdStyle}>
                             <span style={nameTextStyle}>{row.employeeName}</span>
+                          </td>
+
+                          <td style={tdStyle}>
+                            <span
+                              style={{
+                                ...badgeStyle,
+                                backgroundColor:
+                                  row.workplaceName === "헤모즈" ? "#fce7f3" : "#e0f2fe",
+                                color:
+                                  row.workplaceName === "헤모즈" ? "#be185d" : "#0369a1",
+                              }}
+                            >
+                              {row.workplaceName}
+                            </span>
                           </td>
 
                           <td style={tdStyle}>{formatDate(row.date)}</td>

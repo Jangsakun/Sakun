@@ -49,7 +49,8 @@ export async function POST(request: Request) {
           id,
           name,
           birth_date,
-          phone_last4
+          phone_last4,
+          workplace_name
         )
       `)
       .gte("checked_at", startUtc)
@@ -107,7 +108,7 @@ export async function PUT(request: Request) {
 
     const { data: employees, error: employeeError } = await supabase
       .from("employees")
-      .select("id, name, is_active")
+      .select("id, name, is_active, workplace_name")
       .eq("name", trimmedEmployeeName)
       .eq("is_active", true);
 
