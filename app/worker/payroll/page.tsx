@@ -685,13 +685,17 @@ export default function WorkerPayrollPage() {
     </div>
 
     <img
-      src="/stamp.png"
-      alt="직인"
-      style={{
-        width: "120px",
-        opacity: 0.9,
-      }}
-    />
+  src={
+    result.employee.companyName === "헤모즈"
+      ? "/stamp1.png"
+      : "/stamp.png"
+  }
+  alt="직인"
+  style={{
+    width: "120px",
+    opacity: 0.9,
+  }}
+/>
   </div>
 </div>
               </div>
