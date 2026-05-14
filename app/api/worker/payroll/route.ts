@@ -278,7 +278,12 @@ export async function POST(request: NextRequest) {
 
     const hourlyWage = Number(employee.hourly_wage || 10320);
 
-    const workplace = String(employee.workplace || "장사꾼").trim();
+  const workplace = String(
+  employee.workplace_name ||
+    employee.workplace ||
+    employee.workplace_label ||
+    "장사꾼"
+).trim();
 
     const companyName =
       workplace === "헤모즈" ? "헤모즈" : "장사꾼";
