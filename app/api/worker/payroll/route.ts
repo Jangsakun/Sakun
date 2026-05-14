@@ -277,6 +277,17 @@ export async function POST(request: NextRequest) {
     }
 
     const hourlyWage = Number(employee.hourly_wage || 10320);
+
+    const workplace = String(employee.workplace || "장사꾼").trim();
+
+    const companyName =
+      workplace === "헤모즈" ? "헤모즈" : "장사꾼";
+
+    const payslipTitle =
+      workplace === "헤모즈"
+        ? "헤모즈 급여명세서"
+        : "장사꾼 급여명세서";
+
     const grouped: Record<string, any[]> = {};
 
     (records || []).forEach((record) => {
@@ -395,6 +406,9 @@ export async function POST(request: NextRequest) {
         name: employee.name,
         residentNumber: employee.resident_number,
         hourlyWage,
+        workplace,
+        companyName,
+        payslipTitle,
       },
       range: {
         startDate,

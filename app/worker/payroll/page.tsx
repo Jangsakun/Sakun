@@ -27,6 +27,9 @@ type PayrollResponse = {
     name: string;
     residentNumber: string;
     hourlyWage: number;
+    workplace?: string;
+    companyName?: string;
+    payslipTitle?: string;
   };
   range?: {
     startDate: string;
@@ -215,7 +218,7 @@ export default function WorkerPayrollPage() {
     printWindow.document.write(`
       <html>
         <head>
-          <title>주급 명세서</title>
+          <title>${result.employee.payslipTitle || "주급 명세서"}</title>
           <style>
             body {
               font-family: Arial, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
@@ -611,7 +614,7 @@ export default function WorkerPayrollPage() {
             <div className="mt-6 hidden">
               <div ref={statementRef}>
                 <div className="header">
-                  <h1>주급 명세서</h1>
+                  <h1>{result.employee.payslipTitle || "주급 명세서"}</h1>
                   <p>이름: {result.employee.name}</p>
                   <p>
                     조회 기간: {result.range.startDate} ~ {result.range.endDate}
@@ -676,7 +679,9 @@ export default function WorkerPayrollPage() {
     }}
   >
     <div style={{ fontSize: "14px", marginBottom: "8px" }}>
-      (주)장사꾼을위한장사꾼
+      {result.employee.companyName === "헤모즈"
+        ? "헤모즈"
+        : "(주)장사꾼을위한장사꾼"}
     </div>
 
     <img
