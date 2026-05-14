@@ -68,11 +68,20 @@ function toKstDateFromParts(
   return new Date(utcMillis);
 }
 
-function normalizeCheckInTime(checkedAt: string): Date {
+function normalizeCheckInTime(checkedAt: string, workplaceName?: string | null): Date {
   const originalDate = new Date(checkedAt);
   const { year, month, day, hour, minute } = getKstDateParts(originalDate);
 
   const totalMinutes = hour * 60 + minute;
+  const workplace = String(workplaceName || "장사꾼").trim();
+
+  if (
+    workplace === "헤모즈" &&
+    totalMinutes >= 6 * 60 + 45 &&
+    totalMinutes <= 7 * 60 + 10
+  ) {
+    return toKstDateFromParts(year, month, day, 7, 0, 0);
+  }
 
   if (totalMinutes >= 8 * 60 + 45 && totalMinutes <= 9 * 60 + 10) {
     return toKstDateFromParts(year, month, day, 9, 0, 0);
@@ -226,7 +235,17 @@ export async function POST(request: Request) {
       );
     }
 
-    const normalizedCheckedAt = normalizeCheckInTime(checkedAt).toISOString();
+    const employeeWorkplace = String(
+      employee.workplace_name ||
+        employee.workplace ||
+        employee.workplace_label ||
+        "장사꾼"
+    ).trim();
+
+    const normalizedCheckedAt = normalizeCheckInTime(
+      checkedAt,
+      employeeWorkplace
+    ).toISOString();
 
     const { startUtc, endUtc } = getKstDayRangeFromIso(checkedAt);
 

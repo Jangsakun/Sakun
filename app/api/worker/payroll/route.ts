@@ -75,17 +75,23 @@ function formatMinutesToText(totalMinutes: number) {
   return `${minutes}분`;
 }
 
-function normalizeCheckIn(value: string) {
+function normalizeCheckIn(value: string, workplace = "장사꾼") {
   const source = new Date(value);
   const dateKey = formatDateKeyKst(source);
   const { totalMinutes } = getKstHourMinute(source);
 
+  const start0700 = 6 * 60 + 45;
+  const end0710 = 7 * 60 + 10;
   const start0900 = 8 * 60 + 45;
   const end0910 = 9 * 60 + 10;
   const start0930 = 9 * 60 + 11;
   const end0930 = 9 * 60 + 30;
   const start1800 = 17 * 60 + 50;
   const end1800 = 18 * 60 + 10;
+
+  if (workplace === "헤모즈" && totalMinutes >= start0700 && totalMinutes <= end0710) {
+    return createKstDateTime(dateKey, 7, 0);
+  }
 
   if (totalMinutes >= start0900 && totalMinutes <= end0910) {
     return createKstDateTime(dateKey, 9, 0);
@@ -102,10 +108,17 @@ function normalizeCheckIn(value: string) {
   return source;
 }
 
-function normalizeCheckOut(value: string) {
+function normalizeCheckOut(value: string, workplace = "장사꾼") {
   const source = new Date(value);
   const dateKey = formatDateKeyKst(source);
-  const { hour, minute } = getKstHourMinute(source);
+  const { hour, minute, totalMinutes } = getKstHourMinute(source);
+
+  const start1230 = 12 * 60 + 20;
+  const end1230 = 12 * 60 + 40;
+
+  if (workplace === "헤모즈" && totalMinutes >= start1230 && totalMinutes <= end1230) {
+    return createKstDateTime(dateKey, 12, 30);
+  }
 
   if (hour >= 17) {
     if (minute <= 10) {
@@ -278,15 +291,14 @@ export async function POST(request: NextRequest) {
 
     const hourlyWage = Number(employee.hourly_wage || 10320);
 
-  const workplace = String(
-  employee.workplace_name ||
-    employee.workplace ||
-    employee.workplace_label ||
-    "장사꾼"
-).trim();
+    const workplace = String(
+      employee.workplace_name ||
+        employee.workplace ||
+        employee.workplace_label ||
+        "장사꾼"
+    ).trim();
 
-    const companyName =
-      workplace === "헤모즈" ? "헤모즈" : "장사꾼";
+    const companyName = workplace === "헤모즈" ? "헤모즈" : "장사꾼";
 
     const payslipTitle =
       workplace === "헤모즈"
@@ -341,11 +353,11 @@ export async function POST(request: NextRequest) {
           };
         }
 
-        const normalizedCheckInDate = normalizeCheckIn(checkIn.checked_at);
+        const normalizedCheckInDate = normalizeCheckIn(checkIn.checked_at, workplace);
 
         const finalCheckOut = checkOut || null;
         const normalizedCheckOutDate = finalCheckOut
-          ? normalizeCheckOut(finalCheckOut.checked_at)
+          ? normalizeCheckOut(finalCheckOut.checked_at, workplace)
           : new Date();
 
         const checkInMinutes = getKstHourMinute(normalizedCheckInDate);

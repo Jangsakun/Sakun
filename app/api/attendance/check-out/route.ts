@@ -69,8 +69,28 @@ function getNextCheckoutWindowLabel(hour: number, minute: number) {
   return formatTimeLabel(nextHour, nextMinute);
 }
 
-function isCheckoutAllowedAtKst(date: Date) {
+function getEmployeeWorkplaceName(employee: any) {
+  return String(
+    employee?.workplace_name ||
+      employee?.workplace ||
+      employee?.workplace_label ||
+      "장사꾼"
+  ).trim();
+}
+
+function isHemozEarlyCheckoutWindow(date: Date) {
   const { hour, minute } = getKstDateParts(date);
+  const totalMinutes = hour * 60 + minute;
+
+  return totalMinutes >= 12 * 60 + 20 && totalMinutes <= 12 * 60 + 40;
+}
+
+function isCheckoutAllowedAtKst(date: Date, workplaceName: string) {
+  const { hour, minute } = getKstDateParts(date);
+
+  if (workplaceName === "헤모즈" && isHemozEarlyCheckoutWindow(date)) {
+    return { allowed: true, message: "" };
+  }
 
   if (hour < 17) {
     return {
@@ -95,9 +115,18 @@ function isCheckoutAllowedAtKst(date: Date) {
   };
 }
 
-function normalizeCheckOutTime(checkedAt: string): Date {
+function normalizeCheckOutTime(checkedAt: string, workplaceName: string): Date {
   const originalDate = new Date(checkedAt);
   const { year, month, day, hour, minute } = getKstDateParts(originalDate);
+  const totalMinutes = hour * 60 + minute;
+
+  if (
+    workplaceName === "헤모즈" &&
+    totalMinutes >= 12 * 60 + 20 &&
+    totalMinutes <= 12 * 60 + 40
+  ) {
+    return toKstDateFromParts(year, month, day, 12, 30);
+  }
 
   if (minute <= 10) {
     return toKstDateFromParts(year, month, day, hour, 0);
@@ -193,14 +222,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const checkoutRule = isCheckoutAllowedAtKst(checkedDate);
-    if (!checkoutRule.allowed) {
-      return NextResponse.json(
-        { success: false, message: checkoutRule.message },
-        { status: 400 }
-      );
-    }
-
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -270,6 +291,16 @@ export async function POST(request: Request) {
       );
     }
 
+    const workplaceName = getEmployeeWorkplaceName(employee);
+
+    const checkoutRule = isCheckoutAllowedAtKst(checkedDate, workplaceName);
+    if (!checkoutRule.allowed) {
+      return NextResponse.json(
+        { success: false, message: checkoutRule.message },
+        { status: 400 }
+      );
+    }
+
     const { startUtc, endUtc } = getKstDayRangeFromIso(checkedAt);
 
     const { data: existing } = await supabase
@@ -288,7 +319,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const normalizedCheckedAt = normalizeCheckOutTime(checkedAt).toISOString();
+    const normalizedCheckedAt = normalizeCheckOutTime(checkedAt, workplaceName).toISOString();
 
     const payload: any = {
       employee_id: employee.id,
