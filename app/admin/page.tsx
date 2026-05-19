@@ -2990,21 +2990,24 @@ const dateTimeInputStyle: CSSProperties = {
 };
 
 const wageWrapStyle: CSSProperties = {
-  display: "flex",
-  gap: "8px",
+  display: "inline-flex",
+  gap: "6px",
   alignItems: "center",
-  flexWrap: "wrap",
+  flexWrap: "nowrap",
+  whiteSpace: "nowrap",
 };
 
 const wageInputStyle: CSSProperties = {
-  padding: "8px 10px",
-  width: "120px",
-  borderRadius: "10px",
+  height: "32px",
+  padding: "0 8px",
+  width: "94px",
+  borderRadius: "8px",
   border: "1px solid #d1d5db",
   outline: "none",
-  fontSize: "14px",
+  fontSize: "12px",
   backgroundColor: "#ffffff",
   color: "#111827",
+  boxSizing: "border-box",
 };
 
 const primaryButtonStyle: CSSProperties = {
@@ -3054,26 +3057,28 @@ const employeeTableStyle: CSSProperties = {
   width: "100%",
   borderCollapse: "separate",
   borderSpacing: 0,
-  minWidth: "1100px",
+  minWidth: "1180px",
 };
 
 const thStyle: CSSProperties = {
   textAlign: "left",
-  padding: "10px 12px",
+  padding: "8px 10px",
   fontSize: "12px",
   fontWeight: 800,
   color: "#475569",
   backgroundColor: "#f8fafc",
   borderBottom: "1px solid #e5e7eb",
+  whiteSpace: "nowrap",
 };
 
 const tdStyle: CSSProperties = {
-  padding: "10px 12px",
-  fontSize: "13px",
+  padding: "7px 10px",
+  fontSize: "12px",
   color: "#111827",
   borderBottom: "1px solid #e5e7eb",
   verticalAlign: "middle",
   backgroundColor: "#ffffff",
+  lineHeight: 1.35,
 };
 
 const nameTextStyle: CSSProperties = {
@@ -3085,76 +3090,85 @@ const badgeStyle: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  padding: "6px 10px",
+  padding: "4px 8px",
   borderRadius: "999px",
-  fontSize: "12px",
+  fontSize: "11px",
   fontWeight: 700,
   whiteSpace: "nowrap",
 };
 
 const actionWrapStyle: CSSProperties = {
-  display: "flex",
-  gap: "8px",
-  flexWrap: "wrap",
+  display: "inline-flex",
+  gap: "6px",
+  alignItems: "center",
+  flexWrap: "nowrap",
+  whiteSpace: "nowrap",
 };
 
 const primarySmallButtonStyle: CSSProperties = {
-  padding: "8px 12px",
+  height: "32px",
+  padding: "0 10px",
   border: "none",
-  borderRadius: "10px",
+  borderRadius: "8px",
   cursor: "pointer",
   backgroundColor: "#111827",
   color: "#ffffff",
   fontWeight: 700,
-  fontSize: "13px",
+  fontSize: "12px",
+  whiteSpace: "nowrap",
 };
 
 const secondarySmallButtonStyle: CSSProperties = {
-  padding: "8px 12px",
+  height: "32px",
+  padding: "0 10px",
   border: "1px solid #d1d5db",
-  borderRadius: "10px",
+  borderRadius: "8px",
   cursor: "pointer",
   backgroundColor: "#ffffff",
   color: "#111827",
   fontWeight: 700,
-  fontSize: "13px",
+  fontSize: "12px",
+  whiteSpace: "nowrap",
 };
 
 const reconnectCellStyle: CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
+  display: "inline-flex",
+  alignItems: "center",
   gap: "8px",
-  minWidth: "190px",
+  minWidth: "230px",
+  whiteSpace: "nowrap",
 };
 
 const reconnectButtonStyle: CSSProperties = {
-  padding: "8px 12px",
+  height: "32px",
+  padding: "0 12px",
   border: "none",
-  borderRadius: "10px",
+  borderRadius: "8px",
   cursor: "pointer",
   backgroundColor: "#2563eb",
   color: "#ffffff",
   fontWeight: 700,
-  fontSize: "13px",
+  fontSize: "12px",
+  whiteSpace: "nowrap",
 };
 
 const reconnectInfoBoxStyle: CSSProperties = {
   backgroundColor: "#f8fafc",
   border: "1px solid #e5e7eb",
-  borderRadius: "12px",
-  padding: "10px",
-  display: "flex",
-  flexDirection: "column",
+  borderRadius: "10px",
+  padding: "6px 8px",
+  display: "inline-flex",
+  alignItems: "center",
   gap: "6px",
 };
 
 const reconnectCodeTextStyle: CSSProperties = {
-  fontSize: "13px",
+  fontSize: "11px",
   color: "#111827",
 };
 
 const reconnectExpireTextStyle: CSSProperties = {
-  fontSize: "12px",
+  fontSize: "11px",
   color: "#6b7280",
 };
 
@@ -3170,8 +3184,9 @@ const copyButtonStyle: CSSProperties = {
 };
 
 const reconnectEmptyTextStyle: CSSProperties = {
-  fontSize: "12px",
+  fontSize: "11px",
   color: "#94a3b8",
+  whiteSpace: "nowrap",
 };
 
 const emptyBoxStyle: CSSProperties = {
