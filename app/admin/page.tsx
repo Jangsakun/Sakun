@@ -1702,136 +1702,42 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                   </thead>
                   <tbody>
                     {filteredEmployees.map((employee) => {
-                      const isEditing = editingEmployeeId === employee.id;
                       const reconnectInfo = reconnectInfoMap[employee.id];
 
                       return (
                         <tr key={employee.id}>
                           <td style={tdStyle}>
-                            {isEditing ? (
-                              <input
-                                value={editName}
-                                onChange={(e) => setEditName(e.target.value)}
-                                style={smallInputStyle}
-                              />
-                            ) : (
-                              <span style={nameTextStyle}>{employee.name}</span>
-                            )}
+                            <span style={nameTextStyle}>{employee.name}</span>
+                          </td>
+
+                          <td style={tdStyle}>{formatPhone(employee.phone)}</td>
+
+                          <td style={tdStyle}>{getMaskedResidentNumber(employee)}</td>
+
+                          <td style={tdStyle}>{employee.bank_name || "-"}</td>
+
+                          <td style={tdStyle}>{employee.account_number || "-"}</td>
+
+                          <td style={tdStyle}>
+                            <span
+                              style={{
+                                ...badgeStyle,
+                                backgroundColor:
+                                  employee.workplace_name === "헤모즈"
+                                    ? "#fce7f3"
+                                    : "#e0f2fe",
+                                color:
+                                  employee.workplace_name === "헤모즈"
+                                    ? "#be185d"
+                                    : "#0369a1",
+                              }}
+                            >
+                              {employee.workplace_name || "장사꾼"}
+                            </span>
                           </td>
 
                           <td style={tdStyle}>
-                            {isEditing ? (
-                              <input
-                                value={editPhone}
-                                onChange={(e) =>
-                                  setEditPhone(
-                                    e.target.value.replace(/[^0-9]/g, "")
-                                  )
-                                }
-                                style={smallInputStyle}
-                              />
-                            ) : (
-                              formatPhone(employee.phone)
-                            )}
-                          </td>
-
-                          <td style={tdStyle}>
-                            {isEditing ? (
-                              <input
-                                value={editResidentNumber}
-                                onChange={(e) =>
-                                  setEditResidentNumber(
-                                    e.target.value
-                                      .replace(/[^0-9]/g, "")
-                                      .slice(0, 13)
-                                  )
-                                }
-                                style={smallInputStyle}
-                              />
-                            ) : (
-                              getMaskedResidentNumber(employee)
-                            )}
-                          </td>
-
-                          <td style={tdStyle}>
-                            {isEditing ? (
-                              <input
-                                value={editBankName}
-                                onChange={(e) =>
-                                  setEditBankName(e.target.value)
-                                }
-                                style={smallInputStyle}
-                              />
-                            ) : (
-                              employee.bank_name || "-"
-                            )}
-                          </td>
-
-                          <td style={tdStyle}>
-                            {isEditing ? (
-                              <input
-                                value={editAccountNumber}
-                                onChange={(e) =>
-                                  setEditAccountNumber(
-                                    e.target.value.replace(/[^0-9-]/g, "")
-                                  )
-                                }
-                                style={smallInputStyle}
-                              />
-                            ) : (
-                              employee.account_number || "-"
-                            )}
-                          </td>
-
-                          <td style={tdStyle}>
-                            {isEditing ? (
-                              <select
-                                value={editWorkplaceName}
-                                onChange={(e) =>
-                                  setEditWorkplaceName(
-                                    e.target.value as "장사꾼" | "헤모즈"
-                                  )
-                                }
-                                style={smallInputStyle}
-                              >
-                                <option value="장사꾼">장사꾼</option>
-                                <option value="헤모즈">헤모즈</option>
-                              </select>
-                            ) : (
-                              <span
-                                style={{
-                                  ...badgeStyle,
-                                  backgroundColor:
-                                    employee.workplace_name === "헤모즈"
-                                      ? "#fce7f3"
-                                      : "#e0f2fe",
-                                  color:
-                                    employee.workplace_name === "헤모즈"
-                                      ? "#be185d"
-                                      : "#0369a1",
-                                }}
-                              >
-                                {employee.workplace_name || "장사꾼"}
-                              </span>
-                            )}
-                          </td>
-
-                          <td style={tdStyle}>
-                            {isEditing ? (
-                              <select
-                                value={editScheduleGroup}
-                                onChange={(e) =>
-                                  setEditScheduleGroup(e.target.value)
-                                }
-                                style={smallInputStyle}
-                              >
-                                {SCHEDULE_GROUP_OPTIONS.map((option) => (
-                                  <option key={option.value} value={option.value}>
-                                    {option.label}
-                                  </option>
-                                ))}
-                              </select>
-                            ) : employee.schedule_group ? (
+                            {employee.schedule_group ? (
                               <span
                                 style={{
                                   ...badgeStyle,
@@ -1903,13 +1809,10 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                                     코드: <strong>{reconnectInfo.code}</strong>
                                   </div>
                                   <div style={reconnectExpireTextStyle}>
-                                    만료:{" "}
-                                    {formatDateTime(reconnectInfo.expiresAt)}
+                                    만료: {formatDateTime(reconnectInfo.expiresAt)}
                                   </div>
                                   <button
-                                    onClick={() =>
-                                      copyReconnectCode(employee.id)
-                                    }
+                                    onClick={() => copyReconnectCode(employee.id)}
                                     style={copyButtonStyle}
                                   >
                                     코드 복사
@@ -1925,29 +1828,12 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
 
                           <td style={tdStyle}>
                             <div style={actionWrapStyle}>
-                              {isEditing ? (
-                                <>
-                                  <button
-                                    onClick={() => updateEmployee(employee.id)}
-                                    style={primarySmallButtonStyle}
-                                  >
-                                    저장
-                                  </button>
-                                  <button
-                                    onClick={cancelEdit}
-                                    style={secondarySmallButtonStyle}
-                                  >
-                                    취소
-                                  </button>
-                                </>
-                              ) : (
-                                <button
-                                  onClick={() => startEdit(employee)}
-                                  style={primarySmallButtonStyle}
-                                >
-                                  수정
-                                </button>
-                              )}
+                              <button
+                                onClick={() => startEdit(employee)}
+                                style={primarySmallButtonStyle}
+                              >
+                                수정
+                              </button>
 
                               <button
                                 onClick={() => toggleEmployeeActive(employee)}
@@ -1972,7 +1858,207 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
           </section>
         )}
 
-        {tab === "payroll" && (
+        {tab === "employees" && editingEmployeeId !== null && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 100,
+              backgroundColor: "rgba(15, 23, 42, 0.46)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "20px",
+            }}
+          >
+            <div
+              style={{
+                width: "100%",
+                maxWidth: "620px",
+                borderRadius: "22px",
+                backgroundColor: "#ffffff",
+                boxShadow: "0 24px 80px rgba(15, 23, 42, 0.28)",
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  padding: "20px 22px",
+                  borderBottom: "1px solid #e5e7eb",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                  gap: "12px",
+                  background: "linear-gradient(to bottom right, #f8fafc, #ffffff)",
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      fontSize: "20px",
+                      fontWeight: 900,
+                      color: "#111827",
+                    }}
+                  >
+                    직원 정보 수정
+                  </div>
+                  <div
+                    style={{
+                      marginTop: "6px",
+                      fontSize: "13px",
+                      color: "#6b7280",
+                      fontWeight: 600,
+                    }}
+                  >
+                    기본 정보와 근무지, 역할그룹을 한 번에 수정합니다.
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={cancelEdit}
+                  style={{
+                    width: "36px",
+                    height: "36px",
+                    borderRadius: "999px",
+                    border: "1px solid #e5e7eb",
+                    backgroundColor: "#ffffff",
+                    color: "#111827",
+                    fontSize: "22px",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    lineHeight: 1,
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+
+              <div style={{ padding: "22px" }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                    gap: "14px",
+                  }}
+                >
+                  <div>
+                    <label style={labelStyle}>이름</label>
+                    <input
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      style={inputStyle}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>휴대폰번호</label>
+                    <input
+                      value={editPhone}
+                      onChange={(e) =>
+                        setEditPhone(e.target.value.replace(/[^0-9]/g, ""))
+                      }
+                      style={inputStyle}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>주민번호</label>
+                    <input
+                      value={editResidentNumber}
+                      onChange={(e) =>
+                        setEditResidentNumber(
+                          e.target.value.replace(/[^0-9]/g, "").slice(0, 13)
+                        )
+                      }
+                      style={inputStyle}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>은행</label>
+                    <input
+                      value={editBankName}
+                      onChange={(e) => setEditBankName(e.target.value)}
+                      style={inputStyle}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>계좌번호</label>
+                    <input
+                      value={editAccountNumber}
+                      onChange={(e) =>
+                        setEditAccountNumber(
+                          e.target.value.replace(/[^0-9-]/g, "")
+                        )
+                      }
+                      style={inputStyle}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>근무지</label>
+                    <select
+                      value={editWorkplaceName}
+                      onChange={(e) =>
+                        setEditWorkplaceName(
+                          e.target.value as "장사꾼" | "헤모즈"
+                        )
+                      }
+                      style={inputStyle}
+                    >
+                      <option value="장사꾼">장사꾼</option>
+                      <option value="헤모즈">헤모즈</option>
+                    </select>
+                  </div>
+
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <label style={labelStyle}>역할그룹</label>
+                    <select
+                      value={editScheduleGroup}
+                      onChange={(e) => setEditScheduleGroup(e.target.value)}
+                      style={inputStyle}
+                    >
+                      {SCHEDULE_GROUP_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "flex-end",
+                    gap: "10px",
+                    marginTop: "22px",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={cancelEdit}
+                    style={secondarySmallButtonStyle}
+                  >
+                    취소
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => updateEmployee(editingEmployeeId)}
+                    style={primarySmallButtonStyle}
+                  >
+                    저장
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+                {tab === "payroll" && (
           <section style={cardStyle}>
             <div style={sectionHeaderStyle}>
               <div>
