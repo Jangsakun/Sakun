@@ -273,7 +273,6 @@ export default function ScheduleTab() {
   const [showUnavailable, setShowUnavailable] = useState(false);
   const [showNotSubmitted, setShowNotSubmitted] = useState(false);
 
-  const [employeeSearch, setEmployeeSearch] = useState("");
   const [selectedEmployee, setSelectedEmployee] = useState<EmployeeItem | null>(
     null
   );
@@ -315,16 +314,6 @@ export default function ScheduleTab() {
 
     return Array.from(map.values());
   }, [data, allEmployees, days]);
-
-  const searchResults = useMemo(() => {
-    const keyword = employeeSearch.trim().toLowerCase();
-
-    if (!keyword) return [];
-
-    return allEmployees.filter((emp) =>
-      emp.name.toLowerCase().includes(keyword)
-    );
-  }, [employeeSearch, allEmployees]);
 
   const selectedDateAvailableCount = useMemo(() => {
     return availableEmployees.filter((emp) =>
@@ -385,7 +374,6 @@ export default function ScheduleTab() {
     setShowNotSubmitted(false);
     setSelectedEmployee(null);
     setEditSchedule([]);
-    setEmployeeSearch("");
   };
 
   const handleChangeWeekMode = (nextWeekMode: WeekMode) => {
@@ -397,7 +385,6 @@ export default function ScheduleTab() {
     setShowNotSubmitted(false);
     setSelectedEmployee(null);
     setEditSchedule([]);
-    setEmployeeSearch("");
   };
 
   const handleChangeWeekModeInModal = (nextWeekMode: WeekMode) => {
@@ -407,7 +394,6 @@ export default function ScheduleTab() {
     setSelectedDate(nextDays[0]?.value || "");
     setShowUnavailable(false);
     setShowNotSubmitted(false);
-    setEmployeeSearch("");
   };
 
   const openEditModal = (employee: EmployeeItem) => {
@@ -450,7 +436,6 @@ export default function ScheduleTab() {
 
     setSelectedEmployee(matchedEmployee || employee);
     setEditSchedule(nextSchedule);
-    setEmployeeSearch("");
   };
 
   const closeEditModal = () => {
@@ -1103,148 +1088,6 @@ export default function ScheduleTab() {
           </div>
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: "12px",
-            flexWrap: "wrap",
-            padding: "14px 16px",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              gap: "8px",
-              flexWrap: "wrap",
-            }}
-          >
-            {days.map((day) => (
-              <button
-                key={day.value}
-                type="button"
-                onClick={() => setSelectedDate(day.value)}
-                style={{
-                  height: "40px",
-                  padding: "0 14px",
-                  borderRadius: "10px",
-                  border:
-                    selectedDate === day.value
-                      ? "1px solid #111827"
-                      : "1px solid #d1d5db",
-                  background:
-                    selectedDate === day.value ? "#111827" : "#f3f4f6",
-                  color: selectedDate === day.value ? "#ffffff" : "#111827",
-                  fontSize: "14px",
-                  fontWeight: 800,
-                  cursor: "pointer",
-                }}
-              >
-                {day.label}
-              </button>
-            ))}
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              gap: "10px",
-              alignItems: "center",
-              flexWrap: "wrap",
-              justifyContent: "flex-end",
-            }}
-          >
-            <div
-              style={{
-                position: "relative",
-                width: "260px",
-                maxWidth: "100%",
-              }}
-            >
-              <input
-                type="text"
-                placeholder="직원 이름 검색"
-                value={employeeSearch}
-                onChange={(e) => setEmployeeSearch(e.target.value)}
-                style={{
-                  width: "100%",
-                  height: "42px",
-                  padding: "0 14px",
-                  borderRadius: "10px",
-                  border: "1px solid #d1d5db",
-                  fontSize: "14px",
-                  color: "#111827",
-                  backgroundColor: "#ffffff",
-                  outline: "none",
-                  boxSizing: "border-box",
-                }}
-              />
-
-              {employeeSearch.trim() && (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: "46px",
-                    left: 0,
-                    right: 0,
-                    background: "#ffffff",
-                    border: "1px solid #e5e7eb",
-                    borderRadius: "12px",
-                    boxShadow: "0 10px 24px rgba(15, 23, 42, 0.12)",
-                    zIndex: 30,
-                    overflow: "hidden",
-                  }}
-                >
-                  {searchResults.length === 0 ? (
-                    <div
-                      style={{
-                        padding: "12px",
-                        color: "#6b7280",
-                        fontSize: "13px",
-                      }}
-                    >
-                      검색 결과가 없습니다.
-                    </div>
-                  ) : (
-                    searchResults.map((emp, index) => (
-                      <button
-                        key={`${emp.id ?? emp.name}-${index}`}
-                        type="button"
-                        onClick={() => openEditModal(emp)}
-                        style={{
-                          width: "100%",
-                          textAlign: "left",
-                          padding: "12px",
-                          border: "none",
-                          borderBottom:
-                            index === searchResults.length - 1
-                              ? "none"
-                              : "1px solid #f3f4f6",
-                          background: "#ffffff",
-                          cursor: "pointer",
-                          color: "#111827",
-                          fontWeight: 700,
-                        }}
-                      >
-                        {emp.name}
-                        <span
-                          style={{
-                            marginLeft: "6px",
-                            fontSize: "12px",
-                            color: "#6b7280",
-                          }}
-                        >
-                          {getEmployeeScheduleGroup(emp) || "역할 미지정"}
-                        </span>
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
       </div>
 
       {loading && (
