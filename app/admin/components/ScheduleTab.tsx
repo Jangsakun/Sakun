@@ -255,6 +255,33 @@ function getEmployeesForRoleAndDate({
     .sort((a, b) => a.name.localeCompare(b.name, "ko"));
 }
 
+function getNotSubmittedEmployeesForDate(employees: EmployeeItem[]) {
+  return employees.sort((a, b) => a.name.localeCompare(b.name, "ko"));
+}
+
+function getUnavailableEmployeesForDate({
+  employees,
+  notSubmittedEmployees,
+  date,
+}: {
+  employees: EmployeeItem[];
+  notSubmittedEmployees: EmployeeItem[];
+  date: string;
+}) {
+  const notSubmittedKeys = new Set(notSubmittedEmployees.map((employee) => getEmployeeKey(employee)));
+
+  return employees
+    .filter((employee) => {
+      if (notSubmittedKeys.has(getEmployeeKey(employee))) {
+        return false;
+      }
+
+      const matchedSchedule = employee.schedule?.find((item) => item.fullDate === date);
+      return matchedSchedule?.available !== true;
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, "ko"));
+}
+
 export default function ScheduleTab() {
   const [weekMode, setWeekMode] = useState<WeekMode>("current");
   const [selectedWorkplace, setSelectedWorkplace] = useState<WorkplaceName>("장사꾼");
@@ -269,9 +296,6 @@ export default function ScheduleTab() {
   const [selectedDate, setSelectedDate] = useState<string>(days[0]?.value || "");
   const [data, setData] = useState<ScheduleApiResponse["data"] | null>(null);
   const [loading, setLoading] = useState(false);
-
-  const [showUnavailable, setShowUnavailable] = useState(false);
-  const [showNotSubmitted, setShowNotSubmitted] = useState(false);
 
   const [selectedEmployee, setSelectedEmployee] = useState<EmployeeItem | null>(
     null
@@ -370,8 +394,6 @@ export default function ScheduleTab() {
 
   const handleChangeWorkplace = (nextWorkplace: WorkplaceName) => {
     setSelectedWorkplace(nextWorkplace);
-    setShowUnavailable(false);
-    setShowNotSubmitted(false);
     setSelectedEmployee(null);
     setEditSchedule([]);
   };
@@ -381,8 +403,6 @@ export default function ScheduleTab() {
 
     setWeekMode(nextWeekMode);
     setSelectedDate(nextDays[0]?.value || "");
-    setShowUnavailable(false);
-    setShowNotSubmitted(false);
     setSelectedEmployee(null);
     setEditSchedule([]);
   };
@@ -392,8 +412,6 @@ export default function ScheduleTab() {
 
     setWeekMode(nextWeekMode);
     setSelectedDate(nextDays[0]?.value || "");
-    setShowUnavailable(false);
-    setShowNotSubmitted(false);
   };
 
   const openEditModal = (employee: EmployeeItem) => {
@@ -587,11 +605,6 @@ export default function ScheduleTab() {
 
     setEditSchedule(newSchedule);
   }, [weekMode, data, selectedEmployee, days, weekStartDate, weekEndDate, allEmployees]);
-
-  useEffect(() => {
-    setShowUnavailable(false);
-    setShowNotSubmitted(false);
-  }, [selectedDate]);
 
   const renderEmployeeChip = (
     emp: EmployeeItem,
@@ -880,6 +893,266 @@ export default function ScheduleTab() {
                   })}
                 </tr>
               ))}
+
+              <tr>
+                <td
+                  style={{
+                    padding: "14px 16px",
+                    borderBottom: "1px solid #eef2f7",
+                    background: "#fef2f2",
+                    verticalAlign: "top",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "9px",
+                      color: "#b91c1c",
+                      fontWeight: 900,
+                      fontSize: "15px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: "10px",
+                        height: "10px",
+                        borderRadius: "999px",
+                        background: "#ef4444",
+                        display: "inline-block",
+                      }}
+                    />
+                    출근 안함
+                  </div>
+                  <div
+                    style={{
+                      marginTop: "6px",
+                      color: "#64748b",
+                      fontSize: "12px",
+                      fontWeight: 700,
+                    }}
+                  >
+                    날짜별 출근 불가 / 미선택
+                  </div>
+                </td>
+
+                {days.map((day) => {
+                  const employees = getUnavailableEmployeesForDate({
+                    employees: allEmployees,
+                    notSubmittedEmployees: data?.notSubmitted || [],
+                    date: day.value,
+                  });
+                  const isSelected = selectedDate === day.value;
+
+                  return (
+                    <td
+                      key={`unavailable-${day.value}`}
+                      style={{
+                        padding: "12px",
+                        borderBottom: "1px solid #eef2f7",
+                        borderLeft: "1px solid #f1f5f9",
+                        verticalAlign: "top",
+                        background: isSelected ? "#fff7f7" : "#ffffff",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          gap: "8px",
+                          marginBottom: "8px",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: "12px",
+                            color: employees.length > 0 ? "#b91c1c" : "#9ca3af",
+                            fontWeight: 900,
+                          }}
+                        >
+                          {employees.length}명
+                        </span>
+                        {isSelected && (
+                          <span
+                            style={{
+                              padding: "3px 7px",
+                              borderRadius: "999px",
+                              background: "#991b1b",
+                              color: "#ffffff",
+                              fontSize: "10px",
+                              fontWeight: 900,
+                            }}
+                          >
+                            조회중
+                          </span>
+                        )}
+                      </div>
+
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: "7px",
+                          minHeight: "38px",
+                          alignContent: "flex-start",
+                        }}
+                      >
+                        {employees.length === 0 ? (
+                          <span
+                            style={{
+                              color: "#cbd5e1",
+                              fontSize: "13px",
+                              fontWeight: 800,
+                            }}
+                          >
+                            -
+                          </span>
+                        ) : (
+                          employees.map((employee, index) =>
+                            renderEmployeeChip(
+                              employee,
+                              index,
+                              "#fee2e2",
+                              "#991b1b",
+                              day.value,
+                              false
+                            )
+                          )
+                        )}
+                      </div>
+                    </td>
+                  );
+                })}
+              </tr>
+
+              <tr>
+                <td
+                  style={{
+                    padding: "14px 16px",
+                    borderBottom: "1px solid #eef2f7",
+                    background: "#f3f4f6",
+                    verticalAlign: "top",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "9px",
+                      color: "#374151",
+                      fontWeight: 900,
+                      fontSize: "15px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: "10px",
+                        height: "10px",
+                        borderRadius: "999px",
+                        background: "#9ca3af",
+                        display: "inline-block",
+                      }}
+                    />
+                    미제출
+                  </div>
+                  <div
+                    style={{
+                      marginTop: "6px",
+                      color: "#64748b",
+                      fontSize: "12px",
+                      fontWeight: 700,
+                    }}
+                  >
+                    해당 주 스케줄 미제출
+                  </div>
+                </td>
+
+                {days.map((day) => {
+                  const employees = getNotSubmittedEmployeesForDate([...(data?.notSubmitted || [])]);
+                  const isSelected = selectedDate === day.value;
+
+                  return (
+                    <td
+                      key={`not-submitted-${day.value}`}
+                      style={{
+                        padding: "12px",
+                        borderBottom: "1px solid #eef2f7",
+                        borderLeft: "1px solid #f1f5f9",
+                        verticalAlign: "top",
+                        background: isSelected ? "#f8fafc" : "#ffffff",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          gap: "8px",
+                          marginBottom: "8px",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: "12px",
+                            color: employees.length > 0 ? "#374151" : "#9ca3af",
+                            fontWeight: 900,
+                          }}
+                        >
+                          {employees.length}명
+                        </span>
+                        {isSelected && (
+                          <span
+                            style={{
+                              padding: "3px 7px",
+                              borderRadius: "999px",
+                              background: "#374151",
+                              color: "#ffffff",
+                              fontSize: "10px",
+                              fontWeight: 900,
+                            }}
+                          >
+                            조회중
+                          </span>
+                        )}
+                      </div>
+
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: "7px",
+                          minHeight: "38px",
+                          alignContent: "flex-start",
+                        }}
+                      >
+                        {employees.length === 0 ? (
+                          <span
+                            style={{
+                              color: "#cbd5e1",
+                              fontSize: "13px",
+                              fontWeight: 800,
+                            }}
+                          >
+                            -
+                          </span>
+                        ) : (
+                          employees.map((employee, index) =>
+                            renderEmployeeChip(
+                              employee,
+                              index,
+                              "#e5e7eb",
+                              "#374151",
+                              day.value,
+                              false
+                            )
+                          )
+                        )}
+                      </div>
+                    </td>
+                  );
+                })}
+              </tr>
             </tbody>
           </table>
         </div>
@@ -1139,115 +1412,6 @@ export default function ScheduleTab() {
           </div>
 
           {renderRoleWeekTable()}
-
-          <div
-            style={{
-              border: "1px solid #ef4444",
-              borderRadius: "12px",
-              padding: "16px",
-              marginBottom: "16px",
-              background: "#fef2f2",
-            }}
-          >
-            <div
-              onClick={() => setShowUnavailable(!showUnavailable)}
-              style={{
-                fontWeight: 800,
-                cursor: "pointer",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                gap: "12px",
-                color: "#991b1b",
-              }}
-            >
-              <span>🔴 출근 안함 {data.summary.unavailable}명</span>
-              <span>{showUnavailable ? "▲" : "▼"}</span>
-            </div>
-
-            {showUnavailable && (
-              <>
-                {data.unavailable.length === 0 ? (
-                  <div
-                    style={{
-                      color: "#6b7280",
-                      fontSize: "14px",
-                      marginTop: "10px",
-                    }}
-                  >
-                    출근 안함 인원이 없습니다.
-                  </div>
-                ) : (
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: "8px",
-                      marginTop: "10px",
-                    }}
-                  >
-                    {data.unavailable.map((emp, index) =>
-                      renderEmployeeChip(emp, index, "#fee2e2", "#991b1b", selectedDate, false)
-                    )}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-
-          <div
-            style={{
-              border: "1px solid #9ca3af",
-              borderRadius: "12px",
-              padding: "16px",
-              background: "#f3f4f6",
-            }}
-          >
-            <div
-              onClick={() => setShowNotSubmitted(!showNotSubmitted)}
-              style={{
-                fontWeight: 800,
-                cursor: "pointer",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                gap: "12px",
-                color: "#374151",
-              }}
-            >
-              <span>⚪ 미제출 {data.summary.notSubmitted}명</span>
-              <span>{showNotSubmitted ? "▲" : "▼"}</span>
-            </div>
-
-            {showNotSubmitted && (
-              <>
-                {data.notSubmitted.length === 0 ? (
-                  <div
-                    style={{
-                      color: "#6b7280",
-                      fontSize: "14px",
-                      marginTop: "10px",
-                    }}
-                  >
-                    미제출 인원이 없습니다.
-                  </div>
-                ) : (
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: "8px",
-                      marginTop: "10px",
-                    }}
-                  >
-                    {data.notSubmitted.map((emp, index) =>
-                      renderEmployeeChip(emp, index, "#e5e7eb", "#374151", selectedDate, false)
-                    )}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
         </>
       )}
 
