@@ -58,7 +58,7 @@ type WeekMode = "current" | "next";
 
 type WorkplaceName = "장사꾼" | "헤모즈";
 
-type RoleGroupKey = "rallaMoarim" | "monggeul" | "delivery" | "embroidery" | "unassigned";
+type RoleGroupKey = "rallaMoarim" | "monggeul" | "delivery" | "embroidery" | "night" | "unassigned";
 
 type RoleGroupConfig = {
   key: RoleGroupKey;
@@ -111,6 +111,16 @@ const ROLE_GROUPS: RoleGroupConfig[] = [
     bg: "#f0fdf4",
     chipBg: "#dcfce7",
     chipColor: "#166534",
+  },
+  {
+    key: "night",
+    title: "야간근무",
+    subtitle: "야간 제출 인원",
+    values: [],
+    accent: "#4338ca",
+    bg: "#eef2ff",
+    chipBg: "#e0e7ff",
+    chipColor: "#3730a3",
   },
   {
     key: "unassigned",
@@ -803,12 +813,26 @@ export default function ScheduleTab() {
                   </td>
 
                   {days.map((day) => {
-                    const employees = getEmployeesForRoleAndDate({
-                      employees: availableEmployees,
-                      group,
-                      date: day.value,
-                      selectedDate,
-                    });
+                    const employees =
+                      group.key === "night"
+                        ? availableEmployees
+                            .filter(
+                              (employee) =>
+                                isEmployeeAvailableOnDate(
+                                  employee,
+                                  day.value,
+                                  selectedDate
+                                ) &&
+                                getEmployeeShiftForDate(employee, day.value) ===
+                                  "night"
+                            )
+                            .sort((a, b) => a.name.localeCompare(b.name, "ko"))
+                        : getEmployeesForRoleAndDate({
+                            employees: availableEmployees,
+                            group,
+                            date: day.value,
+                            selectedDate,
+                          });
                     const isSelected = selectedDate === day.value;
 
                     return (
