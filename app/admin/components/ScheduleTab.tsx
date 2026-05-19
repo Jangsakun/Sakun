@@ -20,6 +20,10 @@ type EmployeeItem = {
   id?: number | string;
   name: string;
   gender?: string | null;
+  schedule_group?: string | null;
+  scheduleGroup?: string | null;
+  workplace_name?: string | null;
+  workplaceName?: string | null;
   schedule?: ScheduleDay[];
 };
 
@@ -53,6 +57,72 @@ type DayItem = {
 type WeekMode = "current" | "next";
 
 type WorkplaceName = "장사꾼" | "헤모즈";
+
+type RoleGroupKey = "rallaMoarim" | "monggeul" | "delivery" | "embroidery" | "unassigned";
+
+type RoleGroupConfig = {
+  key: RoleGroupKey;
+  title: string;
+  subtitle: string;
+  values: string[];
+  accent: string;
+  bg: string;
+  chipBg: string;
+  chipColor: string;
+};
+
+const ROLE_GROUPS: RoleGroupConfig[] = [
+  {
+    key: "rallaMoarim",
+    title: "랄라 / 모아림",
+    subtitle: "주간 생산 메인",
+    values: ["랄라", "모아림"],
+    accent: "#7c3aed",
+    bg: "#f5f3ff",
+    chipBg: "#ede9fe",
+    chipColor: "#5b21b6",
+  },
+  {
+    key: "monggeul",
+    title: "몽글솜",
+    subtitle: "몽글솜 담당",
+    values: ["몽글솜"],
+    accent: "#db2777",
+    bg: "#fdf2f8",
+    chipBg: "#fce7f3",
+    chipColor: "#be185d",
+  },
+  {
+    key: "delivery",
+    title: "택배",
+    subtitle: "포장 / 출고",
+    values: ["택배"],
+    accent: "#0284c7",
+    bg: "#f0f9ff",
+    chipBg: "#e0f2fe",
+    chipColor: "#0369a1",
+  },
+  {
+    key: "embroidery",
+    title: "자수",
+    subtitle: "자수 작업",
+    values: ["자수"],
+    accent: "#16a34a",
+    bg: "#f0fdf4",
+    chipBg: "#dcfce7",
+    chipColor: "#166534",
+  },
+  {
+    key: "unassigned",
+    title: "역할 미지정",
+    subtitle: "직원관리에서 역할 설정 필요",
+    values: [""],
+    accent: "#6b7280",
+    bg: "#f9fafb",
+    chipBg: "#e5e7eb",
+    chipColor: "#374151",
+  },
+];
 
 function getMondayOfCurrentWeekInKst() {
   const now = new Date();
@@ -135,28 +205,54 @@ function getScheduleItemShift(item?: ScheduleDay | null): ShiftType {
   return normalizeShift(item?.shift || item?.shiftType || item?.shiftLabel);
 }
 
-function getEmployeeShiftForDate(employee: EmployeeItem, selectedDate: string): ShiftType {
+function getEmployeeScheduleGroup(employee: EmployeeItem) {
+  return String(employee.schedule_group || employee.scheduleGroup || "").trim();
+}
+
+function getEmployeeKey(employee: EmployeeItem) {
+  return String(employee.id ?? employee.name);
+}
+
+function isEmployeeAvailableOnDate(employee: EmployeeItem, date: string, selectedDate: string) {
+  const matched = employee.schedule?.find((item) => item.fullDate === date);
+
+  if (matched) {
+    return matched.available === true;
+  }
+
+  return date === selectedDate;
+}
+
+function getEmployeeShiftForDate(employee: EmployeeItem, date: string): ShiftType {
   const matched = employee.schedule?.find(
-    (item) => item.fullDate === selectedDate && item.available
+    (item) => item.fullDate === date && item.available
   );
 
   return getScheduleItemShift(matched);
 }
 
-function filterByGenderAndShift(
-  employees: EmployeeItem[],
-  selectedDate: string,
-  gender: "남성" | "여성" | "unknown",
-  shift: ShiftType
-) {
-  return employees.filter((emp) => {
-    const genderMatched =
-      gender === "unknown"
-        ? emp.gender !== "남성" && emp.gender !== "여성"
-        : emp.gender === gender;
+function getEmployeesForRoleAndDate({
+  employees,
+  group,
+  date,
+  selectedDate,
+}: {
+  employees: EmployeeItem[];
+  group: RoleGroupConfig;
+  date: string;
+  selectedDate: string;
+}) {
+  return employees
+    .filter((employee) => {
+      const scheduleGroup = getEmployeeScheduleGroup(employee);
+      const matchesGroup =
+        group.key === "unassigned"
+          ? !scheduleGroup
+          : group.values.includes(scheduleGroup);
 
-    return genderMatched && getEmployeeShiftForDate(emp, selectedDate) === shift;
-  });
+      return matchesGroup && isEmployeeAvailableOnDate(employee, date, selectedDate);
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, "ko"));
 }
 
 export default function ScheduleTab() {
@@ -192,12 +288,33 @@ export default function ScheduleTab() {
       ...(data?.unavailable || []),
       ...(data?.notSubmitted || []),
     ].forEach((emp) => {
-      const key = String(emp.id ?? emp.name);
-      map.set(key, emp);
+      map.set(getEmployeeKey(emp), emp);
     });
 
     return Array.from(map.values());
   }, [data]);
+
+  const availableEmployees = useMemo(() => {
+    const map = new Map<string, EmployeeItem>();
+
+    (data?.available || []).forEach((emp) => {
+      map.set(getEmployeeKey(emp), emp);
+    });
+
+    allEmployees.forEach((emp) => {
+      const hasAvailableInWeek = days.some((day) =>
+        emp.schedule?.some(
+          (item) => item.fullDate === day.value && item.available === true
+        )
+      );
+
+      if (hasAvailableInWeek) {
+        map.set(getEmployeeKey(emp), emp);
+      }
+    });
+
+    return Array.from(map.values());
+  }, [data, allEmployees, days]);
 
   const searchResults = useMemo(() => {
     const keyword = employeeSearch.trim().toLowerCase();
@@ -209,41 +326,45 @@ export default function ScheduleTab() {
     );
   }, [employeeSearch, allEmployees]);
 
-  const maleDayAvailableEmployees = useMemo(() => {
-    return filterByGenderAndShift(data?.available || [], selectedDate, "남성", "day");
-  }, [data, selectedDate]);
-
-  const maleNightAvailableEmployees = useMemo(() => {
-    return filterByGenderAndShift(data?.available || [], selectedDate, "남성", "night");
-  }, [data, selectedDate]);
-
-  const femaleDayAvailableEmployees = useMemo(() => {
-    return filterByGenderAndShift(data?.available || [], selectedDate, "여성", "day");
-  }, [data, selectedDate]);
-
-  const femaleNightAvailableEmployees = useMemo(() => {
-    return filterByGenderAndShift(data?.available || [], selectedDate, "여성", "night");
-  }, [data, selectedDate]);
-
-  const unknownDayAvailableEmployees = useMemo(() => {
-    return filterByGenderAndShift(data?.available || [], selectedDate, "unknown", "day");
-  }, [data, selectedDate]);
-
-  const unknownNightAvailableEmployees = useMemo(() => {
-    return filterByGenderAndShift(data?.available || [], selectedDate, "unknown", "night");
-  }, [data, selectedDate]);
-
-  const dayAvailableCount = useMemo(() => {
-    return (data?.available || []).filter(
-      (emp) => getEmployeeShiftForDate(emp, selectedDate) === "day"
+  const selectedDateAvailableCount = useMemo(() => {
+    return availableEmployees.filter((emp) =>
+      isEmployeeAvailableOnDate(emp, selectedDate, selectedDate)
     ).length;
-  }, [data, selectedDate]);
+  }, [availableEmployees, selectedDate]);
 
-  const nightAvailableCount = useMemo(() => {
-    return (data?.available || []).filter(
-      (emp) => getEmployeeShiftForDate(emp, selectedDate) === "night"
+  const selectedDateDayCount = useMemo(() => {
+    return availableEmployees.filter(
+      (emp) =>
+        isEmployeeAvailableOnDate(emp, selectedDate, selectedDate) &&
+        getEmployeeShiftForDate(emp, selectedDate) === "day"
     ).length;
-  }, [data, selectedDate]);
+  }, [availableEmployees, selectedDate]);
+
+  const selectedDateNightCount = useMemo(() => {
+    return availableEmployees.filter(
+      (emp) =>
+        isEmployeeAvailableOnDate(emp, selectedDate, selectedDate) &&
+        getEmployeeShiftForDate(emp, selectedDate) === "night"
+    ).length;
+  }, [availableEmployees, selectedDate]);
+
+  const roleWeeklySummary = useMemo(() => {
+    return ROLE_GROUPS.map((group) => {
+      const total = days.reduce((sum, day) => {
+        return (
+          sum +
+          getEmployeesForRoleAndDate({
+            employees: availableEmployees,
+            group,
+            date: day.value,
+            selectedDate,
+          }).length
+        );
+      }, 0);
+
+      return { group, total };
+    });
+  }, [availableEmployees, days, selectedDate]);
 
   const fetchSchedule = async (date: string) => {
     if (!date) return;
@@ -310,15 +431,11 @@ export default function ScheduleTab() {
   const openEditModal = (employee: EmployeeItem) => {
     const selectedAvailableMap = new Map<string, ShiftType>();
 
-    const matchedEmployee = [
-      ...(data?.available || []),
-      ...(data?.unavailable || []),
-      ...(data?.notSubmitted || []),
-    ].find(
+    const matchedEmployee = allEmployees.find(
       (emp) => String(emp.id ?? emp.name) === String(employee.id ?? employee.name)
     );
 
-    const employeeSchedule = matchedEmployee?.schedule;
+    const employeeSchedule = matchedEmployee?.schedule || employee.schedule;
 
     if (Array.isArray(employeeSchedule)) {
       employeeSchedule.forEach((item) => {
@@ -331,15 +448,12 @@ export default function ScheduleTab() {
           selectedAvailableMap.set(item.fullDate, getScheduleItemShift(item));
         }
       });
-    } else {
-      if (
-        data?.available.some(
-          (emp) =>
-            String(emp.id ?? emp.name) === String(employee.id ?? employee.name)
-        )
-      ) {
-        selectedAvailableMap.set(selectedDate, getEmployeeShiftForDate(employee, selectedDate));
-      }
+    } else if (
+      (data?.available || []).some(
+        (emp) => String(emp.id ?? emp.name) === String(employee.id ?? employee.name)
+      )
+    ) {
+      selectedAvailableMap.set(selectedDate, getEmployeeShiftForDate(employee, selectedDate));
     }
 
     const nextSchedule = days.map((day) => ({
@@ -352,7 +466,7 @@ export default function ScheduleTab() {
       shiftLabel: getShiftLabel(selectedAvailableMap.get(day.value) || "day"),
     }));
 
-    setSelectedEmployee(employee);
+    setSelectedEmployee(matchedEmployee || employee);
     setEditSchedule(nextSchedule);
     setEmployeeSearch("");
   };
@@ -469,11 +583,7 @@ export default function ScheduleTab() {
   useEffect(() => {
     if (!selectedEmployee) return;
 
-    const matchedEmployee = [
-      ...(data?.available || []),
-      ...(data?.unavailable || []),
-      ...(data?.notSubmitted || []),
-    ].find(
+    const matchedEmployee = allEmployees.find(
       (emp) =>
         String(emp.id ?? emp.name) ===
         String(selectedEmployee.id ?? selectedEmployee.name)
@@ -509,7 +619,7 @@ export default function ScheduleTab() {
     });
 
     setEditSchedule(newSchedule);
-  }, [weekMode, data, selectedEmployee, days, weekStartDate, weekEndDate]);
+  }, [weekMode, data, selectedEmployee, days, weekStartDate, weekEndDate, allEmployees]);
 
   useEffect(() => {
     setShowUnavailable(false);
@@ -532,24 +642,26 @@ export default function ScheduleTab() {
     index: number,
     bgColor: string,
     textColor: string,
-    showShift = false
+    dateForShift = selectedDate,
+    showShift = true
   ) => {
-    const shift = getEmployeeShiftForDate(emp, selectedDate);
+    const shift = getEmployeeShiftForDate(emp, dateForShift);
 
     return (
       <button
-        key={`${emp.id ?? emp.name}-${index}`}
+        key={`${emp.id ?? emp.name}-${index}-${dateForShift}`}
         type="button"
         onClick={() => openEditModal(emp)}
         style={{
-          padding: "6px 10px",
+          padding: "7px 10px",
           borderRadius: "999px",
           background: bgColor,
           fontSize: "13px",
           color: textColor,
-          fontWeight: 700,
+          fontWeight: 800,
           border: "none",
           cursor: "pointer",
+          whiteSpace: "nowrap",
         }}
       >
         {emp.name}
@@ -559,6 +671,7 @@ export default function ScheduleTab() {
               marginLeft: "6px",
               fontSize: "11px",
               fontWeight: 900,
+              opacity: 0.8,
             }}
           >
             {getShiftLabel(shift)}
@@ -568,62 +681,277 @@ export default function ScheduleTab() {
     );
   };
 
-  const renderAvailableGroup = ({
-    title,
-    employees,
-    borderColor,
-    headerBg,
-    headerColor,
-    chipBg,
-    chipColor,
-  }: {
-    title: string;
-    employees: EmployeeItem[];
-    borderColor: string;
-    headerBg: string;
-    headerColor: string;
-    chipBg: string;
-    chipColor: string;
-  }) => {
+  const renderRoleWeekTable = () => {
     return (
       <div
         style={{
-          border: `1px solid ${borderColor}`,
-          borderRadius: "10px",
+          border: "1px solid #e5e7eb",
+          borderRadius: "18px",
           background: "#ffffff",
           overflow: "hidden",
+          boxShadow: "0 10px 28px rgba(15, 23, 42, 0.06)",
+          marginBottom: "16px",
         }}
       >
         <div
           style={{
-            padding: "9px 12px",
-            background: headerBg,
-            color: headerColor,
-            fontSize: "13px",
-            fontWeight: 800,
-            borderBottom: `1px solid ${borderColor}`,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "12px",
+            flexWrap: "wrap",
+            padding: "16px 18px",
+            borderBottom: "1px solid #eef2f7",
+            background: "linear-gradient(135deg, #ffffff, #f8fafc)",
           }}
         >
-          {title} {employees.length}명
+          <div>
+            <div
+              style={{
+                fontSize: "18px",
+                fontWeight: 900,
+                color: "#111827",
+              }}
+            >
+              역할별 주간 스케줄
+            </div>
+            <div
+              style={{
+                marginTop: "5px",
+                fontSize: "13px",
+                color: "#6b7280",
+                fontWeight: 700,
+              }}
+            >
+              행은 역할그룹, 열은 요일입니다. 이름을 누르면 해당 직원 스케줄을 수정할 수 있습니다.
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: "8px",
+              flexWrap: "wrap",
+            }}
+          >
+            {roleWeeklySummary.map(({ group, total }) => (
+              <span
+                key={group.key}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "8px 10px",
+                  borderRadius: "999px",
+                  background: group.bg,
+                  color: group.accent,
+                  fontSize: "12px",
+                  fontWeight: 900,
+                }}
+              >
+                {group.title} {total}명
+              </span>
+            ))}
+          </div>
         </div>
 
-        <div
-          style={{
-            padding: "12px",
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "8px",
-            minHeight: "54px",
-            alignItems: "flex-start",
-          }}
-        >
-          {employees.length === 0 ? (
-            <span style={{ color: "#9ca3af", fontSize: "13px" }}>없음</span>
-          ) : (
-            employees.map((emp, index) =>
-              renderEmployeeChip(emp, index, chipBg, chipColor, false)
-            )
-          )}
+        <div style={{ overflowX: "auto" }}>
+          <table
+            style={{
+              width: "100%",
+              minWidth: "980px",
+              borderCollapse: "separate",
+              borderSpacing: 0,
+            }}
+          >
+            <thead>
+              <tr>
+                <th
+                  style={{
+                    width: "210px",
+                    textAlign: "left",
+                    padding: "14px 16px",
+                    background: "#f8fafc",
+                    borderBottom: "1px solid #e5e7eb",
+                    color: "#475569",
+                    fontSize: "13px",
+                    fontWeight: 900,
+                  }}
+                >
+                  역할그룹
+                </th>
+                {days.map((day) => {
+                  const isSelected = selectedDate === day.value;
+
+                  return (
+                    <th
+                      key={day.value}
+                      onClick={() => setSelectedDate(day.value)}
+                      style={{
+                        textAlign: "left",
+                        padding: "14px 12px",
+                        background: isSelected ? "#111827" : "#f8fafc",
+                        borderBottom: "1px solid #e5e7eb",
+                        borderLeft: "1px solid #eef2f7",
+                        color: isSelected ? "#ffffff" : "#475569",
+                        fontSize: "13px",
+                        fontWeight: 900,
+                        cursor: "pointer",
+                        minWidth: "150px",
+                      }}
+                    >
+                      <div>{day.day}요일</div>
+                      <div
+                        style={{
+                          marginTop: "4px",
+                          fontSize: "12px",
+                          opacity: 0.8,
+                        }}
+                      >
+                        {day.value}
+                      </div>
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {ROLE_GROUPS.map((group) => (
+                <tr key={group.key}>
+                  <td
+                    style={{
+                      padding: "14px 16px",
+                      borderBottom: "1px solid #eef2f7",
+                      background: group.bg,
+                      verticalAlign: "top",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "9px",
+                        color: group.accent,
+                        fontWeight: 900,
+                        fontSize: "15px",
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: "10px",
+                          height: "10px",
+                          borderRadius: "999px",
+                          background: group.accent,
+                          display: "inline-block",
+                        }}
+                      />
+                      {group.title}
+                    </div>
+                    <div
+                      style={{
+                        marginTop: "6px",
+                        color: "#64748b",
+                        fontSize: "12px",
+                        fontWeight: 700,
+                      }}
+                    >
+                      {group.subtitle}
+                    </div>
+                  </td>
+
+                  {days.map((day) => {
+                    const employees = getEmployeesForRoleAndDate({
+                      employees: availableEmployees,
+                      group,
+                      date: day.value,
+                      selectedDate,
+                    });
+                    const isSelected = selectedDate === day.value;
+
+                    return (
+                      <td
+                        key={`${group.key}-${day.value}`}
+                        style={{
+                          padding: "12px",
+                          borderBottom: "1px solid #eef2f7",
+                          borderLeft: "1px solid #f1f5f9",
+                          verticalAlign: "top",
+                          background: isSelected ? "#f8fafc" : "#ffffff",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            gap: "8px",
+                            marginBottom: "8px",
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: "12px",
+                              color: employees.length > 0 ? group.accent : "#9ca3af",
+                              fontWeight: 900,
+                            }}
+                          >
+                            {employees.length}명
+                          </span>
+                          {isSelected && (
+                            <span
+                              style={{
+                                padding: "3px 7px",
+                                borderRadius: "999px",
+                                background: "#111827",
+                                color: "#ffffff",
+                                fontSize: "10px",
+                                fontWeight: 900,
+                              }}
+                            >
+                              조회중
+                            </span>
+                          )}
+                        </div>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: "7px",
+                            minHeight: "38px",
+                            alignContent: "flex-start",
+                          }}
+                        >
+                          {employees.length === 0 ? (
+                            <span
+                              style={{
+                                color: "#cbd5e1",
+                                fontSize: "13px",
+                                fontWeight: 800,
+                              }}
+                            >
+                              -
+                            </span>
+                          ) : (
+                            employees.map((employee, index) =>
+                              renderEmployeeChip(
+                                employee,
+                                index,
+                                group.chipBg,
+                                group.chipColor,
+                                day.value,
+                                true
+                              )
+                            )
+                          )}
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     );
@@ -994,15 +1322,10 @@ export default function ScheduleTab() {
                           style={{
                             marginLeft: "6px",
                             fontSize: "12px",
-                            color:
-                              emp.gender === "남성"
-                                ? "#2563eb"
-                                : emp.gender === "여성"
-                                ? "#db2777"
-                                : "#6b7280",
+                            color: "#6b7280",
                           }}
                         >
-                          {emp.gender || "성별 미등록"}
+                          {getEmployeeScheduleGroup(emp) || "역할 미지정"}
                         </span>
                       </button>
                     ))
@@ -1031,105 +1354,38 @@ export default function ScheduleTab() {
         <>
           <div
             style={{
-              border: "1px solid #16a34a",
-              borderRadius: "12px",
-              padding: "16px",
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+              gap: "12px",
               marginBottom: "16px",
-              background: "#f0fdf4",
             }}
           >
-            <div style={{ fontWeight: 700, marginBottom: "12px" }}>
-              🟢 출근 가능 {data.summary.available}명 / 주간 {dayAvailableCount}명 / 야간 {nightAvailableCount}명
+            <div style={summaryCardStyle("#f0fdf4", "#16a34a")}>
+              <div style={summaryLabelStyle}>선택일 출근 가능</div>
+              <div style={summaryValueStyle}>{selectedDateAvailableCount}명</div>
+              <div style={summaryHelpStyle}>{selectedDate}</div>
             </div>
 
-            {data.available.length === 0 ? (
-              <div style={{ color: "#6b7280", fontSize: "14px" }}>
-                출근 가능 인원이 없습니다.
-              </div>
-            ) : (
-              <>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                    gap: "10px",
-                  }}
-                >
-                  {renderAvailableGroup({
-                    title: "남자 주간",
-                    employees: maleDayAvailableEmployees,
-                    borderColor: "#bfdbfe",
-                    headerBg: "#eff6ff",
-                    headerColor: "#1d4ed8",
-                    chipBg: "#dbeafe",
-                    chipColor: "#1d4ed8",
-                  })}
+            <div style={summaryCardStyle("#eff6ff", "#2563eb")}>
+              <div style={summaryLabelStyle}>주간</div>
+              <div style={summaryValueStyle}>{selectedDateDayCount}명</div>
+              <div style={summaryHelpStyle}>선택일 기준</div>
+            </div>
 
-                  {renderAvailableGroup({
-                    title: "남자 야간",
-                    employees: maleNightAvailableEmployees,
-                    borderColor: "#c7d2fe",
-                    headerBg: "#eef2ff",
-                    headerColor: "#4338ca",
-                    chipBg: "#e0e7ff",
-                    chipColor: "#4338ca",
-                  })}
+            <div style={summaryCardStyle("#eef2ff", "#4f46e5")}>
+              <div style={summaryLabelStyle}>야간</div>
+              <div style={summaryValueStyle}>{selectedDateNightCount}명</div>
+              <div style={summaryHelpStyle}>선택일 기준</div>
+            </div>
 
-                  {renderAvailableGroup({
-                    title: "여자 주간",
-                    employees: femaleDayAvailableEmployees,
-                    borderColor: "#fbcfe8",
-                    headerBg: "#fdf2f8",
-                    headerColor: "#db2777",
-                    chipBg: "#fce7f3",
-                    chipColor: "#be185d",
-                  })}
-
-               {renderAvailableGroup({
-  title: "여자 야간",
-  employees: femaleNightAvailableEmployees,
-  borderColor: "#fbcfe8",
-  headerBg: "#fdf2f8",
-  headerColor: "#db2777",
-  chipBg: "#fce7f3",
-  chipColor: "#be185d",
-})}
-                </div>
-
-                {(unknownDayAvailableEmployees.length > 0 ||
-                  unknownNightAvailableEmployees.length > 0) && (
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                      gap: "10px",
-                      marginTop: "10px",
-                    }}
-                  >
-                    {renderAvailableGroup({
-                      title: "성별 미등록 주간",
-                      employees: unknownDayAvailableEmployees,
-                      borderColor: "#d1d5db",
-                      headerBg: "#f9fafb",
-                      headerColor: "#4b5563",
-                      chipBg: "#e5e7eb",
-                      chipColor: "#374151",
-                    })}
-
-                    {renderAvailableGroup({
-                      title: "성별 미등록 야간",
-                      employees: unknownNightAvailableEmployees,
-                      borderColor: "#d1d5db",
-                      headerBg: "#f9fafb",
-                      headerColor: "#4b5563",
-                      chipBg: "#e5e7eb",
-                      chipColor: "#374151",
-                    })}
-                  </div>
-                )}
-              </>
-            )}
+            <div style={summaryCardStyle("#f9fafb", "#6b7280")}>
+              <div style={summaryLabelStyle}>전체 제출 기준</div>
+              <div style={summaryValueStyle}>{data.summary.total}명</div>
+              <div style={summaryHelpStyle}>출근안함 {data.summary.unavailable}명 / 미제출 {data.summary.notSubmitted}명</div>
+            </div>
           </div>
+
+          {renderRoleWeekTable()}
 
           <div
             style={{
@@ -1143,12 +1399,13 @@ export default function ScheduleTab() {
             <div
               onClick={() => setShowUnavailable(!showUnavailable)}
               style={{
-                fontWeight: 700,
+                fontWeight: 800,
                 cursor: "pointer",
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
                 gap: "12px",
+                color: "#991b1b",
               }}
             >
               <span>🔴 출근 안함 {data.summary.unavailable}명</span>
@@ -1177,7 +1434,7 @@ export default function ScheduleTab() {
                     }}
                   >
                     {data.unavailable.map((emp, index) =>
-                      renderEmployeeChip(emp, index, "#fee2e2", "#991b1b")
+                      renderEmployeeChip(emp, index, "#fee2e2", "#991b1b", selectedDate, false)
                     )}
                   </div>
                 )}
@@ -1196,12 +1453,13 @@ export default function ScheduleTab() {
             <div
               onClick={() => setShowNotSubmitted(!showNotSubmitted)}
               style={{
-                fontWeight: 700,
+                fontWeight: 800,
                 cursor: "pointer",
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
                 gap: "12px",
+                color: "#374151",
               }}
             >
               <span>⚪ 미제출 {data.summary.notSubmitted}명</span>
@@ -1230,7 +1488,7 @@ export default function ScheduleTab() {
                     }}
                   >
                     {data.notSubmitted.map((emp, index) =>
-                      renderEmployeeChip(emp, index, "#e5e7eb", "#374151", false)
+                      renderEmployeeChip(emp, index, "#e5e7eb", "#374151", selectedDate, false)
                     )}
                   </div>
                 )}
@@ -1351,7 +1609,9 @@ export default function ScheduleTab() {
                   }}
                 >
                   {selectedEmployee.name}
-                  {selectedEmployee.gender ? ` (${selectedEmployee.gender})` : ""}
+                  {getEmployeeScheduleGroup(selectedEmployee)
+                    ? ` (${getEmployeeScheduleGroup(selectedEmployee)})`
+                    : " (역할 미지정)"}
                   {" · "}
                   {selectedWorkplace}
                   {" · "}
@@ -1574,3 +1834,32 @@ export default function ScheduleTab() {
     </div>
   );
 }
+
+function summaryCardStyle(bg: string, accent: string) {
+  return {
+    border: `1px solid ${accent}22`,
+    borderRadius: "16px",
+    padding: "16px",
+    background: bg,
+  };
+}
+
+const summaryLabelStyle = {
+  color: "#64748b",
+  fontSize: "13px",
+  fontWeight: 800,
+  marginBottom: "8px",
+};
+
+const summaryValueStyle = {
+  color: "#111827",
+  fontSize: "26px",
+  fontWeight: 900,
+  marginBottom: "4px",
+};
+
+const summaryHelpStyle = {
+  color: "#64748b",
+  fontSize: "12px",
+  fontWeight: 700,
+};

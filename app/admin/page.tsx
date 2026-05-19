@@ -25,6 +25,7 @@ type AdminRecord = {
     contract_start_date?: string | null;
     contract_end_date?: string | null;
     workplace_name?: string | null;
+    schedule_group?: string | null;
   } | null;
 };
 
@@ -43,6 +44,7 @@ type Employee = {
   bank_name: string;
   account_number: string;
   workplace_name?: string | null;
+  schedule_group?: string | null;
   is_active: boolean;
   created_at?: string;
   hourly_wage?: number;
@@ -113,6 +115,16 @@ type ReconnectCodeInfo = {
   expiresAt: string;
 };
 
+const SCHEDULE_GROUP_OPTIONS = [
+  { value: "", label: "선택안함" },
+  { value: "랄라", label: "랄라" },
+  { value: "모아림", label: "모아림" },
+  { value: "몽글솜", label: "몽글솜" },
+  { value: "택배", label: "택배" },
+  { value: "자수", label: "자수" },
+];
+
+
 export default function AdminPage() {
   const router = useRouter();
 
@@ -160,6 +172,7 @@ export default function AdminPage() {
   const [editWorkplaceName, setEditWorkplaceName] = useState<"장사꾼" | "헤모즈">(
     "장사꾼"
   );
+  const [editScheduleGroup, setEditScheduleGroup] = useState("");
 
   const [editingAttendanceKey, setEditingAttendanceKey] = useState<
     string | null
@@ -558,6 +571,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
     setEditWorkplaceName(
       employee.workplace_name === "헤모즈" ? "헤모즈" : "장사꾼"
     );
+    setEditScheduleGroup(employee.schedule_group || "");
   };
 
   const cancelEdit = () => {
@@ -568,6 +582,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
     setEditBankName("");
     setEditAccountNumber("");
     setEditWorkplaceName("장사꾼");
+    setEditScheduleGroup("");
   };
 
   const updateEmployee = async (employeeId: number) => {
@@ -584,6 +599,8 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
           bank_name: editBankName,
           account_number: editAccountNumber,
           workplaceName: editWorkplaceName,
+          scheduleGroup: editScheduleGroup || null,
+          schedule_group: editScheduleGroup || null,
         }),
       });
 
@@ -1676,6 +1693,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                       <th style={thStyle}>은행</th>
                       <th style={thStyle}>계좌번호</th>
                       <th style={thStyle}>근무지</th>
+                      <th style={thStyle}>역할그룹</th>
                       <th style={thStyle}>시급</th>
                       <th style={thStyle}>상태</th>
                       <th style={thStyle}>기기 재연결</th>
@@ -1795,6 +1813,36 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                               >
                                 {employee.workplace_name || "장사꾼"}
                               </span>
+                            )}
+                          </td>
+
+                          <td style={tdStyle}>
+                            {isEditing ? (
+                              <select
+                                value={editScheduleGroup}
+                                onChange={(e) =>
+                                  setEditScheduleGroup(e.target.value)
+                                }
+                                style={smallInputStyle}
+                              >
+                                {SCHEDULE_GROUP_OPTIONS.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : employee.schedule_group ? (
+                              <span
+                                style={{
+                                  ...badgeStyle,
+                                  backgroundColor: "#f5f3ff",
+                                  color: "#6d28d9",
+                                }}
+                              >
+                                {employee.schedule_group}
+                              </span>
+                            ) : (
+                              <span style={mutedTextStyle}>선택안함</span>
                             )}
                           </td>
 
@@ -3047,4 +3095,12 @@ const emptyBoxStyle: CSSProperties = {
   backgroundColor: "#f8fafc",
   border: "1px solid #e5e7eb",
   borderRadius: "16px",
+
+  
+};
+
+const mutedTextStyle: CSSProperties = {
+  fontSize: "13px",
+  color: "#9ca3af",
+  fontWeight: 500,
 };

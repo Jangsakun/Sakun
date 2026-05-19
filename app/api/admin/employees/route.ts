@@ -26,6 +26,7 @@ export async function GET() {
         bank_name,
         account_number,
         workplace_name,
+        schedule_group,
         is_active,
         hourly_wage,
         weekly_allowance_status,
@@ -60,6 +61,7 @@ export async function GET() {
       return {
         ...emp,
         workplace_name: emp.workplace_name || "장사꾼",
+        schedule_group: emp.schedule_group || "",
         resident_number_masked,
       };
     });

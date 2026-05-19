@@ -16,6 +16,8 @@ export async function PATCH(
       bank_name,
       account_number,
       workplaceName,
+      scheduleGroup,
+      schedule_group,
       birthDate,
       phoneLast4,
       hourlyWage,
@@ -81,6 +83,28 @@ export async function PATCH(
       }
 
       updatePayload.workplace_name = trimmedWorkplaceName;
+    }
+
+    const incomingScheduleGroup =
+      typeof scheduleGroup === "string"
+        ? scheduleGroup
+        : typeof schedule_group === "string"
+        ? schedule_group
+        : undefined;
+
+    if (incomingScheduleGroup !== undefined) {
+      const trimmedScheduleGroup = incomingScheduleGroup.trim();
+
+      const allowedScheduleGroups = ["", "랄라", "모아림", "몽글솜", "택배", "자수"];
+
+      if (!allowedScheduleGroups.includes(trimmedScheduleGroup)) {
+        return NextResponse.json(
+          { success: false, message: "역할그룹 값이 올바르지 않습니다." },
+          { status: 400 }
+        );
+      }
+
+      updatePayload.schedule_group = trimmedScheduleGroup || null;
     }
 
     if (typeof birthDate === "string") {

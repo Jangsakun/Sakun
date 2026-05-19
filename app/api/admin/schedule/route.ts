@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
 
     const { data: employees, error: empError } = await supabase
       .from("employees")
-      .select("id, name, gender, workplace_name")
+      .select("id, name, gender, workplace_name, schedule_group")
       .eq("is_active", true)
       .eq("workplace_name", workplace);
 
@@ -131,6 +131,8 @@ export async function GET(request: NextRequest) {
           gender: emp.gender,
           workplaceName: emp.workplace_name || workplace,
           workplace_name: emp.workplace_name || workplace,
+          scheduleGroup: emp.schedule_group || "",
+          schedule_group: emp.schedule_group || "",
           schedule: [],
           selectedDateSchedule: null,
           shift: null,
@@ -156,6 +158,8 @@ export async function GET(request: NextRequest) {
         gender: emp.gender,
         workplaceName: emp.workplace_name || workplace,
         workplace_name: emp.workplace_name || workplace,
+        scheduleGroup: emp.schedule_group || "",
+        schedule_group: emp.schedule_group || "",
         schedule: weeklySchedule,
         selectedDateSchedule,
         shift: selectedShift,
@@ -240,7 +244,7 @@ export async function PATCH(request: NextRequest) {
 
     let employeeQuery = supabase
       .from("employees")
-      .select("id, name, gender, is_active, workplace_name");
+      .select("id, name, gender, is_active, workplace_name, schedule_group");
 
     if (employeeId) {
       employeeQuery = employeeQuery.eq("id", employeeId);
