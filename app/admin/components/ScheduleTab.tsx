@@ -348,24 +348,6 @@ export default function ScheduleTab() {
     ).length;
   }, [availableEmployees, selectedDate]);
 
-  const roleWeeklySummary = useMemo(() => {
-    return ROLE_GROUPS.map((group) => {
-      const total = days.reduce((sum, day) => {
-        return (
-          sum +
-          getEmployeesForRoleAndDate({
-            employees: availableEmployees,
-            group,
-            date: day.value,
-            selectedDate,
-          }).length
-        );
-      }, 0);
-
-      return { group, total };
-    });
-  }, [availableEmployees, days, selectedDate]);
-
   const fetchSchedule = async (date: string) => {
     if (!date) return;
 
@@ -626,17 +608,6 @@ export default function ScheduleTab() {
     setShowNotSubmitted(false);
   }, [selectedDate]);
 
-  const handleDateSearch = () => {
-    if (!selectedDate) {
-      alert("조회할 날짜를 선택해주세요.");
-      return;
-    }
-
-    setShowUnavailable(false);
-    setShowNotSubmitted(false);
-    fetchSchedule(selectedDate);
-  };
-
   const renderEmployeeChip = (
     emp: EmployeeItem,
     index: number,
@@ -727,32 +698,6 @@ export default function ScheduleTab() {
             </div>
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              gap: "8px",
-              flexWrap: "wrap",
-            }}
-          >
-            {roleWeeklySummary.map(({ group, total }) => (
-              <span
-                key={group.key}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "8px 10px",
-                  borderRadius: "999px",
-                  background: group.bg,
-                  color: group.accent,
-                  fontSize: "12px",
-                  fontWeight: 900,
-                }}
-              >
-                {group.title} {total}명
-              </span>
-            ))}
-          </div>
         </div>
 
         <div style={{ overflowX: "auto" }}>
@@ -1210,41 +1155,6 @@ export default function ScheduleTab() {
               justifyContent: "flex-end",
             }}
           >
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              style={{
-                height: "42px",
-                padding: "0 14px",
-                borderRadius: "10px",
-                border: "1px solid #d1d5db",
-                fontSize: "14px",
-                color: "#111827",
-                backgroundColor: "#ffffff",
-                minWidth: "170px",
-                outline: "none",
-              }}
-            />
-
-            <button
-              type="button"
-              onClick={handleDateSearch}
-              style={{
-                height: "42px",
-                padding: "0 16px",
-                borderRadius: "10px",
-                border: "none",
-                background: "#111827",
-                color: "#ffffff",
-                fontSize: "14px",
-                fontWeight: 800,
-                cursor: "pointer",
-              }}
-            >
-              날짜 조회
-            </button>
-
             <div
               style={{
                 position: "relative",
