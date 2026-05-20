@@ -115,7 +115,7 @@ type ReconnectCodeInfo = {
   expiresAt: string;
 };
 
-const SCHEDULE_GROUP_OPTIONS = [
+const JANGSAGGUN_SCHEDULE_GROUP_OPTIONS = [
   { value: "", label: "선택안함" },
   { value: "랄라", label: "랄라" },
   { value: "모아림", label: "모아림" },
@@ -123,6 +123,27 @@ const SCHEDULE_GROUP_OPTIONS = [
   { value: "택배", label: "택배" },
   { value: "자수", label: "자수" },
 ];
+
+const HEMOZ_SCHEDULE_GROUP_OPTIONS = [
+  { value: "", label: "선택안함" },
+  { value: "오픈", label: "오픈" },
+  { value: "주간", label: "주간" },
+];
+
+function getScheduleGroupOptions(workplaceName: "장사꾼" | "헤모즈") {
+  return workplaceName === "헤모즈"
+    ? HEMOZ_SCHEDULE_GROUP_OPTIONS
+    : JANGSAGGUN_SCHEDULE_GROUP_OPTIONS;
+}
+
+function isValidScheduleGroupForWorkplace(
+  workplaceName: "장사꾼" | "헤모즈",
+  scheduleGroup: string
+) {
+  return getScheduleGroupOptions(workplaceName).some(
+    (option) => option.value === scheduleGroup
+  );
+}
 
 
 export default function AdminPage() {
@@ -562,16 +583,21 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
   }, [filteredPayrollRows]);
 
   const startEdit = (employee: Employee) => {
+    const workplaceName = employee.workplace_name === "헤모즈" ? "헤모즈" : "장사꾼";
+    const scheduleGroup = employee.schedule_group || "";
+
     setEditingEmployeeId(employee.id);
     setEditName(employee.name);
     setEditPhone(employee.phone || "");
     setEditResidentNumber(employee.resident_number || "");
     setEditBankName(employee.bank_name || "");
     setEditAccountNumber(employee.account_number || "");
-    setEditWorkplaceName(
-      employee.workplace_name === "헤모즈" ? "헤모즈" : "장사꾼"
+    setEditWorkplaceName(workplaceName);
+    setEditScheduleGroup(
+      isValidScheduleGroupForWorkplace(workplaceName, scheduleGroup)
+        ? scheduleGroup
+        : ""
     );
-    setEditScheduleGroup(employee.schedule_group || "");
   };
 
   const cancelEdit = () => {
@@ -2001,11 +2027,15 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                     <label style={labelStyle}>근무지</label>
                     <select
                       value={editWorkplaceName}
-                      onChange={(e) =>
-                        setEditWorkplaceName(
-                          e.target.value as "장사꾼" | "헤모즈"
-                        )
-                      }
+                      onChange={(e) => {
+                        const nextWorkplace = e.target.value as "장사꾼" | "헤모즈";
+
+                        setEditWorkplaceName(nextWorkplace);
+
+                        if (!isValidScheduleGroupForWorkplace(nextWorkplace, editScheduleGroup)) {
+                          setEditScheduleGroup("");
+                        }
+                      }}
                       style={inputStyle}
                     >
                       <option value="장사꾼">장사꾼</option>
@@ -2020,7 +2050,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                       onChange={(e) => setEditScheduleGroup(e.target.value)}
                       style={inputStyle}
                     >
-                      {SCHEDULE_GROUP_OPTIONS.map((option) => (
+                      {getScheduleGroupOptions(editWorkplaceName).map((option) => (
                         <option key={option.value} value={option.value}>
                           {option.label}
                         </option>
