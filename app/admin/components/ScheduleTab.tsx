@@ -299,6 +299,16 @@ function getEmployeeScheduleItemShift(
 }
 
 function getEmployeeShiftForDate(employee: EmployeeItem, date: string): ShiftType {
+  const scheduleGroup = getEmployeeScheduleGroup(employee);
+
+  if (scheduleGroup === "오픈") {
+    return "open";
+  }
+
+  if (scheduleGroup === "주간") {
+    return "day";
+  }
+
   const matched = employee.schedule?.find(
     (item) => item.fullDate === date && item.available
   );
