@@ -95,7 +95,15 @@ export async function PATCH(
     if (incomingScheduleGroup !== undefined) {
       const trimmedScheduleGroup = incomingScheduleGroup.trim();
 
-      const allowedScheduleGroups = ["", "랄라", "모아림", "몽글솜", "택배", "자수"];
+      const nextWorkplaceName =
+  typeof workplaceName === "string"
+    ? workplaceName.trim()
+    : undefined;
+
+const allowedScheduleGroups =
+  nextWorkplaceName === "헤모즈"
+    ? ["", "오픈", "주간"]
+    : ["", "랄라", "모아림", "몽글솜", "택배", "자수"];
 
       if (!allowedScheduleGroups.includes(trimmedScheduleGroup)) {
         return NextResponse.json(
