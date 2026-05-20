@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-type ShiftType = "day" | "night";
+type ShiftType = "open" | "day" | "night";
 
 type ScheduleDay = {
   day: string;
@@ -58,7 +58,15 @@ type WeekMode = "current" | "next";
 
 type WorkplaceName = "장사꾼" | "헤모즈";
 
-type RoleGroupKey = "rallaMoarim" | "monggeul" | "delivery" | "embroidery" | "night" | "unassigned";
+type RoleGroupKey =
+  | "rallaMoarim"
+  | "monggeul"
+  | "delivery"
+  | "embroidery"
+  | "night"
+  | "unassigned"
+  | "hemozOpen"
+  | "hemozDay";
 
 type RoleGroupConfig = {
   key: RoleGroupKey;
@@ -134,6 +142,30 @@ const ROLE_GROUPS: RoleGroupConfig[] = [
   },
 ];
 
+
+const HEMOZ_ROLE_GROUPS: RoleGroupConfig[] = [
+  {
+    key: "hemozOpen",
+    title: "오픈",
+    subtitle: "헤모즈 오픈 출근 인원",
+    values: [],
+    accent: "#7c3aed",
+    bg: "#f5f3ff",
+    chipBg: "#ede9fe",
+    chipColor: "#5b21b6",
+  },
+  {
+    key: "hemozDay",
+    title: "주간",
+    subtitle: "헤모즈 주간 출근 인원",
+    values: [],
+    accent: "#2563eb",
+    bg: "#eff6ff",
+    chipBg: "#dbeafe",
+    chipColor: "#1d4ed8",
+  },
+];
+
 function getMondayOfCurrentWeekInKst() {
   const now = new Date();
   const seoulNow = new Date(
@@ -200,6 +232,10 @@ function getWeekTitle(weekMode: WeekMode) {
 function normalizeShift(value: unknown): ShiftType {
   const normalized = String(value || "").toLowerCase().trim();
 
+  if (normalized === "open" || normalized === "오픈") {
+    return "open";
+  }
+
   if (normalized === "night" || normalized === "야간") {
     return "night";
   }
@@ -208,7 +244,9 @@ function normalizeShift(value: unknown): ShiftType {
 }
 
 function getShiftLabel(shift: ShiftType) {
-  return shift === "night" ? "야간" : "주간";
+  if (shift === "open") return "오픈";
+  if (shift === "night") return "야간";
+  return "주간";
 }
 
 function getScheduleItemShift(item?: ScheduleDay | null): ShiftType {
@@ -262,6 +300,28 @@ function getEmployeesForRoleAndDate({
 
       return matchesGroup && isEmployeeAvailableOnDate(employee, date, selectedDate);
     })
+    .sort((a, b) => a.name.localeCompare(b.name, "ko"));
+}
+
+function getEmployeesForHemozGroupAndDate({
+  employees,
+  group,
+  date,
+  selectedDate,
+}: {
+  employees: EmployeeItem[];
+  group: RoleGroupConfig;
+  date: string;
+  selectedDate: string;
+}) {
+  const targetShift: ShiftType = group.key === "hemozOpen" ? "open" : "day";
+
+  return employees
+    .filter(
+      (employee) =>
+        isEmployeeAvailableOnDate(employee, date, selectedDate) &&
+        getEmployeeShiftForDate(employee, date) === targetShift
+    )
     .sort((a, b) => a.name.localeCompare(b.name, "ko"));
 }
 
@@ -352,6 +412,14 @@ export default function ScheduleTab() {
   const selectedDateAvailableCount = useMemo(() => {
     return availableEmployees.filter((emp) =>
       isEmployeeAvailableOnDate(emp, selectedDate, selectedDate)
+    ).length;
+  }, [availableEmployees, selectedDate]);
+
+  const selectedDateOpenCount = useMemo(() => {
+    return availableEmployees.filter(
+      (emp) =>
+        isEmployeeAvailableOnDate(emp, selectedDate, selectedDate) &&
+        getEmployeeShiftForDate(emp, selectedDate) === "open"
     ).length;
   }, [availableEmployees, selectedDate]);
 
@@ -661,6 +729,9 @@ export default function ScheduleTab() {
   };
 
   const renderRoleWeekTable = () => {
+    const activeRoleGroups =
+      selectedWorkplace === "헤모즈" ? HEMOZ_ROLE_GROUPS : ROLE_GROUPS;
+
     return (
       <div
         style={{
@@ -692,7 +763,7 @@ export default function ScheduleTab() {
                 color: "#111827",
               }}
             >
-              역할별 주간 스케줄
+              {selectedWorkplace === "헤모즈" ? "헤모즈 주간 스케줄" : "역할별 주간 스케줄"}
             </div>
             <div
               style={{
@@ -702,7 +773,9 @@ export default function ScheduleTab() {
                 fontWeight: 700,
               }}
             >
-              행은 역할그룹, 열은 요일입니다. 이름을 누르면 해당 직원 스케줄을 수정할 수 있습니다.
+              {selectedWorkplace === "헤모즈"
+                ? "행은 오픈 / 주간 / 출근안함 / 미제출, 열은 요일입니다. 이름을 누르면 해당 직원 스케줄을 수정할 수 있습니다."
+                : "행은 역할그룹, 열은 요일입니다. 이름을 누르면 해당 직원 스케줄을 수정할 수 있습니다."}
             </div>
           </div>
 
@@ -731,7 +804,7 @@ export default function ScheduleTab() {
                     fontWeight: 900,
                   }}
                 >
-                  역할그룹
+                  {selectedWorkplace === "헤모즈" ? "구분" : "역할그룹"}
                 </th>
                 {days.map((day) => {
                   const isSelected = selectedDate === day.value;
@@ -769,7 +842,7 @@ export default function ScheduleTab() {
               </tr>
             </thead>
             <tbody>
-              {ROLE_GROUPS.map((group) => (
+              {activeRoleGroups.map((group) => (
                 <tr key={group.key}>
                   <td
                     style={{
@@ -814,25 +887,32 @@ export default function ScheduleTab() {
 
                   {days.map((day) => {
                     const employees =
-                      group.key === "night"
-                        ? availableEmployees
-                            .filter(
-                              (employee) =>
-                                isEmployeeAvailableOnDate(
-                                  employee,
-                                  day.value,
-                                  selectedDate
-                                ) &&
-                                getEmployeeShiftForDate(employee, day.value) ===
-                                  "night"
-                            )
-                            .sort((a, b) => a.name.localeCompare(b.name, "ko"))
-                        : getEmployeesForRoleAndDate({
+                      selectedWorkplace === "헤모즈"
+                        ? getEmployeesForHemozGroupAndDate({
                             employees: availableEmployees,
                             group,
                             date: day.value,
                             selectedDate,
-                          });
+                          })
+                        : group.key === "night"
+                          ? availableEmployees
+                              .filter(
+                                (employee) =>
+                                  isEmployeeAvailableOnDate(
+                                    employee,
+                                    day.value,
+                                    selectedDate
+                                  ) &&
+                                  getEmployeeShiftForDate(employee, day.value) ===
+                                    "night"
+                              )
+                              .sort((a, b) => a.name.localeCompare(b.name, "ko"))
+                          : getEmployeesForRoleAndDate({
+                              employees: availableEmployees,
+                              group,
+                              date: day.value,
+                              selectedDate,
+                            });
                     const isSelected = selectedDate === day.value;
 
                     return (
@@ -907,7 +987,7 @@ export default function ScheduleTab() {
                                 group.chipBg,
                                 group.chipColor,
                                 day.value,
-                                true
+                                selectedWorkplace !== "헤모즈"
                               )
                             )
                           )}
@@ -1416,17 +1496,35 @@ export default function ScheduleTab() {
               <div style={summaryHelpStyle}>{selectedDate}</div>
             </div>
 
-            <div style={summaryCardStyle("#eff6ff", "#2563eb")}>
-              <div style={summaryLabelStyle}>주간</div>
-              <div style={summaryValueStyle}>{selectedDateDayCount}명</div>
-              <div style={summaryHelpStyle}>선택일 기준</div>
-            </div>
+            {selectedWorkplace === "헤모즈" ? (
+              <>
+                <div style={summaryCardStyle("#f5f3ff", "#7c3aed")}>
+                  <div style={summaryLabelStyle}>오픈</div>
+                  <div style={summaryValueStyle}>{selectedDateOpenCount}명</div>
+                  <div style={summaryHelpStyle}>선택일 기준</div>
+                </div>
 
-            <div style={summaryCardStyle("#eef2ff", "#4f46e5")}>
-              <div style={summaryLabelStyle}>야간</div>
-              <div style={summaryValueStyle}>{selectedDateNightCount}명</div>
-              <div style={summaryHelpStyle}>선택일 기준</div>
-            </div>
+                <div style={summaryCardStyle("#eff6ff", "#2563eb")}>
+                  <div style={summaryLabelStyle}>주간</div>
+                  <div style={summaryValueStyle}>{selectedDateDayCount}명</div>
+                  <div style={summaryHelpStyle}>선택일 기준</div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={summaryCardStyle("#eff6ff", "#2563eb")}>
+                  <div style={summaryLabelStyle}>주간</div>
+                  <div style={summaryValueStyle}>{selectedDateDayCount}명</div>
+                  <div style={summaryHelpStyle}>선택일 기준</div>
+                </div>
+
+                <div style={summaryCardStyle("#eef2ff", "#4f46e5")}>
+                  <div style={summaryLabelStyle}>야간</div>
+                  <div style={summaryValueStyle}>{selectedDateNightCount}명</div>
+                  <div style={summaryHelpStyle}>선택일 기준</div>
+                </div>
+              </>
+            )}
 
             <div style={summaryCardStyle("#f9fafb", "#6b7280")}>
               <div style={summaryLabelStyle}>전체 제출 기준</div>
@@ -1550,9 +1648,11 @@ export default function ScheduleTab() {
                   }}
                 >
                   {selectedEmployee.name}
-                  {getEmployeeScheduleGroup(selectedEmployee)
-                    ? ` (${getEmployeeScheduleGroup(selectedEmployee)})`
-                    : " (역할 미지정)"}
+                  {selectedWorkplace === "헤모즈"
+                    ? ""
+                    : getEmployeeScheduleGroup(selectedEmployee)
+                      ? ` (${getEmployeeScheduleGroup(selectedEmployee)})`
+                      : " (역할 미지정)"}
                   {" · "}
                   {selectedWorkplace}
                   {" · "}
@@ -1662,47 +1762,95 @@ export default function ScheduleTab() {
                               gap: "6px",
                             }}
                           >
-                            <button
-                              type="button"
-                              onClick={() => changeEditScheduleShift(item.fullDate, "day")}
-                              style={{
-                                padding: "6px 10px",
-                                borderRadius: "999px",
-                                border:
-                                  currentShift === "day"
-                                    ? "1px solid #2563eb"
-                                    : "1px solid #d1d5db",
-                                background:
-                                  currentShift === "day" ? "#dbeafe" : "#ffffff",
-                                color:
-                                  currentShift === "day" ? "#1d4ed8" : "#374151",
-                                fontWeight: 900,
-                                cursor: "pointer",
-                              }}
-                            >
-                              주간
-                            </button>
+                            {selectedWorkplace === "헤모즈" ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => changeEditScheduleShift(item.fullDate, "open")}
+                                  style={{
+                                    padding: "6px 10px",
+                                    borderRadius: "999px",
+                                    border:
+                                      currentShift === "open"
+                                        ? "1px solid #7c3aed"
+                                        : "1px solid #d1d5db",
+                                    background:
+                                      currentShift === "open" ? "#ede9fe" : "#ffffff",
+                                    color:
+                                      currentShift === "open" ? "#5b21b6" : "#374151",
+                                    fontWeight: 900,
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  오픈
+                                </button>
 
-                            <button
-                              type="button"
-                              onClick={() => changeEditScheduleShift(item.fullDate, "night")}
-                              style={{
-                                padding: "6px 10px",
-                                borderRadius: "999px",
-                                border:
-                                  currentShift === "night"
-                                    ? "1px solid #6366f1"
-                                    : "1px solid #d1d5db",
-                                background:
-                                  currentShift === "night" ? "#e0e7ff" : "#ffffff",
-                                color:
-                                  currentShift === "night" ? "#4338ca" : "#374151",
-                                fontWeight: 900,
-                                cursor: "pointer",
-                              }}
-                            >
-                              야간
-                            </button>
+                                <button
+                                  type="button"
+                                  onClick={() => changeEditScheduleShift(item.fullDate, "day")}
+                                  style={{
+                                    padding: "6px 10px",
+                                    borderRadius: "999px",
+                                    border:
+                                      currentShift === "day"
+                                        ? "1px solid #2563eb"
+                                        : "1px solid #d1d5db",
+                                    background:
+                                      currentShift === "day" ? "#dbeafe" : "#ffffff",
+                                    color:
+                                      currentShift === "day" ? "#1d4ed8" : "#374151",
+                                    fontWeight: 900,
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  주간
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => changeEditScheduleShift(item.fullDate, "day")}
+                                  style={{
+                                    padding: "6px 10px",
+                                    borderRadius: "999px",
+                                    border:
+                                      currentShift === "day"
+                                        ? "1px solid #2563eb"
+                                        : "1px solid #d1d5db",
+                                    background:
+                                      currentShift === "day" ? "#dbeafe" : "#ffffff",
+                                    color:
+                                      currentShift === "day" ? "#1d4ed8" : "#374151",
+                                    fontWeight: 900,
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  주간
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => changeEditScheduleShift(item.fullDate, "night")}
+                                  style={{
+                                    padding: "6px 10px",
+                                    borderRadius: "999px",
+                                    border:
+                                      currentShift === "night"
+                                        ? "1px solid #6366f1"
+                                        : "1px solid #d1d5db",
+                                    background:
+                                      currentShift === "night" ? "#e0e7ff" : "#ffffff",
+                                    color:
+                                      currentShift === "night" ? "#4338ca" : "#374151",
+                                    fontWeight: 900,
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  야간
+                                </button>
+                              </>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1724,7 +1872,7 @@ export default function ScheduleTab() {
                 }}
               >
                 수정 후 저장하면 해당 직원의 {getWeekTitle(weekMode)} 스케줄이 변경됩니다.
-                출근 가능으로 체크한 날은 주간/야간도 함께 선택해주세요.
+                출근으로 체크한 날은 {selectedWorkplace === "헤모즈" ? "오픈/주간" : "주간/야간"}도 함께 선택해주세요.
               </div>
 
               <div
