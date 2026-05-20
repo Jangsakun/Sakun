@@ -271,12 +271,39 @@ function isEmployeeAvailableOnDate(employee: EmployeeItem, date: string, selecte
   return date === selectedDate;
 }
 
+function getDefaultShiftByEmployeeGroup(employee: EmployeeItem): ShiftType {
+  const scheduleGroup = getEmployeeScheduleGroup(employee);
+
+  if (scheduleGroup === "오픈") {
+    return "open";
+  }
+
+  return "day";
+}
+
+function getEmployeeScheduleItemShift(
+  employee: EmployeeItem,
+  item?: ScheduleDay | null
+): ShiftType {
+  if (!item) {
+    return getDefaultShiftByEmployeeGroup(employee);
+  }
+
+  const rawShift = item.shift || item.shiftType || item.shiftLabel;
+
+  if (!rawShift || String(rawShift).trim() === "") {
+    return getDefaultShiftByEmployeeGroup(employee);
+  }
+
+  return normalizeShift(rawShift);
+}
+
 function getEmployeeShiftForDate(employee: EmployeeItem, date: string): ShiftType {
   const matched = employee.schedule?.find(
     (item) => item.fullDate === date && item.available
   );
 
-  return getScheduleItemShift(matched);
+  return getEmployeeScheduleItemShift(employee, matched);
 }
 
 function getEmployeesForRoleAndDate({
@@ -509,7 +536,7 @@ export default function ScheduleTab() {
           item.fullDate >= weekStartDate &&
           item.fullDate <= weekEndDate
         ) {
-          selectedAvailableMap.set(item.fullDate, getScheduleItemShift(item));
+          selectedAvailableMap.set(item.fullDate, getEmployeeScheduleItemShift(matchedEmployee || employee, item));
         }
       });
     } else if (
@@ -520,14 +547,16 @@ export default function ScheduleTab() {
       selectedAvailableMap.set(selectedDate, getEmployeeShiftForDate(employee, selectedDate));
     }
 
+    const defaultShift = getDefaultShiftByEmployeeGroup(matchedEmployee || employee);
+
     const nextSchedule = days.map((day) => ({
       day: day.day,
       label: day.label,
       fullDate: day.value,
       available: selectedAvailableMap.has(day.value),
-      shift: selectedAvailableMap.get(day.value) || "day",
-      shiftType: selectedAvailableMap.get(day.value) || "day",
-      shiftLabel: getShiftLabel(selectedAvailableMap.get(day.value) || "day"),
+      shift: selectedAvailableMap.get(day.value) || defaultShift,
+      shiftType: selectedAvailableMap.get(day.value) || defaultShift,
+      shiftLabel: getShiftLabel(selectedAvailableMap.get(day.value) || defaultShift),
     }));
 
     setSelectedEmployee(matchedEmployee || employee);
@@ -546,7 +575,12 @@ export default function ScheduleTab() {
         if (item.fullDate !== fullDate) return item;
 
         const nextAvailable = !item.available;
-        const nextShift = nextAvailable ? item.shift || "day" : item.shift || "day";
+        const defaultShift = selectedEmployee
+          ? getDefaultShiftByEmployeeGroup(selectedEmployee)
+          : "day";
+        const nextShift = nextAvailable
+          ? item.shift || defaultShift
+          : item.shift || defaultShift;
 
         return {
           ...item,
@@ -654,7 +688,7 @@ export default function ScheduleTab() {
 
     const selectedAvailableMap = new Map<string, ShiftType>();
 
-    if (Array.isArray(matchedEmployee?.schedule)) {
+    if (matchedEmployee && Array.isArray(matchedEmployee.schedule)) {
       matchedEmployee.schedule.forEach((item) => {
         if (
           item.available === true &&
@@ -662,13 +696,17 @@ export default function ScheduleTab() {
           item.fullDate >= weekStartDate &&
           item.fullDate <= weekEndDate
         ) {
-          selectedAvailableMap.set(item.fullDate, getScheduleItemShift(item));
+          selectedAvailableMap.set(item.fullDate, getEmployeeScheduleItemShift(matchedEmployee, item));
         }
       });
     }
 
+    const defaultShift = selectedEmployee
+      ? getDefaultShiftByEmployeeGroup(selectedEmployee)
+      : "day";
+
     const newSchedule = days.map((day) => {
-      const shift = selectedAvailableMap.get(day.value) || "day";
+      const shift = selectedAvailableMap.get(day.value) || defaultShift;
 
       return {
         day: day.day,
