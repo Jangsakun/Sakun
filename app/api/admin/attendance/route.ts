@@ -83,9 +83,10 @@ export async function PUT(request: Request) {
   try {
     const body = await request.json();
 
-    const { employeeName, date, checkInTime, checkOutTime } = body;
+    const { employeeName, workplaceName, date, checkInTime, checkOutTime } = body;
 
     const trimmedEmployeeName = String(employeeName || "").trim();
+    const trimmedWorkplaceName = String(workplaceName || "").trim();
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -97,9 +98,16 @@ export async function PUT(request: Request) {
       );
     }
 
+    if (!trimmedWorkplaceName || !["장사꾼", "헤모즈"].includes(trimmedWorkplaceName)) {
+      return NextResponse.json(
+        { success: false, message: "근무지를 선택해 주세요." },
+        { status: 400 }
+      );
+    }
+
     if (!trimmedEmployeeName || !date || !checkInTime) {
       return NextResponse.json(
-        { success: false, message: "직원, 날짜, 출근시간은 필수입니다." },
+        { success: false, message: "근무지, 직원, 날짜, 출근시간은 필수입니다." },
         { status: 400 }
       );
     }
@@ -110,6 +118,7 @@ export async function PUT(request: Request) {
       .from("employees")
       .select("id, name, is_active, workplace_name")
       .eq("name", trimmedEmployeeName)
+      .eq("workplace_name", trimmedWorkplaceName)
       .eq("is_active", true);
 
     if (employeeError) {
@@ -121,7 +130,10 @@ export async function PUT(request: Request) {
 
     if (!employees || employees.length === 0) {
       return NextResponse.json(
-        { success: false, message: "직원을 찾을 수 없습니다." },
+        {
+          success: false,
+          message: `${trimmedWorkplaceName} 근무지에서 '${trimmedEmployeeName}' 직원을 찾을 수 없습니다.`,
+        },
         { status: 404 }
       );
     }
@@ -131,7 +143,7 @@ export async function PUT(request: Request) {
         {
           success: false,
           message:
-            "같은 이름의 직원이 여러 명 있습니다. 직원 관리에서 이름을 구분해서 수정하거나 ID 방식이 필요합니다.",
+            "선택한 근무지 안에서도 같은 이름의 직원이 여러 명 있습니다. 직원명 또는 직원 선택 방식으로 구분이 필요합니다.",
         },
         { status: 400 }
       );

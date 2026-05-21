@@ -202,6 +202,9 @@ export default function AdminPage() {
   const [editCheckOutTime, setEditCheckOutTime] = useState("");
   const [attendanceSaving, setAttendanceSaving] = useState(false);
 
+const [manualWorkplace, setManualWorkplace] = useState<"장사꾼" | "헤모즈">(
+  "장사꾼"
+);
 const [manualEmployeeName, setManualEmployeeName] = useState("");
 const [manualDate, setManualDate] = useState("");
 const [manualCheckInTime, setManualCheckInTime] = useState("");
@@ -1289,11 +1292,31 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
   <div
     style={{
       display: "grid",
-      gridTemplateColumns: "1.1fr 0.8fr 0.75fr 0.75fr auto",
+      gridTemplateColumns: "0.8fr 1.1fr 0.8fr 0.75fr 0.75fr auto",
       gap: "12px",
       alignItems: "end",
     }}
   >
+    <div>
+      <label style={labelStyle}>근무지</label>
+      <select
+        value={manualWorkplace}
+        onChange={(e) =>
+          setManualWorkplace(e.target.value as "장사꾼" | "헤모즈")
+        }
+        style={{
+          ...inputStyle,
+          height: "44px",
+          borderRadius: "12px",
+          backgroundColor: "#ffffff",
+          fontSize: "14px",
+        }}
+      >
+        <option value="장사꾼">장사꾼</option>
+        <option value="헤모즈">헤모즈</option>
+      </select>
+    </div>
+
     <div>
       <label style={labelStyle}>직원 이름</label>
       <input
@@ -1365,7 +1388,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
       onClick={async () => {
         try {
           if (!manualEmployeeName || !manualDate || !manualCheckInTime) {
-            alert("직원 이름, 날짜, 출근시간은 필수입니다.");
+            alert("근무지, 직원 이름, 날짜, 출근시간은 필수입니다.");
             return;
           }
 
@@ -1375,6 +1398,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
+              workplaceName: manualWorkplace,
               employeeName: manualEmployeeName,
               date: manualDate,
               checkInTime: manualCheckInTime,
@@ -1391,6 +1415,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
 
           alert("출퇴근 기록이 추가되었습니다.");
 
+          setManualWorkplace("장사꾼");
           setManualEmployeeName("");
           setManualDate("");
           setManualCheckInTime("");
