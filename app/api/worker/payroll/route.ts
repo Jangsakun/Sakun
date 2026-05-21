@@ -353,11 +353,14 @@ export async function POST(request: NextRequest) {
           };
         }
 
-        const normalizedCheckInDate = normalizeCheckIn(checkIn.checked_at, workplace);
+        // 관리자 페이지에서 수동 수정한 시간이 최종 확정값입니다.
+        // 근로자가 출퇴근 버튼을 누를 때는 이미 출퇴근 API에서 자동 보정되어 DB에 저장됩니다.
+        // 따라서 근로자 급여조회에서는 DB에 저장된 checked_at 값을 다시 30분 단위로 보정하지 않고 그대로 사용합니다.
+        const normalizedCheckInDate = new Date(checkIn.checked_at);
 
         const finalCheckOut = checkOut || null;
         const normalizedCheckOutDate = finalCheckOut
-          ? normalizeCheckOut(finalCheckOut.checked_at, workplace)
+          ? new Date(finalCheckOut.checked_at)
           : new Date();
 
         const checkInMinutes = getKstHourMinute(normalizedCheckInDate);
