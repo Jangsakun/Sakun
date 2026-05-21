@@ -431,15 +431,10 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
       let workMinutes: number | null = null;
 
       if (checkInRecord && checkOutRecord) {
-        const normalizedCheckIn = normalizeAttendanceCheckIn(
-          checkInRecord.checked_at
-        );
-        const normalizedCheckOut = normalizeAttendanceCheckOut(
-          checkOutRecord.checked_at
-        );
+        const savedCheckIn = new Date(checkInRecord.checked_at);
+        const savedCheckOut = new Date(checkOutRecord.checked_at);
 
-        const diffMs =
-          normalizedCheckOut.getTime() - normalizedCheckIn.getTime();
+        const diffMs = savedCheckOut.getTime() - savedCheckIn.getTime();
 
         if (diffMs >= 0) {
           let calculatedMinutes = Math.floor(diffMs / 1000 / 60);
@@ -448,8 +443,8 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
           const lunchEnd = createSeoulDateTime(date, 13, 30);
 
           const includesFullLunch =
-            normalizedCheckIn.getTime() <= lunchStart.getTime() &&
-            normalizedCheckOut.getTime() >= lunchEnd.getTime();
+            savedCheckIn.getTime() <= lunchStart.getTime() &&
+            savedCheckOut.getTime() >= lunchEnd.getTime();
 
           if (includesFullLunch) {
             calculatedMinutes = Math.max(0, calculatedMinutes - 60);
@@ -1336,6 +1331,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
       <label style={labelStyle}>출근시간</label>
       <input
         type="time"
+        step={60}
         value={manualCheckInTime}
         onChange={(e) => setManualCheckInTime(e.target.value)}
         style={{
@@ -1352,6 +1348,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
       <label style={labelStyle}>퇴근시간</label>
       <input
         type="time"
+        step={60}
         value={manualCheckOutTime}
         onChange={(e) => setManualCheckOutTime(e.target.value)}
         style={{
@@ -1550,6 +1547,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                             {isEditingAttendance ? (
                               <input
                                 type="datetime-local"
+                                step={60}
                                 value={editCheckInTime}
                                 onChange={(e) =>
                                   setEditCheckInTime(e.target.value)
@@ -1565,6 +1563,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                             {isEditingAttendance ? (
                               <input
                                 type="datetime-local"
+                                step={60}
                                 value={editCheckOutTime}
                                 onChange={(e) =>
                                   setEditCheckOutTime(e.target.value)
@@ -2686,12 +2685,12 @@ function formatTime(value: string | null) {
 
 function formatCheckInTime(value: string | null) {
   if (!value) return "-";
-  return formatTime(normalizeAttendanceCheckIn(value).toISOString());
+  return formatTime(value);
 }
 
 function formatCheckOutTime(value: string | null) {
   if (!value) return "-";
-  return formatTime(normalizeAttendanceCheckOut(value).toISOString());
+  return formatTime(value);
 }
 
 function formatDate(value: string) {
