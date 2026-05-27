@@ -832,22 +832,19 @@ export default function ScheduleTab() {
                   {selectedWorkplace === "헤모즈" ? "구분" : "역할그룹"}
                 </th>
                 {days.map((day) => {
-                  const isSelected = selectedDate === day.value;
-
                   return (
                     <th
                       key={day.value}
-                      onClick={() => setSelectedDate(day.value)}
                       style={{
                         textAlign: "left",
                         padding: "14px 12px",
-                        background: isSelected ? "#111827" : "#f8fafc",
+                        background: "#f8fafc",
                         borderBottom: "1px solid #e5e7eb",
                         borderLeft: "1px solid #eef2f7",
-                        color: isSelected ? "#ffffff" : "#475569",
+                        color: "#475569",
                         fontSize: "13px",
                         fontWeight: 900,
-                        cursor: "pointer",
+                        cursor: "default",
                         minWidth: "150px",
                       }}
                     >
@@ -938,8 +935,6 @@ export default function ScheduleTab() {
                               date: day.value,
                               selectedDate,
                             });
-                    const isSelected = selectedDate === day.value;
-
                     return (
                       <td
                         key={`${group.key}-${day.value}`}
@@ -948,7 +943,7 @@ export default function ScheduleTab() {
                           borderBottom: "1px solid #eef2f7",
                           borderLeft: "1px solid #f1f5f9",
                           verticalAlign: "top",
-                          background: isSelected ? "#f8fafc" : "#ffffff",
+                          background: "#ffffff",
                         }}
                       >
                         <div
@@ -1057,8 +1052,6 @@ export default function ScheduleTab() {
                     notSubmittedEmployees: data?.notSubmitted || [],
                     date: day.value,
                   });
-                  const isSelected = selectedDate === day.value;
-
                   return (
                     <td
                       key={`unavailable-${day.value}`}
@@ -1067,7 +1060,7 @@ export default function ScheduleTab() {
                         borderBottom: "1px solid #eef2f7",
                         borderLeft: "1px solid #f1f5f9",
                         verticalAlign: "top",
-                        background: isSelected ? "#fff7f7" : "#ffffff",
+                        background: "#ffffff",
                       }}
                     >
                       <div
@@ -1171,8 +1164,6 @@ export default function ScheduleTab() {
 
                 {days.map((day) => {
                   const employees = getNotSubmittedEmployeesForDate([...(data?.notSubmitted || [])]);
-                  const isSelected = selectedDate === day.value;
-
                   return (
                     <td
                       key={`not-submitted-${day.value}`}
@@ -1181,7 +1172,7 @@ export default function ScheduleTab() {
                         borderBottom: "1px solid #eef2f7",
                         borderLeft: "1px solid #f1f5f9",
                         verticalAlign: "top",
-                        background: isSelected ? "#f8fafc" : "#ffffff",
+                        background: "#ffffff",
                       }}
                     >
                       <div
@@ -1851,4 +1842,3 @@ export default function ScheduleTab() {
     </div>
   );
 }
-
