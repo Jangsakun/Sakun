@@ -452,35 +452,6 @@ export default function ScheduleTab() {
     return Array.from(map.values());
   }, [data, allEmployees, days]);
 
-  const selectedDateAvailableCount = useMemo(() => {
-    return availableEmployees.filter((emp) =>
-      isEmployeeAvailableOnDate(emp, selectedDate, selectedDate)
-    ).length;
-  }, [availableEmployees, selectedDate]);
-
-  const selectedDateOpenCount = useMemo(() => {
-    return availableEmployees.filter(
-      (emp) =>
-        isEmployeeAvailableOnDate(emp, selectedDate, selectedDate) &&
-        getEmployeeShiftForDate(emp, selectedDate) === "open"
-    ).length;
-  }, [availableEmployees, selectedDate]);
-
-  const selectedDateDayCount = useMemo(() => {
-    return availableEmployees.filter(
-      (emp) =>
-        isEmployeeAvailableOnDate(emp, selectedDate, selectedDate) &&
-        getEmployeeShiftForDate(emp, selectedDate) === "day"
-    ).length;
-  }, [availableEmployees, selectedDate]);
-
-  const selectedDateNightCount = useMemo(() => {
-    return availableEmployees.filter(
-      (emp) =>
-        isEmployeeAvailableOnDate(emp, selectedDate, selectedDate) &&
-        getEmployeeShiftForDate(emp, selectedDate) === "night"
-    ).length;
-  }, [availableEmployees, selectedDate]);
 
   const fetchSchedule = async (date: string) => {
     if (!date) return;
@@ -998,20 +969,6 @@ export default function ScheduleTab() {
                           >
                             {employees.length}명
                           </span>
-                          {isSelected && (
-                            <span
-                              style={{
-                                padding: "3px 7px",
-                                borderRadius: "999px",
-                                background: "#111827",
-                                color: "#ffffff",
-                                fontSize: "10px",
-                                fontWeight: 900,
-                              }}
-                            >
-                              조회중
-                            </span>
-                          )}
                         </div>
 
                         <div
@@ -1131,20 +1088,6 @@ export default function ScheduleTab() {
                         >
                           {employees.length}명
                         </span>
-                        {isSelected && (
-                          <span
-                            style={{
-                              padding: "3px 7px",
-                              borderRadius: "999px",
-                              background: "#991b1b",
-                              color: "#ffffff",
-                              fontSize: "10px",
-                              fontWeight: 900,
-                            }}
-                          >
-                            조회중
-                          </span>
-                        )}
                       </div>
 
                       <div
@@ -1259,20 +1202,6 @@ export default function ScheduleTab() {
                         >
                           {employees.length}명
                         </span>
-                        {isSelected && (
-                          <span
-                            style={{
-                              padding: "3px 7px",
-                              borderRadius: "999px",
-                              background: "#374151",
-                              color: "#ffffff",
-                              fontSize: "10px",
-                              fontWeight: 900,
-                            }}
-                          >
-                            조회중
-                          </span>
-                        )}
                       </div>
 
                       <div
@@ -1534,62 +1463,7 @@ export default function ScheduleTab() {
         </div>
       )}
 
-      {!loading && data && (
-        <>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-              gap: "12px",
-              marginBottom: "16px",
-            }}
-          >
-            <div style={summaryCardStyle("#f0fdf4", "#16a34a")}>
-              <div style={summaryLabelStyle}>선택일 출근 가능</div>
-              <div style={summaryValueStyle}>{selectedDateAvailableCount}명</div>
-              <div style={summaryHelpStyle}>{selectedDate}</div>
-            </div>
-
-            {selectedWorkplace === "헤모즈" ? (
-              <>
-                <div style={summaryCardStyle("#f5f3ff", "#7c3aed")}>
-                  <div style={summaryLabelStyle}>오픈</div>
-                  <div style={summaryValueStyle}>{selectedDateOpenCount}명</div>
-                  <div style={summaryHelpStyle}>선택일 기준</div>
-                </div>
-
-                <div style={summaryCardStyle("#eff6ff", "#2563eb")}>
-                  <div style={summaryLabelStyle}>주간</div>
-                  <div style={summaryValueStyle}>{selectedDateDayCount}명</div>
-                  <div style={summaryHelpStyle}>선택일 기준</div>
-                </div>
-              </>
-            ) : (
-              <>
-                <div style={summaryCardStyle("#eff6ff", "#2563eb")}>
-                  <div style={summaryLabelStyle}>주간</div>
-                  <div style={summaryValueStyle}>{selectedDateDayCount}명</div>
-                  <div style={summaryHelpStyle}>선택일 기준</div>
-                </div>
-
-                <div style={summaryCardStyle("#eef2ff", "#4f46e5")}>
-                  <div style={summaryLabelStyle}>야간</div>
-                  <div style={summaryValueStyle}>{selectedDateNightCount}명</div>
-                  <div style={summaryHelpStyle}>선택일 기준</div>
-                </div>
-              </>
-            )}
-
-            <div style={summaryCardStyle("#f9fafb", "#6b7280")}>
-              <div style={summaryLabelStyle}>전체 제출 기준</div>
-              <div style={summaryValueStyle}>{data.summary.total}명</div>
-              <div style={summaryHelpStyle}>출근안함 {data.summary.unavailable}명 / 미제출 {data.summary.notSubmitted}명</div>
-            </div>
-          </div>
-
-          {renderRoleWeekTable()}
-        </>
-      )}
+      {!loading && data && renderRoleWeekTable()}
 
       {!loading && !data && (
         <div
@@ -1978,31 +1852,3 @@ export default function ScheduleTab() {
   );
 }
 
-function summaryCardStyle(bg: string, accent: string) {
-  return {
-    border: `1px solid ${accent}22`,
-    borderRadius: "16px",
-    padding: "16px",
-    background: bg,
-  };
-}
-
-const summaryLabelStyle = {
-  color: "#64748b",
-  fontSize: "13px",
-  fontWeight: 800,
-  marginBottom: "8px",
-};
-
-const summaryValueStyle = {
-  color: "#111827",
-  fontSize: "26px",
-  fontWeight: 900,
-  marginBottom: "4px",
-};
-
-const summaryHelpStyle = {
-  color: "#64748b",
-  fontSize: "12px",
-  fontWeight: 700,
-};
