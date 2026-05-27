@@ -261,14 +261,18 @@ function getEmployeeKey(employee: EmployeeItem) {
   return String(employee.id ?? employee.name);
 }
 
-function isEmployeeAvailableOnDate(employee: EmployeeItem, date: string, selectedDate: string) {
-  const matched = employee.schedule?.find((item) => item.fullDate === date);
+function getScheduleItemForDate(employee: EmployeeItem, date: string) {
+  return employee.schedule?.find((item) => item.fullDate === date) || null;
+}
 
-  if (matched) {
-    return matched.available === true;
+function isEmployeeAvailableOnDate(employee: EmployeeItem, date: string, _selectedDate: string) {
+  const matched = getScheduleItemForDate(employee, date);
+
+  if (!matched) {
+    return false;
   }
 
-  return date === selectedDate;
+  return matched.available === true;
 }
 
 function getDefaultShiftByEmployeeGroup(employee: EmployeeItem): ShiftType {
@@ -299,6 +303,12 @@ function getEmployeeScheduleItemShift(
 }
 
 function getEmployeeShiftForDate(employee: EmployeeItem, date: string): ShiftType {
+  const matched = getScheduleItemForDate(employee, date);
+
+  if (matched?.available === true) {
+    return getEmployeeScheduleItemShift(employee, matched);
+  }
+
   const scheduleGroup = getEmployeeScheduleGroup(employee);
 
   if (scheduleGroup === "오픈") {
@@ -309,11 +319,7 @@ function getEmployeeShiftForDate(employee: EmployeeItem, date: string): ShiftTyp
     return "day";
   }
 
-  const matched = employee.schedule?.find(
-    (item) => item.fullDate === date && item.available
-  );
-
-  return getEmployeeScheduleItemShift(employee, matched);
+  return getDefaultShiftByEmployeeGroup(employee);
 }
 
 function getEmployeesForRoleAndDate({
