@@ -61,16 +61,13 @@ export async function GET() {
 
       const employmentType = emp.employment_type || "fixed";
 
-      let weeklyAllowanceStatus =
-        emp.weekly_allowance_status || "검토필요";
+      const savedWeeklyAllowanceStatus = String(
+        emp.weekly_allowance_status || ""
+      ).trim();
 
-      if (employmentType === "fixed") {
-        weeklyAllowanceStatus = "대상";
-      }
-
-      if (employmentType === "carrot") {
-        weeklyAllowanceStatus = "비대상";
-      }
+      const weeklyAllowanceStatus =
+        savedWeeklyAllowanceStatus ||
+        (employmentType === "carrot" ? "비대상" : "대상");
 
       return {
         ...emp,
@@ -93,3 +90,4 @@ export async function GET() {
     return NextResponse.json({ success: false, message }, { status: 500 });
   }
 }
+
