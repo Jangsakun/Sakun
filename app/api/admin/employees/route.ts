@@ -26,6 +26,7 @@ export async function GET() {
         bank_name,
         account_number,
         workplace_name,
+        employment_type,
         schedule_group,
         is_active,
         hourly_wage,
@@ -58,10 +59,25 @@ export async function GET() {
         )}******`;
       }
 
+      const employmentType = emp.employment_type || "fixed";
+
+      let weeklyAllowanceStatus =
+        emp.weekly_allowance_status || "검토필요";
+
+      if (employmentType === "fixed") {
+        weeklyAllowanceStatus = "대상";
+      }
+
+      if (employmentType === "carrot") {
+        weeklyAllowanceStatus = "비대상";
+      }
+
       return {
         ...emp,
         workplace_name: emp.workplace_name || "장사꾼",
+        employment_type: employmentType,
         schedule_group: emp.schedule_group || "",
+        weekly_allowance_status: weeklyAllowanceStatus,
         resident_number_masked,
       };
     });

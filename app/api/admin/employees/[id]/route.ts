@@ -16,6 +16,7 @@ export async function PATCH(
       bank_name,
       account_number,
       workplaceName,
+      employmentType,
       scheduleGroup,
       schedule_group,
       birthDate,
@@ -85,6 +86,22 @@ export async function PATCH(
       updatePayload.workplace_name = trimmedWorkplaceName;
     }
 
+    if (typeof employmentType === "string") {
+      const trimmedEmploymentType = employmentType.trim();
+
+      if (
+        trimmedEmploymentType !== "fixed" &&
+        trimmedEmploymentType !== "carrot"
+      ) {
+        return NextResponse.json(
+          { success: false, message: "고용형태 값이 올바르지 않습니다." },
+          { status: 400 }
+        );
+      }
+
+      updatePayload.employment_type = trimmedEmploymentType;
+    }
+
     const incomingScheduleGroup =
       typeof scheduleGroup === "string"
         ? scheduleGroup
@@ -96,14 +113,12 @@ export async function PATCH(
       const trimmedScheduleGroup = incomingScheduleGroup.trim();
 
       const nextWorkplaceName =
-  typeof workplaceName === "string"
-    ? workplaceName.trim()
-    : undefined;
+        typeof workplaceName === "string" ? workplaceName.trim() : undefined;
 
-const allowedScheduleGroups =
-  nextWorkplaceName === "헤모즈"
-    ? ["", "오픈", "주간"]
-    : ["", "랄라", "모아림", "몽글솜", "택배", "자수"];
+      const allowedScheduleGroups =
+        nextWorkplaceName === "헤모즈"
+          ? ["", "오픈", "주간"]
+          : ["", "랄라", "모아림", "몽글솜", "택배", "자수"];
 
       if (!allowedScheduleGroups.includes(trimmedScheduleGroup)) {
         return NextResponse.json(

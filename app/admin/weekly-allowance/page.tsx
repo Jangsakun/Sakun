@@ -11,6 +11,7 @@ type Employee = {
   birth_date: string;
   phone_last4: string;
   workplace_name?: string | null;
+  employment_type?: string | null;
   hourly_wage?: number | null;
   weekly_allowance_status?: string | null;
   weekly_allowance_reason?: string | null;
@@ -56,8 +57,14 @@ export default function AdminWeeklyAllowancePage() {
 
     return employees.filter((employee) => {
       const name = String(employee.name || "").toLowerCase();
-      const status = employee.weekly_allowance_status || "검토필요";
+      const status = getAutoWeeklyAllowanceStatus(employee);
       const workplaceName = employee.workplace_name || "장사꾼";
+  const employmentTypeLabel =
+    employee.employment_type === "carrot"
+      ? "당근"
+      : employee.employment_type === "fixed"
+      ? "고정"
+      : "미지정";
 
       const matchesKeyword = !keyword || name.includes(keyword);
       const matchesStatus = statusFilter === "전체" || status === statusFilter;
@@ -169,11 +176,12 @@ export default function AdminWeeklyAllowancePage() {
           </div>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-gray-200">
-            <table className="w-full min-w-[1080px] border-collapse bg-white text-sm">
+            <table className="w-full min-w-[1180px] border-collapse bg-white text-sm">
               <thead className="bg-gray-50">
                 <tr className="border-b border-gray-200">
                   <th className="px-4 py-3 text-left font-semibold">직원</th>
                   <th className="px-4 py-3 text-left font-semibold">근무지</th>
+                  <th className="px-4 py-3 text-left font-semibold">고용형태</th>
                   <th className="px-4 py-3 text-left font-semibold">시급</th>
                   <th className="px-4 py-3 text-left font-semibold">주휴수당 상태</th>
                   <th className="px-4 py-3 text-left font-semibold">비대상 사유</th>
@@ -197,11 +205,24 @@ export default function AdminWeeklyAllowancePage() {
         )}
 
         <div className="mt-6 rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-700">
-          <strong>TIP</strong> 변경사항은 저장 버튼을 눌러야 반영됩니다.
+          <strong>TIP</strong> 고정은 대상, 당근은 비대상으로 자동 적용됩니다. 사유와 메모는 저장 버튼을 눌러야 반영됩니다.
         </div>
       </div>
     </main>
   );
+}
+
+
+function getAutoWeeklyAllowanceStatus(employee: Employee) {
+  if (employee.employment_type === "fixed") {
+    return "대상";
+  }
+
+  if (employee.employment_type === "carrot") {
+    return "비대상";
+  }
+
+  return employee.weekly_allowance_status || "검토필요";
 }
 
 function EmployeeAllowanceRow({
@@ -213,8 +234,12 @@ function EmployeeAllowanceRow({
   onSaved: () => Promise<void>;
   setParentMessage: (message: string) => void;
 }) {
+  const autoWeeklyAllowanceStatus = getAutoWeeklyAllowanceStatus(employee);
+  const isAutoManaged =
+    employee.employment_type === "fixed" || employee.employment_type === "carrot";
+
   const [weeklyAllowanceStatus, setWeeklyAllowanceStatus] = useState(
-    employee.weekly_allowance_status || "검토필요"
+    autoWeeklyAllowanceStatus
   );
   const [weeklyAllowanceReason, setWeeklyAllowanceReason] = useState(
     employee.weekly_allowance_reason || ""
@@ -236,7 +261,7 @@ function EmployeeAllowanceRow({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          weeklyAllowanceStatus,
+          weeklyAllowanceStatus: autoWeeklyAllowanceStatus,
           weeklyAllowanceReason,
           weeklyAllowanceNote,
         }),
@@ -259,13 +284,19 @@ function EmployeeAllowanceRow({
   };
 
   const statusClass =
-    weeklyAllowanceStatus === "대상"
+    autoWeeklyAllowanceStatus === "대상"
       ? "bg-emerald-50 text-emerald-700"
-      : weeklyAllowanceStatus === "비대상"
+      : autoWeeklyAllowanceStatus === "비대상"
       ? "bg-red-50 text-red-600"
       : "bg-orange-50 text-orange-600";
 
   const workplaceName = employee.workplace_name || "장사꾼";
+  const employmentTypeLabel =
+    employee.employment_type === "carrot"
+      ? "당근"
+      : employee.employment_type === "fixed"
+      ? "고정"
+      : "미지정";
 
   return (
     <>
@@ -284,20 +315,40 @@ function EmployeeAllowanceRow({
           </span>
         </td>
 
+        <td className="px-4 py-3">
+          <span
+            className={
+              employee.employment_type === "carrot"
+                ? "rounded-full bg-orange-100 px-3 py-1 text-xs font-bold text-orange-700"
+                : employee.employment_type === "fixed"
+                ? "rounded-full bg-indigo-100 px-3 py-1 text-xs font-bold text-indigo-700"
+                : "rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-600"
+            }
+          >
+            {employmentTypeLabel}
+          </span>
+        </td>
+
         <td className="px-4 py-3 text-gray-900">
           {(employee.hourly_wage ?? 10320).toLocaleString("ko-KR")}원
         </td>
 
         <td className="px-4 py-3">
           <select
-            value={weeklyAllowanceStatus}
+            value={autoWeeklyAllowanceStatus}
             onChange={(e) => setWeeklyAllowanceStatus(e.target.value)}
-            className={`h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold outline-none ${statusClass}`}
+            disabled={isAutoManaged}
+            className={`h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold outline-none disabled:cursor-not-allowed disabled:opacity-100 ${statusClass}`}
           >
             <option value="대상">대상</option>
             <option value="비대상">비대상</option>
             <option value="검토필요">검토필요</option>
           </select>
+          {isAutoManaged && (
+            <div className="mt-1 text-xs font-medium text-gray-500">
+              {employmentTypeLabel} 기준 자동 적용
+            </div>
+          )}
         </td>
 
         <td className="px-4 py-3">
@@ -343,7 +394,7 @@ function EmployeeAllowanceRow({
 
       {memoOpen && (
         <tr className="border-b border-gray-200 bg-white">
-          <td colSpan={7} className="px-4 py-3">
+          <td colSpan={8} className="px-4 py-3">
             <label className="mb-2 block text-sm font-semibold text-gray-700">
               관리자 메모
             </label>

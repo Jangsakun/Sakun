@@ -22,6 +22,8 @@ type EmployeeItem = {
   gender?: string | null;
   schedule_group?: string | null;
   scheduleGroup?: string | null;
+  employment_type?: string | null;
+  employmentType?: string | null;
   workplace_name?: string | null;
   workplaceName?: string | null;
   schedule?: ScheduleDay[];
@@ -64,6 +66,7 @@ type RoleGroupKey =
   | "delivery"
   | "embroidery"
   | "night"
+  | "carrot"
   | "unassigned"
   | "hemozOpen"
   | "hemozDay";
@@ -131,6 +134,16 @@ const ROLE_GROUPS: RoleGroupConfig[] = [
     chipColor: "#3730a3",
   },
   {
+    key: "carrot",
+    title: "당근",
+    subtitle: "당근 알바 출근 인원",
+    values: [],
+    accent: "#f97316",
+    bg: "#fff7ed",
+    chipBg: "#ffedd5",
+    chipColor: "#c2410c",
+  },
+  {
     key: "unassigned",
     title: "역할 미지정",
     subtitle: "직원관리에서 역할 설정 필요",
@@ -163,6 +176,16 @@ const HEMOZ_ROLE_GROUPS: RoleGroupConfig[] = [
     bg: "#eff6ff",
     chipBg: "#dbeafe",
     chipColor: "#1d4ed8",
+  },
+  {
+    key: "carrot",
+    title: "당근",
+    subtitle: "당근 알바 출근 인원",
+    values: [],
+    accent: "#f97316",
+    bg: "#fff7ed",
+    chipBg: "#ffedd5",
+    chipColor: "#c2410c",
   },
 ];
 
@@ -257,6 +280,14 @@ function getEmployeeScheduleGroup(employee: EmployeeItem) {
   return String(employee.schedule_group || employee.scheduleGroup || "").trim();
 }
 
+function getEmployeeEmploymentType(employee: EmployeeItem) {
+  return String(employee.employment_type || employee.employmentType || "fixed").trim();
+}
+
+function isCarrotEmployee(employee: EmployeeItem) {
+  return getEmployeeEmploymentType(employee) === "carrot";
+}
+
 function getEmployeeKey(employee: EmployeeItem) {
   return String(employee.id ?? employee.name);
 }
@@ -335,13 +366,25 @@ function getEmployeesForRoleAndDate({
 }) {
   return employees
     .filter((employee) => {
+      if (!isEmployeeAvailableOnDate(employee, date, selectedDate)) {
+        return false;
+      }
+
+      if (group.key === "carrot") {
+        return isCarrotEmployee(employee);
+      }
+
+      if (isCarrotEmployee(employee)) {
+        return false;
+      }
+
       const scheduleGroup = getEmployeeScheduleGroup(employee);
       const matchesGroup =
         group.key === "unassigned"
           ? !scheduleGroup
           : group.values.includes(scheduleGroup);
 
-      return matchesGroup && isEmployeeAvailableOnDate(employee, date, selectedDate);
+      return matchesGroup;
     })
     .sort((a, b) => a.name.localeCompare(b.name, "ko"));
 }
@@ -360,11 +403,21 @@ function getEmployeesForHemozGroupAndDate({
   const targetShift: ShiftType = group.key === "hemozOpen" ? "open" : "day";
 
   return employees
-    .filter(
-      (employee) =>
-        isEmployeeAvailableOnDate(employee, date, selectedDate) &&
-        getEmployeeShiftForDate(employee, date) === targetShift
-    )
+    .filter((employee) => {
+      if (!isEmployeeAvailableOnDate(employee, date, selectedDate)) {
+        return false;
+      }
+
+      if (group.key === "carrot") {
+        return isCarrotEmployee(employee);
+      }
+
+      if (isCarrotEmployee(employee)) {
+        return false;
+      }
+
+      return getEmployeeShiftForDate(employee, date) === targetShift;
+    })
     .sort((a, b) => a.name.localeCompare(b.name, "ko"));
 }
 
@@ -799,8 +852,8 @@ export default function ScheduleTab() {
               }}
             >
               {selectedWorkplace === "헤모즈"
-                ? "행은 오픈 / 주간 / 출근안함 / 미제출, 열은 요일입니다. 이름을 누르면 해당 직원 스케줄을 수정할 수 있습니다."
-                : "행은 역할그룹, 열은 요일입니다. 이름을 누르면 해당 직원 스케줄을 수정할 수 있습니다."}
+                ? "행은 오픈 / 주간 / 당근 / 출근안함 / 미제출, 열은 요일입니다. 이름을 누르면 해당 직원 스케줄을 수정할 수 있습니다."
+                : "행은 역할그룹 / 당근, 열은 요일입니다. 이름을 누르면 해당 직원 스케줄을 수정할 수 있습니다."}
             </div>
           </div>
 
@@ -920,6 +973,7 @@ export default function ScheduleTab() {
                           ? availableEmployees
                               .filter(
                                 (employee) =>
+                                  !isCarrotEmployee(employee) &&
                                   isEmployeeAvailableOnDate(
                                     employee,
                                     day.value,
@@ -1567,7 +1621,9 @@ export default function ScheduleTab() {
                   }}
                 >
                   {selectedEmployee.name}
-                  {selectedWorkplace === "헤모즈"
+                  {isCarrotEmployee(selectedEmployee)
+                    ? " (당근)"
+                    : selectedWorkplace === "헤모즈"
                     ? ""
                     : getEmployeeScheduleGroup(selectedEmployee)
                       ? ` (${getEmployeeScheduleGroup(selectedEmployee)})`
