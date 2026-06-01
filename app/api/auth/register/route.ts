@@ -129,6 +129,220 @@ export async function POST(request: Request) {
     const accountDigits = trimmedAccountNumber.replace(/[^0-9]/g, "");
     const phoneLast4 = phoneDigits.slice(-4);
 
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || (!serviceRoleKey && !anonKey)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "환경변수 없음",
+        },
+        { status: 500 }
+      );
+    }
+
+    const supabase = createClient(
+      supabaseUrl,
+      serviceRoleKey || anonKey || ""
+    );
+
+    if (!trimmedDeviceId) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "기기 정보가 없습니다. 다시 시도해주세요.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // 재연결 코드를 입력한 경우, 다른 개인정보 입력 없이 코드만으로 재연결 처리
+    if (trimmedReconnectCode) {
+      const { data: reconnectEmployee, error: reconnectFindError } =
+        await supabase
+          .from("employees")
+          .select(
+            `
+            id,
+            name,
+            phone,
+            phone_last4,
+            resident_number,
+            resident_number_masked,
+            birth_date,
+            gender,
+            bank_name,
+            account_number,
+            workplace_name,
+            employment_type,
+            reconnect_code,
+            reconnect_expires_at,
+            is_active
+            `
+          )
+          .eq("reconnect_code", trimmedReconnectCode)
+          .maybeSingle();
+
+      if (reconnectFindError) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "재연결 대상 확인 중 오류가 발생했습니다.",
+            debug: {
+              message: reconnectFindError.message,
+              details: reconnectFindError.details,
+              hint: reconnectFindError.hint,
+              code: reconnectFindError.code,
+            },
+          },
+          { status: 500 }
+        );
+      }
+
+      if (!reconnectEmployee) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              "재연결 대상 직원을 찾을 수 없습니다. 재연결 코드를 다시 확인해주세요.",
+          },
+          { status: 404 }
+        );
+      }
+
+      if (reconnectEmployee.is_active === false) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "비활성화된 직원은 재연결할 수 없습니다.",
+          },
+          { status: 403 }
+        );
+      }
+
+      if (!reconnectEmployee.reconnect_expires_at) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              "재연결 코드 만료시간이 없습니다. 관리자에게 다시 발급 요청해주세요.",
+          },
+          { status: 400 }
+        );
+      }
+
+      const expiresAtTime = new Date(
+        reconnectEmployee.reconnect_expires_at
+      ).getTime();
+
+      if (Number.isNaN(expiresAtTime) || expiresAtTime < Date.now()) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              "재연결 코드가 만료되었습니다. 관리자에게 다시 요청해주세요.",
+          },
+          { status: 400 }
+        );
+      }
+
+      const { data: updatedEmployee, error: updateReconnectError } =
+        await supabase
+          .from("employees")
+          .update({
+            reconnect_code: null,
+            reconnect_expires_at: null,
+          })
+          .eq("id", reconnectEmployee.id)
+          .select()
+          .single();
+
+      if (updateReconnectError) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "재연결 코드 초기화 중 오류가 발생했습니다.",
+            debug: {
+              message: updateReconnectError.message,
+              details: updateReconnectError.details,
+              hint: updateReconnectError.hint,
+              code: updateReconnectError.code,
+            },
+          },
+          { status: 500 }
+        );
+      }
+
+      const { error: deleteDeviceError } = await supabase
+        .from("employee_devices")
+        .delete()
+        .eq("employee_id", reconnectEmployee.id);
+
+      if (deleteDeviceError) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "기존 기기 정보 삭제 중 오류가 발생했습니다.",
+            debug: {
+              message: deleteDeviceError.message,
+              details: deleteDeviceError.details,
+              hint: deleteDeviceError.hint,
+              code: deleteDeviceError.code,
+            },
+          },
+          { status: 500 }
+        );
+      }
+
+      const { error: insertDeviceError } = await supabase
+        .from("employee_devices")
+        .insert([
+          {
+            employee_id: reconnectEmployee.id,
+            device_id: trimmedDeviceId,
+          },
+        ]);
+
+      if (insertDeviceError) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "새 기기 정보 저장 중 오류가 발생했습니다.",
+            debug: {
+              message: insertDeviceError.message,
+              details: insertDeviceError.details,
+              hint: insertDeviceError.hint,
+              code: insertDeviceError.code,
+            },
+          },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: "기기 재연결이 완료되었습니다.",
+        employee: {
+          id: updatedEmployee.id,
+          name: updatedEmployee.name,
+          phone: updatedEmployee.phone,
+          phoneLast4: updatedEmployee.phone_last4,
+          residentNumberMasked:
+            updatedEmployee.resident_number_masked ||
+            maskResidentNumber(updatedEmployee.resident_number || ""),
+          birthDate: updatedEmployee.birth_date,
+          gender: updatedEmployee.gender,
+          bankName: updatedEmployee.bank_name,
+          accountNumber: updatedEmployee.account_number,
+          workplaceName: updatedEmployee.workplace_name,
+          employmentType: updatedEmployee.employment_type,
+        },
+        reconnected: true,
+      });
+    }
+
     if (
       !trimmedName ||
       !trimmedPhone ||
@@ -141,16 +355,6 @@ export async function POST(request: Request) {
           success: false,
           message:
             "이름, 휴대폰번호, 주민번호, 은행명, 계좌번호를 모두 입력해주세요.",
-        },
-        { status: 400 }
-      );
-    }
-
-    if (!trimmedDeviceId) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "기기 정보가 없습니다. 다시 시도해주세요.",
         },
         { status: 400 }
       );
@@ -199,25 +403,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || (!serviceRoleKey && !anonKey)) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "환경변수 없음",
-        },
-        { status: 500 }
-      );
-    }
-
-    const supabase = createClient(
-      supabaseUrl,
-      serviceRoleKey || anonKey || ""
-    );
-
     const { data: existingEmployee, error: findError } = await supabase
       .from("employees")
       .select(
@@ -264,182 +449,19 @@ export async function POST(request: Request) {
         );
       }
 
-      if (!trimmedReconnectCode) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: "이미 등록된 회원입니다.",
-            employee: {
-              id: existingEmployee.id,
-              name: existingEmployee.name,
-              phone: existingEmployee.phone,
-              residentNumberMasked:
-                existingEmployee.resident_number_masked,
-            },
-          },
-          { status: 409 }
-        );
-      }
-
-      if (!existingEmployee.reconnect_code) {
-        return NextResponse.json(
-          {
-            success: false,
-            message:
-              "발급된 재연결 코드가 없습니다. 관리자에게 요청해주세요.",
-          },
-          { status: 400 }
-        );
-      }
-
-      if (existingEmployee.reconnect_code !== trimmedReconnectCode) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: "재연결 코드가 일치하지 않습니다.",
-          },
-          { status: 400 }
-        );
-      }
-
-      if (!existingEmployee.reconnect_expires_at) {
-        return NextResponse.json(
-          {
-            success: false,
-            message:
-              "재연결 코드 만료시간이 없습니다. 다시 발급해주세요.",
-          },
-          { status: 400 }
-        );
-      }
-
-      const expiresAtTime = new Date(
-        existingEmployee.reconnect_expires_at
-      ).getTime();
-
-      if (Number.isNaN(expiresAtTime) || expiresAtTime < Date.now()) {
-        return NextResponse.json(
-          {
-            success: false,
-            message:
-              "재연결 코드가 만료되었습니다. 관리자에게 다시 요청해주세요.",
-          },
-          { status: 400 }
-        );
-      }
-
-      const { data: updatedEmployee, error: updateError } = await supabase
-        .from("employees")
-        .update({
-          name: trimmedName,
-          phone: phoneDigits,
-          phone_last4: phoneLast4,
-          resident_number: residentDigits,
-          resident_number_masked: maskedResidentNumber,
-          birth_date: birthDate,
-          gender,
-          bank_name: trimmedBankName,
-          account_number: accountDigits,
-          workplace_name: trimmedWorkplaceName,
-          employment_type: trimmedEmploymentType,
-          reconnect_code: null,
-          reconnect_expires_at: null,
-        })
-        .eq("id", existingEmployee.id)
-        .select()
-        .single();
-
-      if (updateError) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: "재연결 처리 실패",
-            debug: {
-              message: updateError.message,
-              details: updateError.details,
-              hint: updateError.hint,
-              code: updateError.code,
-            },
-          },
-          { status: 500 }
-        );
-      }
-
-      const { error: deleteDeviceError } = await supabase
-        .from("employee_devices")
-        .delete()
-        .eq("employee_id", existingEmployee.id);
-
-      if (deleteDeviceError) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: "기존 기기 정보 삭제 중 오류가 발생했습니다.",
-            debug: {
-              message: deleteDeviceError.message,
-              details: deleteDeviceError.details,
-              hint: deleteDeviceError.hint,
-              code: deleteDeviceError.code,
-            },
-          },
-          { status: 500 }
-        );
-      }
-
-      const { error: insertDeviceError } = await supabase
-        .from("employee_devices")
-        .insert([
-          {
-            employee_id: existingEmployee.id,
-            device_id: trimmedDeviceId,
-          },
-        ]);
-
-      if (insertDeviceError) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: "새 기기 정보 저장 중 오류가 발생했습니다.",
-            debug: {
-              message: insertDeviceError.message,
-              details: insertDeviceError.details,
-              hint: insertDeviceError.hint,
-              code: insertDeviceError.code,
-            },
-          },
-          { status: 500 }
-        );
-      }
-
-      return NextResponse.json({
-        success: true,
-        message: "기기 재연결이 완료되었습니다.",
-        employee: {
-          id: updatedEmployee.id,
-          name: updatedEmployee.name,
-          phone: updatedEmployee.phone,
-          phoneLast4: updatedEmployee.phone_last4,
-          residentNumberMasked:
-            updatedEmployee.resident_number_masked,
-          birthDate: updatedEmployee.birth_date,
-          gender: updatedEmployee.gender,
-          bankName: updatedEmployee.bank_name,
-          accountNumber: updatedEmployee.account_number,
-          workplaceName: updatedEmployee.workplace_name,
-          employmentType: updatedEmployee.employment_type,
-        },
-        reconnected: true,
-      });
-    }
-
-    if (trimmedReconnectCode) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "재연결 대상 직원을 찾을 수 없습니다. 주민번호 또는 직원 정보를 다시 확인해주세요.",
+          message: "이미 등록된 회원입니다. 재연결 코드로 다시 시도해주세요.",
+          employee: {
+            id: existingEmployee.id,
+            name: existingEmployee.name,
+            phone: existingEmployee.phone,
+            residentNumberMasked:
+              existingEmployee.resident_number_masked,
+          },
         },
-        { status: 404 }
+        { status: 409 }
       );
     }
 
