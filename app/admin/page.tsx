@@ -25,6 +25,7 @@ type AdminRecord = {
     contract_start_date?: string | null;
     contract_end_date?: string | null;
     workplace_name?: string | null;
+    employment_type?: string | null;
     schedule_group?: string | null;
   } | null;
 };
@@ -44,6 +45,7 @@ type Employee = {
   bank_name: string;
   account_number: string;
   workplace_name?: string | null;
+  employment_type?: string | null;
   schedule_group?: string | null;
   is_active: boolean;
   created_at?: string;
@@ -192,6 +194,9 @@ export default function AdminPage() {
   const [editAccountNumber, setEditAccountNumber] = useState("");
   const [editWorkplaceName, setEditWorkplaceName] = useState<"장사꾼" | "헤모즈">(
     "장사꾼"
+  );
+  const [editEmploymentType, setEditEmploymentType] = useState<"fixed" | "carrot">(
+    "fixed"
   );
   const [editScheduleGroup, setEditScheduleGroup] = useState("");
 
@@ -591,6 +596,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
     setEditBankName(employee.bank_name || "");
     setEditAccountNumber(employee.account_number || "");
     setEditWorkplaceName(workplaceName);
+    setEditEmploymentType(employee.employment_type === "carrot" ? "carrot" : "fixed");
     setEditScheduleGroup(
       isValidScheduleGroupForWorkplace(workplaceName, scheduleGroup)
         ? scheduleGroup
@@ -606,6 +612,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
     setEditBankName("");
     setEditAccountNumber("");
     setEditWorkplaceName("장사꾼");
+    setEditEmploymentType("fixed");
     setEditScheduleGroup("");
   };
 
@@ -623,6 +630,8 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
           bank_name: editBankName,
           account_number: editAccountNumber,
           workplaceName: editWorkplaceName,
+          employmentType: editEmploymentType,
+          employment_type: editEmploymentType,
           scheduleGroup: editScheduleGroup || null,
           schedule_group: editScheduleGroup || null,
         }),
@@ -1743,6 +1752,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                       <th style={thStyle}>은행</th>
                       <th style={thStyle}>계좌번호</th>
                       <th style={thStyle}>근무지</th>
+                      <th style={thStyle}>고용형태</th>
                       <th style={thStyle}>역할그룹</th>
                       <th style={thStyle}>시급</th>
                       <th style={thStyle}>상태</th>
@@ -1783,6 +1793,24 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                               }}
                             >
                               {employee.workplace_name || "장사꾼"}
+                            </span>
+                          </td>
+
+                          <td style={tdStyle}>
+                            <span
+                              style={{
+                                ...badgeStyle,
+                                backgroundColor:
+                                  employee.employment_type === "carrot"
+                                    ? "#ffedd5"
+                                    : "#dcfce7",
+                                color:
+                                  employee.employment_type === "carrot"
+                                    ? "#c2410c"
+                                    : "#166534",
+                              }}
+                            >
+                              {employee.employment_type === "carrot" ? "당근" : "고정"}
                             </span>
                           </td>
 
@@ -1960,7 +1988,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                       fontWeight: 600,
                     }}
                   >
-                    기본 정보와 근무지, 역할그룹을 한 번에 수정합니다.
+                    기본 정보와 근무지, 고용형태, 역할그룹을 한 번에 수정합니다.
                   </div>
                 </div>
 
@@ -2064,6 +2092,20 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                     >
                       <option value="장사꾼">장사꾼</option>
                       <option value="헤모즈">헤모즈</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>고용형태</label>
+                    <select
+                      value={editEmploymentType}
+                      onChange={(e) =>
+                        setEditEmploymentType(e.target.value as "fixed" | "carrot")
+                      }
+                      style={inputStyle}
+                    >
+                      <option value="fixed">고정</option>
+                      <option value="carrot">당근</option>
                     </select>
                   </div>
 

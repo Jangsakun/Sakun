@@ -23,6 +23,7 @@ export default function RegisterDevicePage() {
   const [bankName, setBankName] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [workplaceName, setWorkplaceName] = useState("장사꾼");
+  const [employmentType, setEmploymentType] = useState("fixed");
   const [reconnectCode, setReconnectCode] = useState("");
   const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
 
@@ -40,7 +41,8 @@ export default function RegisterDevicePage() {
       !residentNumber ||
       !bankName ||
       !accountNumber ||
-      !workplaceName
+      !workplaceName ||
+      !employmentType
     ) {
       setMessage("모든 항목을 입력해주세요.");
       return;
@@ -74,6 +76,7 @@ export default function RegisterDevicePage() {
           bankName,
           accountNumber,
           workplaceName,
+          employmentType,
           reconnectCode,
           deviceId,
         }),
@@ -179,8 +182,22 @@ export default function RegisterDevicePage() {
                     onChange={(e) => setWorkplaceName(e.target.value)}
                     className={inputClassName}
                   >
-                    <option value="장사꾼">장사꾼 (팔복동)</option>
-                    <option value="헤모즈">헤모즈 (효자동)</option>
+                    <option value="장사꾼">장사꾼(팔복동)</option>
+                    <option value="헤모즈">헤모즈(효자동)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-800">
+                    고용 형태 선택
+                  </label>
+
+                  <select
+                    value={employmentType}
+                    onChange={(e) => setEmploymentType(e.target.value)}
+                    className={inputClassName}
+                  >
+                    <option value="fixed">고정</option>
+                    <option value="carrot">당근</option>
                   </select>
                 </div>
 
@@ -212,7 +229,7 @@ export default function RegisterDevicePage() {
                       <ul className="mt-2 space-y-1 text-xs text-gray-600">
                         <li>
                           - 수집항목: 이름, 휴대전화번호, 주민등록번호,
-                          은행명, 계좌번호, 근무지
+                          은행명, 계좌번호, 근무지, 고용형태
                         </li>
                         <li>
                           - 이용목적: 근태관리, 급여 지급 및 관련 법적 의무

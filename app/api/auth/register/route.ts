@@ -99,6 +99,7 @@ export async function POST(request: Request) {
       bankName,
       accountNumber,
       workplaceName,
+      employmentType,
       reconnectCode,
       deviceId,
     } = body;
@@ -111,6 +112,10 @@ export async function POST(request: Request) {
 
     const trimmedWorkplaceName = String(
       workplaceName || "장사꾼"
+    ).trim();
+
+    const trimmedEmploymentType = String(
+      employmentType || "fixed"
     ).trim();
 
     const trimmedReconnectCode = String(reconnectCode || "")
@@ -336,6 +341,7 @@ export async function POST(request: Request) {
           bank_name: trimmedBankName,
           account_number: accountDigits,
           workplace_name: trimmedWorkplaceName,
+          employment_type: trimmedEmploymentType,
           reconnect_code: null,
           reconnect_expires_at: null,
         })
@@ -420,6 +426,7 @@ export async function POST(request: Request) {
           bankName: updatedEmployee.bank_name,
           accountNumber: updatedEmployee.account_number,
           workplaceName: updatedEmployee.workplace_name,
+          employmentType: updatedEmployee.employment_type,
         },
         reconnected: true,
       });
@@ -450,6 +457,7 @@ export async function POST(request: Request) {
           bank_name: trimmedBankName,
           account_number: accountDigits,
           workplace_name: trimmedWorkplaceName,
+          employment_type: trimmedEmploymentType,
           hourly_wage: 10320,
           weekly_allowance_status: "비대상",
           is_active: true,
@@ -513,6 +521,7 @@ export async function POST(request: Request) {
         bankName: data.bank_name,
         accountNumber: data.account_number,
         workplaceName: data.workplace_name,
+        employmentType: data.employment_type,
       },
       reconnected: false,
     });
