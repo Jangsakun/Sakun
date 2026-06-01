@@ -35,27 +35,32 @@ export default function RegisterDevicePage() {
     "w-full h-12 border border-gray-200 rounded px-3 bg-white text-black placeholder-gray-400";
 
   const handleSubmit = async () => {
-    if (
-      !name ||
-      !phone ||
-      !residentNumber ||
-      !bankName ||
-      !accountNumber ||
-      !workplaceName ||
-      !employmentType
-    ) {
-      setMessage("모든 항목을 입력해주세요.");
-      return;
-    }
+    const trimmedReconnectCode = reconnectCode.trim().toUpperCase();
+    const isReconnectMode = trimmedReconnectCode.length > 0;
 
-    if (residentNumber.replace(/[^0-9]/g, "").length !== 13) {
-      setMessage("주민번호 13자리를 정확히 입력해주세요.");
-      return;
-    }
+    if (!isReconnectMode) {
+      if (
+        !name ||
+        !phone ||
+        !residentNumber ||
+        !bankName ||
+        !accountNumber ||
+        !workplaceName ||
+        !employmentType
+      ) {
+        setMessage("모든 항목을 입력해주세요.");
+        return;
+      }
 
-    if (!agreedToPrivacy) {
-      setMessage("개인정보 수집 및 이용 동의가 필요합니다.");
-      return;
+      if (residentNumber.replace(/[^0-9]/g, "").length !== 13) {
+        setMessage("주민번호 13자리를 정확히 입력해주세요.");
+        return;
+      }
+
+      if (!agreedToPrivacy) {
+        setMessage("개인정보 수집 및 이용 동의가 필요합니다.");
+        return;
+      }
     }
 
     const deviceId = getOrCreateDeviceId();
@@ -77,7 +82,7 @@ export default function RegisterDevicePage() {
           accountNumber,
           workplaceName,
           employmentType,
-          reconnectCode,
+          reconnectCode: reconnectCode.trim().toUpperCase(),
           deviceId,
         }),
       });
@@ -211,7 +216,7 @@ export default function RegisterDevicePage() {
                 />
 
                 <p className="text-xs text-gray-500">
-                  휴대폰을 변경한 경우 관리자에게 받은 재연결 코드를 입력하세요
+                  재연결 코드를 입력하면 위 개인정보 항목 없이 코드만으로 기기 재연결이 가능합니다.
                 </p>
 
                 <div className="rounded-lg border border-gray-200 bg-gray-50 text-black px-4 py-4">
@@ -254,7 +259,11 @@ export default function RegisterDevicePage() {
                 disabled={isLoading}
                 className="mt-6 w-full h-12 bg-black text-white rounded"
               >
-                {isLoading ? "처리 중..." : "등록하기"}
+                {isLoading
+                  ? "처리 중..."
+                  : reconnectCode.trim()
+                  ? "기기 재연결하기"
+                  : "등록하기"}
               </button>
 
               {message && (
