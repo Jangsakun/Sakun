@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-type ShiftType = "day" | "night";
+type ShiftType = "open" | "day" | "night";
 type WorkplaceName = "장사꾼" | "헤모즈";
 
 function createSupabaseAdmin() {
@@ -28,6 +28,10 @@ function normalizeWorkplace(value: unknown): WorkplaceName {
 function normalizeShift(value: unknown): ShiftType {
   const normalized = String(value || "").toLowerCase().trim();
 
+  if (normalized === "open" || normalized === "오픈") {
+    return "open";
+  }
+
   if (normalized === "night" || normalized === "야간") {
     return "night";
   }
@@ -36,7 +40,9 @@ function normalizeShift(value: unknown): ShiftType {
 }
 
 function getShiftLabel(shift: ShiftType) {
-  return shift === "night" ? "야간" : "주간";
+  if (shift === "open") return "오픈";
+  if (shift === "night") return "야간";
+  return "주간";
 }
 
 function normalizeScheduleItem(item: any) {
@@ -83,7 +89,7 @@ export async function GET(request: NextRequest) {
 
     const { data: employees, error: empError } = await supabase
       .from("employees")
-      .select("id, name, gender, workplace_name, schedule_group")
+      .select("id, name, gender, workplace_name, employment_type, schedule_group")
       .eq("is_active", true)
       .eq("workplace_name", workplace);
 
@@ -131,6 +137,8 @@ export async function GET(request: NextRequest) {
           gender: emp.gender,
           workplaceName: emp.workplace_name || workplace,
           workplace_name: emp.workplace_name || workplace,
+          employmentType: emp.employment_type || "fixed",
+          employment_type: emp.employment_type || "fixed",
           scheduleGroup: emp.schedule_group || "",
           schedule_group: emp.schedule_group || "",
           schedule: [],
@@ -158,6 +166,8 @@ export async function GET(request: NextRequest) {
         gender: emp.gender,
         workplaceName: emp.workplace_name || workplace,
         workplace_name: emp.workplace_name || workplace,
+        employmentType: emp.employment_type || "fixed",
+        employment_type: emp.employment_type || "fixed",
         scheduleGroup: emp.schedule_group || "",
         schedule_group: emp.schedule_group || "",
         schedule: weeklySchedule,
@@ -244,7 +254,7 @@ export async function PATCH(request: NextRequest) {
 
     let employeeQuery = supabase
       .from("employees")
-      .select("id, name, gender, is_active, workplace_name, schedule_group");
+      .select("id, name, gender, is_active, workplace_name, employment_type, schedule_group");
 
     if (employeeId) {
       employeeQuery = employeeQuery.eq("id", employeeId);
