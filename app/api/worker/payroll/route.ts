@@ -414,10 +414,12 @@ export async function POST(request: NextRequest) {
     const weeklyAllowanceStatus =
       employee.weekly_allowance_status || "검토필요";
 
-    const weeklyAllowanceAmount =
-      weeklyAllowanceStatus === "대상"
-        ? Math.floor((totalMinutes / 60 / 5) * hourlyWage)
-        : 0;
+ const totalHours = totalMinutes / 60;
+
+const weeklyAllowanceAmount =
+  weeklyAllowanceStatus === "대상" && totalHours >= 15
+    ? Math.floor((totalHours / 5) * hourlyWage)
+    : 0;
 
     return NextResponse.json({
       success: true,

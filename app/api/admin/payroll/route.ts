@@ -405,7 +405,7 @@ export async function POST(request: Request) {
 
       let weeklyAllowance = 0;
 
-      if (w.weeklyAllowanceStatus === "대상") {
+      if (w.weeklyAllowanceStatus === "대상" && totalHours >= 15) {
         weeklyAllowance = roundToWon((totalHours / 5) * w.hourlyWage);
       } else {
         weeklyAllowance = 0;
