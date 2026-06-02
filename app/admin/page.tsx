@@ -853,6 +853,48 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
   };
 
 
+  const deleteAttendanceRow = async (row: GroupedAttendanceRow) => {
+    const recordIds = [row.checkInRecordId, row.checkOutRecordId].filter(
+      (id): id is number => typeof id === "number"
+    );
+
+    if (recordIds.length === 0) {
+      alert("삭제할 출퇴근 기록이 없습니다.");
+      return;
+    }
+
+    const ok = window.confirm(
+      `${row.employeeName} / ${formatDate(row.date)} 출퇴근 기록을 삭제할까요?\n\n출근 기록과 퇴근 기록이 함께 삭제됩니다.`
+    );
+
+    if (!ok) return;
+
+    try {
+      const response = await fetch("/api/admin/attendance/delete", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          recordIds,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        alert(data.message || "출퇴근 기록 삭제 실패");
+        return;
+      }
+
+      alert("출퇴근 기록이 삭제되었습니다.");
+      fetchRecords();
+    } catch (error) {
+      console.error(error);
+      alert("출퇴근 기록 삭제 중 오류 발생");
+    }
+  };
+
   const downloadAttendanceCsv = () => {
     if (groupedAttendanceRows.length === 0) {
       alert("다운로드할 출퇴근 기록이 없습니다.");
@@ -1663,12 +1705,25 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                                   </button>
                                 </>
                               ) : (
-                                <button
-                                  onClick={() => startAttendanceEdit(row)}
-                                  style={primarySmallButtonStyle}
-                                >
-                                  시간수정
-                                </button>
+                                <>
+                                  <button
+                                    onClick={() => startAttendanceEdit(row)}
+                                    style={primarySmallButtonStyle}
+                                  >
+                                    시간수정
+                                  </button>
+                                  <button
+                                    onClick={() => deleteAttendanceRow(row)}
+                                    style={{
+                                      ...secondarySmallButtonStyle,
+                                      backgroundColor: "#fee2e2",
+                                      color: "#b91c1c",
+                                      borderColor: "#fecaca",
+                                    }}
+                                  >
+                                    삭제
+                                  </button>
+                                </>
                               )}
                             </div>
                           </td>
