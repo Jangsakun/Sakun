@@ -51,6 +51,11 @@ type ScheduleSaveResponse = {
 };
 
 type AttendanceItem = {
+  id?: number | string | null;
+  record_type?: string | null;
+  recordType?: string | null;
+  checked_at?: string | null;
+  checkedAt?: string | null;
   employee_id?: number | string | null;
   employeeId?: number | string | null;
   employee_name?: string | null;
@@ -61,6 +66,12 @@ type AttendanceItem = {
   date?: string | null;
   check_in_time?: string | null;
   checkInTime?: string | null;
+  employees?: {
+    id?: number | string | null;
+    name?: string | null;
+    workplace_name?: string | null;
+    workplaceName?: string | null;
+  } | null;
 };
 
 
@@ -311,6 +322,8 @@ function getAttendanceDateKey(record: AttendanceItem) {
     record.work_date ||
     record.workDate ||
     record.date ||
+    record.checked_at ||
+    record.checkedAt ||
     record.check_in_time ||
     record.checkInTime ||
     "";
@@ -324,8 +337,10 @@ function getAttendanceEmployeeKey(record: AttendanceItem) {
   return String(
     record.employee_id ??
       record.employeeId ??
+      record.employees?.id ??
       record.employee_name ??
       record.employeeName ??
+      record.employees?.name ??
       record.name ??
       ""
   );
@@ -613,15 +628,16 @@ export default function ScheduleTab() {
     if (!weekStartDate || !weekEndDate) return;
 
     try {
-      const params = new URLSearchParams({
-        startDate: weekStartDate,
-        endDate: weekEndDate,
-        workplace: selectedWorkplace,
-      });
-
-      const res = await fetch(`/api/admin/attendance?${params.toString()}`, {
-        method: "GET",
+      const res = await fetch("/api/admin/attendance", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
         cache: "no-store",
+        body: JSON.stringify({
+          startDate: weekStartDate,
+          endDate: weekEndDate,
+        }),
       });
 
       if (!res.ok) {
@@ -635,17 +651,38 @@ export default function ScheduleTab() {
       const nextCheckedInKeysByDate: Record<string, Set<string>> = {};
 
       records.forEach((record) => {
-        const hasCheckedIn = Boolean(record.check_in_time || record.checkInTime);
+        const recordType = String(record.record_type || record.recordType || "").trim();
+        const hasCheckedIn =
+          recordType === "check_in" ||
+          Boolean(record.check_in_time || record.checkInTime);
+
+        const recordWorkplace = String(
+          record.employees?.workplace_name ||
+            record.employees?.workplaceName ||
+            selectedWorkplace
+        ).trim();
+
         const dateKey = getAttendanceDateKey(record);
         const employeeKey = getAttendanceEmployeeKey(record);
+        const employeeNameKey = String(
+          record.employee_name ||
+            record.employeeName ||
+            record.employees?.name ||
+            record.name ||
+            ""
+        ).trim();
 
         if (!hasCheckedIn || !dateKey || !employeeKey) return;
+        if (recordWorkplace && recordWorkplace !== selectedWorkplace) return;
 
         if (!nextCheckedInKeysByDate[dateKey]) {
           nextCheckedInKeysByDate[dateKey] = new Set<string>();
         }
 
-        nextCheckedInKeysByDate[dateKey].add(employeeKey);
+        nextCheckedInKeysByDate[dateKey].add(String(employeeKey));
+        if (employeeNameKey) {
+          nextCheckedInKeysByDate[dateKey].add(employeeNameKey);
+        }
       });
 
       setCheckedInKeysByDate(nextCheckedInKeysByDate);
