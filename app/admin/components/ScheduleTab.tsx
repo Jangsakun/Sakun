@@ -50,6 +50,20 @@ type ScheduleSaveResponse = {
   message?: string;
 };
 
+type AttendanceItem = {
+  employee_id?: number | string | null;
+  employeeId?: number | string | null;
+  employee_name?: string | null;
+  employeeName?: string | null;
+  name?: string | null;
+  work_date?: string | null;
+  workDate?: string | null;
+  date?: string | null;
+  check_in_time?: string | null;
+  checkInTime?: string | null;
+};
+
+
 type DayItem = {
   label: string;
   value: string;
@@ -292,6 +306,63 @@ function getEmployeeKey(employee: EmployeeItem) {
   return String(employee.id ?? employee.name);
 }
 
+function getAttendanceDateKey(record: AttendanceItem) {
+  const rawDate =
+    record.work_date ||
+    record.workDate ||
+    record.date ||
+    record.check_in_time ||
+    record.checkInTime ||
+    "";
+
+  if (!rawDate) return "";
+
+  return String(rawDate).slice(0, 10);
+}
+
+function getAttendanceEmployeeKey(record: AttendanceItem) {
+  return String(
+    record.employee_id ??
+      record.employeeId ??
+      record.employee_name ??
+      record.employeeName ??
+      record.name ??
+      ""
+  );
+}
+
+function normalizeAttendanceList(payload: unknown): AttendanceItem[] {
+  if (Array.isArray(payload)) return payload as AttendanceItem[];
+
+  if (!payload || typeof payload !== "object") return [];
+
+  const result = payload as {
+    data?: unknown;
+    records?: unknown;
+    attendanceRecords?: unknown;
+    items?: unknown;
+  };
+
+  if (Array.isArray(result.data)) return result.data as AttendanceItem[];
+  if (Array.isArray(result.records)) return result.records as AttendanceItem[];
+  if (Array.isArray(result.attendanceRecords)) return result.attendanceRecords as AttendanceItem[];
+  if (Array.isArray(result.items)) return result.items as AttendanceItem[];
+
+  if (result.data && typeof result.data === "object") {
+    const nested = result.data as {
+      records?: unknown;
+      attendanceRecords?: unknown;
+      items?: unknown;
+    };
+
+    if (Array.isArray(nested.records)) return nested.records as AttendanceItem[];
+    if (Array.isArray(nested.attendanceRecords)) return nested.attendanceRecords as AttendanceItem[];
+    if (Array.isArray(nested.items)) return nested.items as AttendanceItem[];
+  }
+
+  return [];
+}
+
 function getScheduleItemForDate(employee: EmployeeItem, date: string) {
   return employee.schedule?.find((item) => item.fullDate === date) || null;
 }
@@ -462,6 +533,7 @@ export default function ScheduleTab() {
   const [selectedDate, setSelectedDate] = useState<string>(days[0]?.value || "");
   const [data, setData] = useState<ScheduleApiResponse["data"] | null>(null);
   const [loading, setLoading] = useState(false);
+  const [checkedInKeysByDate, setCheckedInKeysByDate] = useState<Record<string, Set<string>>>({});
 
   const [selectedEmployee, setSelectedEmployee] = useState<EmployeeItem | null>(
     null
@@ -535,6 +607,66 @@ export default function ScheduleTab() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchAttendanceStatus = async () => {
+    if (!weekStartDate || !weekEndDate) return;
+
+    try {
+      const params = new URLSearchParams({
+        startDate: weekStartDate,
+        endDate: weekEndDate,
+        workplace: selectedWorkplace,
+      });
+
+      const res = await fetch(`/api/admin/attendance?${params.toString()}`, {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      if (!res.ok) {
+        setCheckedInKeysByDate({});
+        return;
+      }
+
+      const result = await res.json();
+      const records = normalizeAttendanceList(result);
+
+      const nextCheckedInKeysByDate: Record<string, Set<string>> = {};
+
+      records.forEach((record) => {
+        const hasCheckedIn = Boolean(record.check_in_time || record.checkInTime);
+        const dateKey = getAttendanceDateKey(record);
+        const employeeKey = getAttendanceEmployeeKey(record);
+
+        if (!hasCheckedIn || !dateKey || !employeeKey) return;
+
+        if (!nextCheckedInKeysByDate[dateKey]) {
+          nextCheckedInKeysByDate[dateKey] = new Set<string>();
+        }
+
+        nextCheckedInKeysByDate[dateKey].add(employeeKey);
+      });
+
+      setCheckedInKeysByDate(nextCheckedInKeysByDate);
+    } catch (error) {
+      console.error("출근 상태 조회 실패:", error);
+      setCheckedInKeysByDate({});
+    }
+  };
+
+  const isEmployeeCheckedInOnDate = (employee: EmployeeItem, date: string) => {
+    const checkedInKeys = checkedInKeysByDate[date];
+
+    if (!checkedInKeys) return false;
+
+    const employeeIdKey = employee.id !== undefined && employee.id !== null ? String(employee.id) : "";
+    const employeeNameKey = String(employee.name || "");
+
+    return (
+      (!!employeeIdKey && checkedInKeys.has(employeeIdKey)) ||
+      (!!employeeNameKey && checkedInKeys.has(employeeNameKey))
+    );
   };
 
   const handleChangeWorkplace = (nextWorkplace: WorkplaceName) => {
@@ -714,8 +846,9 @@ export default function ScheduleTab() {
 
     if (selectedDate) {
       fetchSchedule(selectedDate);
+      fetchAttendanceStatus();
     }
-  }, [selectedDate, selectedWorkplace]);
+  }, [selectedDate, selectedWorkplace, weekStartDate, weekEndDate]);
 
   useEffect(() => {
     if (!selectedEmployee) return;
@@ -771,6 +904,7 @@ export default function ScheduleTab() {
     showShift = true
   ) => {
     const shift = getEmployeeShiftForDate(emp, dateForShift);
+    const isCheckedIn = isEmployeeCheckedInOnDate(emp, dateForShift);
 
     return (
       <button
@@ -787,9 +921,26 @@ export default function ScheduleTab() {
           border: "none",
           cursor: "pointer",
           whiteSpace: "nowrap",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "6px",
         }}
       >
-        {emp.name}
+        {isCheckedIn && (
+          <span
+            aria-label="출근 완료"
+            title="출근 완료"
+            style={{
+              width: "8px",
+              height: "8px",
+              borderRadius: "999px",
+              background: "#22c55e",
+              display: "inline-block",
+              flexShrink: 0,
+            }}
+          />
+        )}
+        <span>{emp.name}</span>
         {showShift && (
           <span
             style={{
@@ -857,6 +1008,31 @@ export default function ScheduleTab() {
             </div>
           </div>
 
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "7px",
+              padding: "8px 12px",
+              borderRadius: "999px",
+              background: "#f0fdf4",
+              color: "#15803d",
+              fontSize: "12px",
+              fontWeight: 900,
+              whiteSpace: "nowrap",
+            }}
+          >
+            <span
+              style={{
+                width: "8px",
+                height: "8px",
+                borderRadius: "999px",
+                background: "#22c55e",
+                display: "inline-block",
+              }}
+            />
+            출근 완료
+          </div>
         </div>
 
         <div style={{ overflowX: "auto" }}>
