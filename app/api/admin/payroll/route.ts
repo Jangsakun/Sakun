@@ -262,24 +262,25 @@ export async function POST(request: Request) {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    const { data: records, error } = await supabase
-      .from("attendance_records")
-      .select(`
-        id,
-        record_type,
-        checked_at,
-        employee_id,
-        employees (
-          id,
-          name,
-          hourly_wage,
-          weekly_allowance_status,
-          workplace_name
-        )
-      `)
-      .gte("checked_at", `${startDate}T00:00:00+09:00`)
-      .lte("checked_at", `${endDate}T23:59:59.999+09:00`)
-      .order("checked_at", { ascending: true });
+  const { data: records, error } = await supabase
+  .from("attendance_records")
+  .select(`
+    id,
+    record_type,
+    checked_at,
+    employee_id,
+    employees (
+      id,
+      name,
+      hourly_wage,
+      weekly_allowance_status,
+      workplace_name
+    )
+  `)
+  .gte("checked_at", `${startDate}T00:00:00+09:00`)
+  .lte("checked_at", `${endDate}T23:59:59.999+09:00`)
+  .order("checked_at", { ascending: true })
+  .range(0, 99999);
 
     if (error) {
       return NextResponse.json(
