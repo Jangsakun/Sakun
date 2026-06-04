@@ -557,6 +557,40 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
     });
   }, [payrollRows, employeeMap, selectedWorkplace]);
 
+  const monthlyPayrollRows = useMemo(() => {
+    const grouped = new Map<string, PayrollRow>();
+
+    filteredPayrollRows.forEach((row) => {
+      const key = row.employeeId;
+
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          ...row,
+          weekStart: startDate,
+          weekEnd: endDate,
+          totalHours: 0,
+          basePay: 0,
+          weeklyAllowance: 0,
+          grossPay: 0,
+          netPay: 0,
+        });
+      }
+
+      const target = grouped.get(key);
+      if (!target) return;
+
+      target.totalHours += row.totalHours || 0;
+      target.basePay += row.basePay || 0;
+      target.weeklyAllowance += row.weeklyAllowance || 0;
+      target.grossPay += row.grossPay || 0;
+      target.netPay += row.netPay || 0;
+    });
+
+    return Array.from(grouped.values()).sort((a, b) =>
+      a.employeeName.localeCompare(b.employeeName, "ko")
+    );
+  }, [filteredPayrollRows, startDate, endDate]);
+
   const filteredContractEmployees = useMemo(() => {
     return employees.filter((employee) => {
       const employeeWorkplace = employee.workplace_name || "장사꾼";
@@ -2215,7 +2249,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
               <div>
                 <h2 style={sectionTitleStyle}>급여 관리</h2>
                 <p style={sectionDescriptionStyle}>
-                  기간을 직접 선택해서 직원별 주차 합산 급여와 주휴수당을 확인할
+                  기간을 직접 선택해서 직원별 합산 급여와 주휴수당을 한 줄로 확인할
                   수 있습니다.
                 </p>
               </div>
@@ -2328,14 +2362,14 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
             </div>
 
             <div style={{ ...warningBoxStyle, marginBottom: "18px" }}>
-              주휴수당 계산식: <strong>(해당 주 총근무시간 ÷ 5) × 시급</strong>
+              화면은 직원별 합산으로 표시됩니다. 상세 엑셀 다운로드는 기존처럼 주차별로 내려받을 수 있습니다.
             </div>
 
             {payrollLoading ? (
               <div style={emptyBoxStyle}>급여 데이터를 불러오는 중입니다...</div>
             ) : payrollMessage ? (
               <div style={emptyBoxStyle}>{payrollMessage}</div>
-            ) : filteredPayrollRows.length === 0 ? (
+            ) : monthlyPayrollRows.length === 0 ? (
               <div style={emptyBoxStyle}>급여 데이터가 없습니다.</div>
             ) : (
               <div style={tableScrollStyle}>
@@ -2347,8 +2381,8 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                       <th style={thStyle}>주민번호</th>
                       <th style={thStyle}>은행</th>
                       <th style={thStyle}>계좌번호</th>
-                      <th style={thStyle}>주 시작</th>
-                      <th style={thStyle}>주 종료</th>
+                      <th style={thStyle}>조회 시작</th>
+                      <th style={thStyle}>조회 종료</th>
                       <th style={thStyle}>총 근무시간</th>
                       <th style={thStyle}>시급</th>
                       <th style={thStyle}>기본급</th>
@@ -2358,7 +2392,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredPayrollRows.map((row, index) => {
+                    {monthlyPayrollRows.map((row, index) => {
                       const employee = employeeMap.get(Number(row.employeeId));
                       const workplaceName = row.workplaceName || employee?.workplace_name || "장사꾼";
 
