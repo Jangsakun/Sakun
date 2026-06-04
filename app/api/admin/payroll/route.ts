@@ -262,34 +262,51 @@ export async function POST(request: Request) {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-  const { data: records, error } = await supabase
-  .from("attendance_records")
-  .select(`
-    id,
-    record_type,
-    checked_at,
-    employee_id,
-    employees (
-      id,
-      name,
-      hourly_wage,
-      weekly_allowance_status,
-      workplace_name
-    )
-  `)
-  .gte("checked_at", `${startDate}T00:00:00+09:00`)
-  .lte("checked_at", `${endDate}T23:59:59.999+09:00`)
-  .order("checked_at", { ascending: true })
-  .range(0, 99999);
+    const allRecords: AttendanceRecord[] = [];
+    const pageSize = 1000;
+    let from = 0;
 
-    if (error) {
-      return NextResponse.json(
-        { success: false, message: error.message },
-        { status: 500 }
-      );
+    while (true) {
+      const to = from + pageSize - 1;
+
+      const { data, error } = await supabase
+        .from("attendance_records")
+        .select(`
+          id,
+          record_type,
+          checked_at,
+          employee_id,
+          employees (
+            id,
+            name,
+            hourly_wage,
+            weekly_allowance_status,
+            workplace_name
+          )
+        `)
+        .gte("checked_at", `${startDate}T00:00:00+09:00`)
+        .lte("checked_at", `${endDate}T23:59:59.999+09:00`)
+        .order("checked_at", { ascending: true })
+        .range(from, to);
+
+      if (error) {
+        return NextResponse.json(
+          { success: false, message: error.message },
+          { status: 500 }
+        );
+      }
+
+      const pageRecords = (data || []) as AttendanceRecord[];
+      allRecords.push(...pageRecords);
+
+      if (pageRecords.length < pageSize) {
+        break;
+      }
+
+      from += pageSize;
     }
 
-    const safeRecords = (records || []) as AttendanceRecord[];
+    const safeRecords = allRecords;
     let filtered = safeRecords;
 
     if (name && String(name).trim()) {
