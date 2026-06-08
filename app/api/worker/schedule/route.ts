@@ -3,25 +3,30 @@ import { createClient } from "@supabase/supabase-js";
 
 type ShiftType = "day" | "night";
 
+type ScheduleItem = {
+  day: string;
+  label: string;
+  dayLabel: string;
+  dateLabel: string;
+  fullDate: string;
+  available: boolean;
+  shift: ShiftType;
+  shiftType: ShiftType;
+  shiftLabel: string;
+};
+
 function createSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!supabaseUrl || !serviceRoleKey) {
-    return null;
-  }
+  if (!supabaseUrl || !serviceRoleKey) return null;
 
   return createClient(supabaseUrl, serviceRoleKey);
 }
 
 function normalizeShift(value: unknown): ShiftType {
   const normalized = String(value || "").toLowerCase().trim();
-
-  if (normalized === "night" || normalized === "야간") {
-    return "night";
-  }
-
-  return "day";
+  return normalized === "night" || normalized === "야간" ? "night" : "day";
 }
 
 function getShiftLabel(shift: ShiftType) {
@@ -38,6 +43,48 @@ function addDaysKst(dateString: string, days: number) {
   const date = new Date(`${dateString}T00:00:00+09:00`);
   date.setDate(date.getDate() + days);
   return date.toISOString().slice(0, 10);
+}
+
+function normalizeScheduleItem(item: any): ScheduleItem {
+  const shift = normalizeShift(item.shift || item.shiftType || item.shiftLabel);
+
+  return {
+    day: String(item.day || item.dayLabel || ""),
+    label: String(item.label || item.dateLabel || ""),
+    dayLabel: String(item.dayLabel || item.day || ""),
+    dateLabel: String(item.dateLabel || item.label || ""),
+    fullDate: String(item.fullDate || ""),
+    available: Boolean(item.available),
+    shift,
+    shiftType: shift,
+    shiftLabel: getShiftLabel(shift),
+  };
+}
+
+function getComparableScheduleItem(item: any) {
+  if (!item) return null;
+
+  const normalized = normalizeScheduleItem(item);
+
+  return {
+    fullDate: normalized.fullDate,
+    available: normalized.available,
+    shift: normalized.shift,
+  };
+}
+
+function isSameScheduleItem(a: any, b: any) {
+  const left = getComparableScheduleItem(a);
+  const right = getComparableScheduleItem(b);
+
+  if (!left && !right) return true;
+  if (!left || !right) return false;
+
+  return (
+    left.fullDate === right.fullDate &&
+    left.available === right.available &&
+    left.shift === right.shift
+  );
 }
 
 export async function POST(request: NextRequest) {
@@ -59,38 +106,14 @@ export async function POST(request: NextRequest) {
       !weekEndDate
     ) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "필수값이 누락되었습니다.",
-          debug: {
-            name: trimmedName,
-            birthDate: trimmedBirthDate,
-            phoneLast4: trimmedPhoneLast4,
-            weekStartDate,
-            weekEndDate,
-            scheduleIsArray: Array.isArray(schedule),
-            scheduleLength: Array.isArray(schedule) ? schedule.length : null,
-          },
-        },
+        { success: false, message: "필수값이 누락되었습니다." },
         { status: 400 }
       );
     }
 
     if (!Array.isArray(schedule) || schedule.length === 0) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "제출할 스케줄이 없습니다.",
-          debug: {
-            name: trimmedName,
-            birthDate: trimmedBirthDate,
-            phoneLast4: trimmedPhoneLast4,
-            weekStartDate,
-            weekEndDate,
-            scheduleIsArray: Array.isArray(schedule),
-            scheduleLength: Array.isArray(schedule) ? schedule.length : null,
-          },
-        },
+        { success: false, message: "제출할 스케줄이 없습니다." },
         { status: 400 }
       );
     }
@@ -125,38 +148,16 @@ export async function POST(request: NextRequest) {
 
     if (!employee) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "직원 정보를 찾을 수 없습니다.",
-          debug: {
-            name: trimmedName,
-            birthDate: trimmedBirthDate,
-            phoneLast4: trimmedPhoneLast4,
-          },
-        },
+        { success: false, message: "직원 정보를 찾을 수 없습니다." },
         { status: 404 }
       );
     }
 
-    const normalizedSchedule = schedule.map((item: any) => {
-      const shift = normalizeShift(item.shift || item.shiftType || item.shiftLabel);
-
-      return {
-        day: String(item.day || item.dayLabel || ""),
-        label: String(item.label || item.dateLabel || ""),
-        dayLabel: String(item.dayLabel || item.day || ""),
-        dateLabel: String(item.dateLabel || item.label || ""),
-        fullDate: String(item.fullDate || ""),
-        available: Boolean(item.available),
-        shift,
-        shiftType: shift,
-        shiftLabel: getShiftLabel(shift),
-      };
-    });
+    const normalizedSchedule = schedule.map(normalizeScheduleItem);
 
     const { data: existingSchedule, error: findError } = await supabase
       .from("weekly_schedules")
-      .select("id")
+      .select("id, schedule")
       .eq("name", trimmedName)
       .eq("birth_date", trimmedBirthDate)
       .eq("phone_last4", trimmedPhoneLast4)
@@ -178,11 +179,16 @@ export async function POST(request: NextRequest) {
     if (existingSchedule) {
       const todayKst = getKstTodayString();
       const tomorrowKst = addDaysKst(todayKst, 1);
-      const hasTomorrowSchedule = normalizedSchedule.some(
-        (item) => item.fullDate === tomorrowKst
+
+      const existingTomorrow = Array.isArray(existingSchedule.schedule)
+        ? existingSchedule.schedule.find((item: any) => item.fullDate === tomorrowKst)
+        : null;
+
+      const nextTomorrow = normalizedSchedule.find(
+        (item: ScheduleItem) => item.fullDate === tomorrowKst
       );
 
-      if (hasTomorrowSchedule) {
+      if (!isSameScheduleItem(existingTomorrow, nextTomorrow)) {
         return NextResponse.json(
           {
             success: false,
@@ -223,20 +229,18 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const { error: insertError } = await supabase
-      .from("weekly_schedules")
-      .insert([
-        {
-          employee_id: employee.id,
-          name: trimmedName,
-          birth_date: trimmedBirthDate,
-          phone_last4: trimmedPhoneLast4,
-          gender: employee.gender || null,
-          week_start_date: weekStartDate,
-          week_end_date: weekEndDate,
-          schedule: normalizedSchedule,
-        },
-      ]);
+    const { error: insertError } = await supabase.from("weekly_schedules").insert([
+      {
+        employee_id: employee.id,
+        name: trimmedName,
+        birth_date: trimmedBirthDate,
+        phone_last4: trimmedPhoneLast4,
+        gender: employee.gender || null,
+        week_start_date: weekStartDate,
+        week_end_date: weekEndDate,
+        schedule: normalizedSchedule,
+      },
+    ]);
 
     if (insertError) {
       return NextResponse.json(

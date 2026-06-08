@@ -427,6 +427,22 @@ function formatDateKey(date: Date) {
   return `${y}-${m}-${d}`;
 }
 
+function getTomorrowKstDateKey() {
+  const now = new Date();
+  const seoulNow = new Date(
+    now.toLocaleString("en-US", { timeZone: "Asia/Seoul" })
+  );
+
+  seoulNow.setHours(0, 0, 0, 0);
+  seoulNow.setDate(seoulNow.getDate() + 1);
+
+  return formatDateKey(seoulNow);
+}
+
+function isTomorrowSchedule(fullDate: string) {
+  return fullDate === getTomorrowKstDateKey();
+}
+
 function formatShortDate(date: Date) {
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");
@@ -1220,6 +1236,11 @@ totalWorkMinutes = Math.max(0, diff);
       prev.map((day) => {
         if (day.key !== key || day.isHoliday) return day;
 
+        if (isTomorrowSchedule(day.fullDate)) {
+          alert("다음날 스케줄은 전날에 수정할 수 없습니다.");
+          return day;
+        }
+
         const nextAvailable = !day.available;
 
         return {
@@ -1235,6 +1256,11 @@ totalWorkMinutes = Math.max(0, diff);
     setWeeklySchedule((prev) =>
       prev.map((day) => {
         if (day.key !== key || day.isHoliday || !day.available) return day;
+
+        if (isTomorrowSchedule(day.fullDate)) {
+          alert("다음날 스케줄은 전날에 수정할 수 없습니다.");
+          return day;
+        }
 
         return {
           ...day,
@@ -1623,7 +1649,7 @@ totalWorkMinutes = Math.max(0, diff);
                 ? "제출 여부를 확인하고 있습니다."
                 : isSchedulePending
                 ? `${scheduleWeekTitle} 스케줄이 아직 제출되지 않았습니다.`
-                : "스케줄 제출이 완료되었습니다. 전날만 제외하고 수정할 수 있습니다."}
+                : "스케줄 제출이 완료되었습니다."}
             </div>
             <div style={scheduleSubTextStyle}>
               {isScheduleChecking
@@ -1696,8 +1722,16 @@ totalWorkMinutes = Math.max(0, diff);
                   );
                 }
 
+                const isLockedTomorrow = isTomorrowSchedule(day.fullDate);
+
                 return (
-                  <div key={day.key} style={scheduleEditorRowStyle}>
+                  <div
+                    key={day.key}
+                    style={{
+                      ...scheduleEditorRowStyle,
+                      opacity: isLockedTomorrow ? 0.55 : 1,
+                    }}
+                  >
                     <div style={scheduleEditorLeftStyle}>
                       <div style={scheduleEditorDayStyle}>
                         {day.dayLabel} ({day.dateLabel})
@@ -1707,33 +1741,38 @@ totalWorkMinutes = Math.max(0, diff);
                         <input
                           type="checkbox"
                           checked={day.available}
+                          disabled={isLockedTomorrow}
                           onChange={() => handleToggleScheduleAvailable(day.key)}
                         />
-                        <span>출근 가능</span>
+                        <span>{isLockedTomorrow ? "전날 수정불가" : "출근 가능"}</span>
                       </label>
 
                       {day.available && (
                         <div style={scheduleShiftButtonRowStyle}>
                           <button
                             type="button"
+                            disabled={isLockedTomorrow}
                             onClick={() => handleShiftChange(day.key, "day")}
-                            style={
-                              day.shift === "day"
+                            style={{
+                              ...(day.shift === "day"
                                 ? scheduleShiftSelectedButtonStyle
-                                : scheduleShiftButtonStyle
-                            }
+                                : scheduleShiftButtonStyle),
+                              cursor: isLockedTomorrow ? "not-allowed" : "pointer",
+                            }}
                           >
                             주간
                           </button>
 
                           <button
                             type="button"
+                            disabled={isLockedTomorrow}
                             onClick={() => handleShiftChange(day.key, "night")}
-                            style={
-                              day.shift === "night"
+                            style={{
+                              ...(day.shift === "night"
                                 ? scheduleNightSelectedButtonStyle
-                                : scheduleShiftButtonStyle
-                            }
+                                : scheduleShiftButtonStyle),
+                              cursor: isLockedTomorrow ? "not-allowed" : "pointer",
+                            }}
                           >
                             야간
                           </button>
