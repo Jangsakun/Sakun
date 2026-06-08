@@ -28,6 +28,18 @@ function getShiftLabel(shift: ShiftType) {
   return shift === "night" ? "야간" : "주간";
 }
 
+function getKstTodayString() {
+  const now = new Date();
+  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  return kst.toISOString().slice(0, 10);
+}
+
+function addDaysKst(dateString: string, days: number) {
+  const date = new Date(`${dateString}T00:00:00+09:00`);
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -164,6 +176,22 @@ export async function POST(request: NextRequest) {
     }
 
     if (existingSchedule) {
+      const todayKst = getKstTodayString();
+      const tomorrowKst = addDaysKst(todayKst, 1);
+      const hasTomorrowSchedule = normalizedSchedule.some(
+        (item) => item.fullDate === tomorrowKst
+      );
+
+      if (hasTomorrowSchedule) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "전날에는 다음날 스케줄을 수정할 수 없습니다.",
+          },
+          { status: 400 }
+        );
+      }
+
       const { error: updateError } = await supabase
         .from("weekly_schedules")
         .update({

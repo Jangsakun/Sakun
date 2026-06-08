@@ -1216,8 +1216,6 @@ totalWorkMinutes = Math.max(0, diff);
   };
 
   const handleToggleScheduleAvailable = (key: string) => {
-    if (scheduleStatus === "submitted") return;
-
     setWeeklySchedule((prev) =>
       prev.map((day) => {
         if (day.key !== key || day.isHoliday) return day;
@@ -1234,8 +1232,6 @@ totalWorkMinutes = Math.max(0, diff);
   };
 
   const handleShiftChange = (key: string, shift: ShiftType) => {
-    if (scheduleStatus === "submitted") return;
-
     setWeeklySchedule((prev) =>
       prev.map((day) => {
         if (day.key !== key || day.isHoliday || !day.available) return day;
@@ -1251,9 +1247,7 @@ totalWorkMinutes = Math.max(0, diff);
   const handleSubmitSchedule = async () => {
     if (!employee) return;
 
-    if (scheduleStatus === "submitted") {
-      return;
-    }
+    const isUpdateMode = scheduleStatus === "submitted";
 
     const activeDays = weeklySchedule
       .filter((day) => !day.isHoliday && day.available)
@@ -1299,7 +1293,11 @@ totalWorkMinutes = Math.max(0, diff);
 
       setScheduleStatus("submitted");
       setScheduleOpen(false);
-      setMessage(`${scheduleWeekTitle} 스케줄 제출이 완료되었습니다.`);
+      setMessage(
+        isUpdateMode
+          ? `${scheduleWeekTitle} 스케줄이 수정되었습니다.`
+          : `${scheduleWeekTitle} 스케줄 제출이 완료되었습니다.`
+      );
 
       await checkScheduleSubmitted(
         employee,
@@ -1625,14 +1623,14 @@ totalWorkMinutes = Math.max(0, diff);
                 ? "제출 여부를 확인하고 있습니다."
                 : isSchedulePending
                 ? `${scheduleWeekTitle} 스케줄이 아직 제출되지 않았습니다.`
-                : "스케줄 제출이 완료되었습니다."}
+                : "스케줄 제출이 완료되었습니다. 전날만 제외하고 수정할 수 있습니다."}
             </div>
             <div style={scheduleSubTextStyle}>
               {isScheduleChecking
                 ? "잠시만 기다려주세요."
                 : isSchedulePending
                 ? "아래에서 출근 가능 요일과 주간/야간을 선택 후 제출해주세요."
-                : "한 번 제출한 뒤에는 관리자만 수정할 수 있습니다."}
+                : "다음날 스케줄은 전날에 수정할 수 없고, 그 외 날짜는 수정 가능합니다."}
             </div>
           </div>
 
@@ -1679,7 +1677,7 @@ totalWorkMinutes = Math.max(0, diff);
             ))}
           </div>
 
-          {scheduleOpen && isSchedulePending && !isScheduleChecking && (
+          {scheduleOpen && !isScheduleChecking && (
             <div style={scheduleEditorWrapStyle}>
               {weeklySchedule.map((day) => {
                 if (day.isHoliday) {
@@ -1785,12 +1783,18 @@ totalWorkMinutes = Math.max(0, diff);
                       : "pointer",
                 }}
               >
-                {isScheduleSaving ? "제출 중..." : "스케줄 제출하기"}
+                {isScheduleSaving
+                  ? isSchedulePending
+                    ? "제출 중..."
+                    : "수정 중..."
+                  : isSchedulePending
+                  ? "스케줄 제출하기"
+                  : "스케줄 수정하기"}
               </button>
             </div>
           )}
 
-          {!scheduleOpen && isSchedulePending && !isScheduleChecking && (
+          {!scheduleOpen && !isScheduleChecking && (
             <button
               type="button"
               onClick={() => setScheduleOpen(true)}
@@ -1801,11 +1805,15 @@ totalWorkMinutes = Math.max(0, diff);
                 cursor: isHolidayLoading ? "not-allowed" : "pointer",
               }}
             >
-              {isHolidayLoading ? "주간 일정 불러오는 중..." : "스케줄 입력 열기"}
+              {isHolidayLoading
+                ? "주간 일정 불러오는 중..."
+                : isSchedulePending
+                ? "스케줄 입력 열기"
+                : "스케줄 수정하기"}
             </button>
           )}
 
-          {scheduleOpen && isSchedulePending && !isScheduleChecking && (
+          {scheduleOpen && !isScheduleChecking && (
             <button
               type="button"
               onClick={() => setScheduleOpen(false)}
@@ -1815,9 +1823,6 @@ totalWorkMinutes = Math.max(0, diff);
             </button>
           )}
 
-          {!isSchedulePending && !isScheduleChecking && (
-            <div style={scheduleDoneButtonStyle}>제출 완료 (수정 불가)</div>
-          )}
         </div>
 
       </section>
