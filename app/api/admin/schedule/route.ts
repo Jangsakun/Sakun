@@ -290,13 +290,15 @@ export async function PATCH(request: NextRequest) {
       normalizeScheduleItem(item)
     );
 
-    const { data: existingSchedule, error: findError } = await supabase
+    const { data: existingSchedules, error: findError } = await supabase
       .from("weekly_schedules")
-      .select("id")
+      .select("id, week_end_date")
       .eq("employee_id", finalEmployeeId)
       .eq("week_start_date", weekStartDate)
-      .eq("week_end_date", weekEndDate)
-      .maybeSingle();
+      .order("week_end_date", { ascending: false })
+      .limit(1);
+
+    const existingSchedule = existingSchedules?.[0] || null;
 
     if (findError) {
       return NextResponse.json(
