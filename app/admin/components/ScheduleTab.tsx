@@ -1177,13 +1177,13 @@ export default function ScheduleTab() {
                     const employees =
                       selectedWorkplace === "헤모즈"
                         ? getEmployeesForHemozGroupAndDate({
-                            employees: availableEmployees,
+                            employees: allEmployees,
                             group,
                             date: day.value,
                             selectedDate,
                           })
                         : group.key === "night"
-                          ? availableEmployees
+                          ? allEmployees
                               .filter(
                                 (employee) =>
                                   !isCarrotEmployee(employee) &&
@@ -1197,7 +1197,7 @@ export default function ScheduleTab() {
                               )
                               .sort((a, b) => a.name.localeCompare(b.name, "ko"))
                           : getEmployeesForRoleAndDate({
-                              employees: availableEmployees,
+                              employees: allEmployees,
                               group,
                               date: day.value,
                               selectedDate,
