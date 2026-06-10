@@ -118,13 +118,21 @@ export async function GET(request: NextRequest) {
     const notSubmitted: any[] = [];
 
     for (const emp of employees || []) {
-      const scheduleRow = schedules?.find((s) => {
-        if (s.employee_id && emp.id) {
-          return String(s.employee_id) === String(emp.id);
-        }
+      const employeeSchedules = (schedules || [])
+        .filter((s) => {
+          if (s.employee_id && emp.id) {
+            return String(s.employee_id) === String(emp.id);
+          }
 
-        return s.name === emp.name;
-      });
+          return s.name === emp.name;
+        })
+        .sort((a, b) =>
+          String(b.week_end_date || "").localeCompare(
+            String(a.week_end_date || "")
+          )
+        );
+
+      const scheduleRow = employeeSchedules[0] || null;
 
       const weeklySchedule = Array.isArray(scheduleRow?.schedule)
         ? scheduleRow.schedule.map((item: any) => normalizeScheduleItem(item))
