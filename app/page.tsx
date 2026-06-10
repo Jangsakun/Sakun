@@ -468,7 +468,7 @@ function formatWeekRangeLabel(startDate: Date, endDate: Date) {
 
 function createWeekdaysWithHolidayInfo(holidays: HolidayItem[]) {
   const monday = getScheduleTargetMondayInKst();
-  const weekdays = [0, 1, 2, 3, 4].map((offset) => addDays(monday, offset));
+  const weekdays = [0, 1, 2, 3, 4, 5].map((offset) => addDays(monday, offset));
 
   return weekdays.map((date, index) => {
     const fullDate = formatDateKey(date);
@@ -948,9 +948,9 @@ export default function Home() {
         setIsHolidayLoading(true);
 
         const monday = getScheduleTargetMondayInKst();
-        const friday = addDays(monday, 4);
+        const saturday = addDays(monday, 5);
         const years = Array.from(
-          new Set([monday.getFullYear(), friday.getFullYear()])
+          new Set([monday.getFullYear(), saturday.getFullYear()])
         );
 
         const holidayResults = await Promise.all(
@@ -973,8 +973,8 @@ export default function Home() {
         const holidays = holidayResults.flat();
         const nextWeeklySchedule = createWeekdaysWithHolidayInfo(holidays);
         const nextWeekStartDate = formatDateKey(monday);
-        const nextWeekEndDate = formatDateKey(friday);
-        const nextWeekRangeLabel = formatWeekRangeLabel(monday, friday);
+        const nextWeekEndDate = formatDateKey(saturday);
+        const nextWeekRangeLabel = formatWeekRangeLabel(monday, saturday);
 
         setWeeklySchedule(nextWeeklySchedule);
         setWeekStartDate(nextWeekStartDate);
@@ -993,8 +993,8 @@ export default function Home() {
         console.error("공휴일/주간 일정 생성 실패:", error);
 
         const monday = getScheduleTargetMondayInKst();
-        const friday = addDays(monday, 4);
-        const fallbackWeek = [0, 1, 2, 3, 4].map((offset, index) => {
+        const saturday = addDays(monday, 5);
+        const fallbackWeek = [0, 1, 2, 3, 4, 5].map((offset, index) => {
           const date = addDays(monday, offset);
 
           return {
@@ -1010,8 +1010,8 @@ export default function Home() {
         });
 
         const nextWeekStartDate = formatDateKey(monday);
-        const nextWeekEndDate = formatDateKey(friday);
-        const nextWeekRangeLabel = formatWeekRangeLabel(monday, friday);
+        const nextWeekEndDate = formatDateKey(saturday);
+        const nextWeekRangeLabel = formatWeekRangeLabel(monday, saturday);
 
         setWeeklySchedule(fallbackWeek);
         setWeekStartDate(nextWeekStartDate);
@@ -2094,7 +2094,7 @@ const scheduleSubTextStyle: React.CSSProperties = {
 
 const scheduleMiniDayRowStyle: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(5, 1fr)",
+  gridTemplateColumns: "repeat(6, 1fr)",
   gap: "6px",
   marginBottom: "16px",
 };

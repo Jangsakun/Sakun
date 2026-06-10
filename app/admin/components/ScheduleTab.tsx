@@ -253,9 +253,9 @@ function getWeekDaysInKst(weekMode: WeekMode): DayItem[] {
   const weekStart =
     weekMode === "next" ? addDays(currentMonday, 7) : currentMonday;
 
-  const labels = ["월", "화", "수", "목", "금"];
+  const labels = ["월", "화", "수", "목", "금", "토"];
 
-  return [0, 1, 2, 3, 4].map((offset) => {
+  return [0, 1, 2, 3, 4, 5].map((offset) => {
     const date = addDays(weekStart, offset);
 
     return {
@@ -1076,7 +1076,7 @@ export default function ScheduleTab() {
           <table
             style={{
               width: "100%",
-              minWidth: "980px",
+              minWidth: "1120px",
               borderCollapse: "separate",
               borderSpacing: 0,
             }}
