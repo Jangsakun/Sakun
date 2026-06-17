@@ -409,17 +409,20 @@ export async function POST(request: NextRequest) {
         };
       });
 
-    const totalNetPay = calcNetPay(totalGrossPay);
-
     const weeklyAllowanceStatus =
       employee.weekly_allowance_status || "검토필요";
 
- const totalHours = totalMinutes / 60;
+    const totalHours = totalMinutes / 60;
 
-const weeklyAllowanceAmount =
-  weeklyAllowanceStatus === "대상" && totalHours >= 15
-    ? Math.floor((totalHours / 5) * hourlyWage)
-    : 0;
+    const weeklyAllowanceAmount =
+      weeklyAllowanceStatus === "대상" && totalHours >= 15
+        ? Math.floor((totalHours / 5) * hourlyWage)
+        : 0;
+
+    // 관리자 급여관리 화면과 동일하게
+    // 총 지급 급여와 세후 급여는 기본급 + 주휴수당 기준으로 계산합니다.
+    const totalGrossPayWithAllowance = totalGrossPay + weeklyAllowanceAmount;
+    const totalNetPay = calcNetPay(totalGrossPayWithAllowance);
 
     return NextResponse.json({
       success: true,
@@ -439,7 +442,7 @@ const weeklyAllowanceAmount =
       summary: {
         totalMinutes,
         totalWorkText: formatMinutesToText(totalMinutes),
-        totalGrossPay,
+        totalGrossPay: totalGrossPayWithAllowance,
         totalNetPay,
       },
       weeklyAllowance: {
