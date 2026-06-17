@@ -32,6 +32,7 @@ type DailyWorkRow = {
   workplaceName: string;
   date: string;
   hours: number;
+  workedMinutes: number;
   wage: number;
   weeklyAllowanceStatus: string;
 };
@@ -43,6 +44,7 @@ type WeeklyPayrollRow = {
   weekStart: string;
   weekEnd: string;
   totalHours: number;
+  totalMinutes: number;
   hourlyWage: number;
   weeklyAllowanceStatus: string;
 };
@@ -295,6 +297,7 @@ export async function POST(request: Request) {
         workplaceName,
         date,
         hours,
+        workedMinutes,
         wage,
         weeklyAllowanceStatus,
       });
@@ -341,28 +344,32 @@ export async function POST(request: Request) {
           weekStart,
           weekEnd,
           totalHours: 0,
+          totalMinutes: 0,
           hourlyWage: row.wage,
           weeklyAllowanceStatus: row.weeklyAllowanceStatus || "검토필요",
         };
       }
 
       weekly[key].totalHours += row.hours;
+      weekly[key].totalMinutes += row.workedMinutes;
     }
 
     const result = Object.values(weekly).map((w) => {
-      const totalHours = Number(w.totalHours.toFixed(2));
-      const basePay = roundToWon(totalHours * w.hourlyWage);
+      // 화면 표시는 시간 단위로 전달하되, 급여 계산은 소수점 반올림 시간이 아닌 총 분 기준으로 계산합니다.
+      // 예: 35시간 40분 = 2,140분 기준 계산 → 근로자 급여조회와 동일한 금액
+      const totalHours = Number((w.totalMinutes / 60).toFixed(4));
+      const basePay = Math.floor((w.totalMinutes / 60) * w.hourlyWage);
 
       let weeklyAllowance = 0;
 
-      if (w.weeklyAllowanceStatus === "대상" && totalHours >= 15) {
-        weeklyAllowance = roundToWon((totalHours / 5) * w.hourlyWage);
+      if (w.weeklyAllowanceStatus === "대상" && w.totalMinutes >= 15 * 60) {
+        weeklyAllowance = Math.floor((w.totalMinutes / 60 / 5) * w.hourlyWage);
       } else {
         weeklyAllowance = 0;
       }
 
       const grossPay = basePay + weeklyAllowance;
-      const netPay = roundToWon(grossPay * 0.967);
+      const netPay = Math.floor(grossPay * 0.967);
 
       return {
         employeeId: String(w.employeeId),
