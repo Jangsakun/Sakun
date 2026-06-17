@@ -61,75 +61,6 @@ function formatKST(date: Date) {
   }).format(date);
 }
 
-function getKSTHourMinute(date: Date) {
-  const hhmm = date.toLocaleTimeString("en-GB", {
-    timeZone: "Asia/Seoul",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-
-  const [hourText, minuteText] = hhmm.split(":");
-  return {
-    hour: Number(hourText),
-    minute: Number(minuteText),
-    totalMinutes: Number(hourText) * 60 + Number(minuteText),
-  };
-}
-
-function createKSTDateTime(dateKey: string, hour: number, minute: number) {
-  const safeHour = String(hour).padStart(2, "0");
-  const safeMinute = String(minute).padStart(2, "0");
-  return new Date(`${dateKey}T${safeHour}:${safeMinute}:00+09:00`);
-}
-
-function normalizeCheckInTime(value: string) {
-  const source = new Date(value);
-  const dateKey = formatKST(source);
-  const { totalMinutes } = getKSTHourMinute(source);
-
-  const start0900Window = 8 * 60 + 45;
-  const end0910Window = 9 * 60 + 10;
-  const start0911Window = 9 * 60 + 11;
-  const end0930Window = 9 * 60 + 30;
-  const start1800Window = 17 * 60 + 50;
-  const end1800Window = 18 * 60 + 10;
-
-  if (totalMinutes >= start0900Window && totalMinutes <= end0910Window) {
-    return createKSTDateTime(dateKey, 9, 0);
-  }
-
-  if (totalMinutes >= start0911Window && totalMinutes <= end0930Window) {
-    return createKSTDateTime(dateKey, 9, 30);
-  }
-
-  if (totalMinutes >= start1800Window && totalMinutes <= end1800Window) {
-    return createKSTDateTime(dateKey, 18, 0);
-  }
-
-  return source;
-}
-
-function normalizeCheckOutTime(value: string) {
-  const source = new Date(value);
-  const dateKey = formatKST(source);
-  const { hour, minute } = getKSTHourMinute(source);
-
-  if (hour >= 17) {
-    if (minute <= 10) {
-      return createKSTDateTime(dateKey, hour, 0);
-    }
-
-    if (minute <= 40) {
-      return createKSTDateTime(dateKey, hour, 30);
-    }
-
-    return createKSTDateTime(dateKey, hour + 1, 0);
-  }
-
-  return source;
-}
-
 function isCheckInType(value: string) {
   const normalized = String(value || "").toLowerCase().trim();
   return (
@@ -195,10 +126,11 @@ function calculateDailyWorkedMinutes(date: string, sessions: WorkSession[]) {
   let totalMinutes = 0;
 
   for (const session of sessions) {
-    const normalizedIn = normalizeCheckInTime(session.checkIn.checked_at);
-    const normalizedOut = normalizeCheckOutTime(session.checkOut.checked_at);
+    // 관리자 급여관리는 출퇴근 보정시간이 아니라 실제 기록 시간을 기준으로 계산합니다.
+    const actualIn = new Date(session.checkIn.checked_at);
+    const actualOut = new Date(session.checkOut.checked_at);
 
-    const diffMs = normalizedOut.getTime() - normalizedIn.getTime();
+    const diffMs = actualOut.getTime() - actualIn.getTime();
 
     if (diffMs > 0) {
       totalMinutes += Math.floor(diffMs / 1000 / 60);
@@ -209,8 +141,8 @@ function calculateDailyWorkedMinutes(date: string, sessions: WorkSession[]) {
     return 0;
   }
 
-  const firstNormalizedIn = normalizeCheckInTime(sessions[0].checkIn.checked_at);
-  const lastNormalizedOut = normalizeCheckOutTime(
+  const firstActualIn = new Date(sessions[0].checkIn.checked_at);
+  const lastActualOut = new Date(
     sessions[sessions.length - 1].checkOut.checked_at
   );
 
@@ -218,8 +150,8 @@ function calculateDailyWorkedMinutes(date: string, sessions: WorkSession[]) {
   const lunchEnd = new Date(`${date}T13:30:00+09:00`);
 
   const includesFullLunch =
-    firstNormalizedIn.getTime() <= lunchStart.getTime() &&
-    lastNormalizedOut.getTime() >= lunchEnd.getTime();
+    firstActualIn.getTime() <= lunchStart.getTime() &&
+    lastActualOut.getTime() >= lunchEnd.getTime();
 
   if (includesFullLunch) {
     totalMinutes = Math.max(0, totalMinutes - 60);
