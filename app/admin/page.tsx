@@ -1019,7 +1019,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
         employee?.account_number || "-",
         row.weekStart,
         row.weekEnd,
-        row.totalHours.toFixed(2),
+        formatHoursToText(row.totalHours),
         String(row.hourlyWage),
         String(Math.round(row.basePay)),
         String(Math.round(row.weeklyAllowance)),
@@ -1132,7 +1132,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
       row.bankName,
       row.accountNumber,
       row.period,
-      row.totalHours.toFixed(2),
+      formatHoursToText(row.totalHours),
       String(row.hourlyWage),
       String(Math.round(row.basePay)),
       String(Math.round(row.weeklyAllowance)),
@@ -2272,7 +2272,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
               <div style={paySummaryCardStyle}>
                 <div style={paySummaryLabelStyle}>총 근무시간 합계</div>
                 <div style={paySummaryValueStyle}>
-                  {payrollSummary.totalHours.toFixed(2)}시간
+                  {formatHoursToText(payrollSummary.totalHours)}
                 </div>
               </div>
 
@@ -2424,7 +2424,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                           <td style={tdStyle}>{formatDate(row.weekStart)}</td>
                           <td style={tdStyle}>{formatDate(row.weekEnd)}</td>
                           <td style={tdStyle}>
-                            {row.totalHours.toFixed(2)}시간
+                            {formatHoursToText(row.totalHours)}
                           </td>
                           <td style={tdStyle}>
                             {formatCurrency(row.hourlyWage)}
@@ -2875,6 +2875,21 @@ function formatWorkMinutes(minutes: number | null) {
   if (mins === 0) return `${hours}시간`;
 
   return `${hours}시간 ${mins}분`;
+}
+
+function formatHoursToText(hours: number | null | undefined) {
+  if (hours === null || hours === undefined || Number.isNaN(hours) || hours < 0) {
+    return "-";
+  }
+
+  const totalMinutes = Math.round(hours * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+
+  if (h === 0) return `${m}분`;
+  if (m === 0) return `${h}시간`;
+
+  return `${h}시간 ${m}분`;
 }
 
 function formatCurrency(value: number) {
