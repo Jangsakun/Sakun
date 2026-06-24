@@ -454,6 +454,19 @@ function getKoreanDayLabel(date: Date) {
   return labels[date.getDay()];
 }
 
+function formatKstHeaderDate(date = new Date()) {
+  const { year, month, day } = getKstParts(date);
+  const weekday = date.toLocaleDateString("ko-KR", {
+    timeZone: "Asia/Seoul",
+    weekday: "long",
+  });
+
+  return `${year}.${String(month).padStart(2, "0")}.${String(day).padStart(
+    2,
+    "0"
+  )} ${weekday}`;
+}
+
 function formatWeekRangeLabel(startDate: Date, endDate: Date) {
   const startYear = startDate.getFullYear();
   const startMonth = String(startDate.getMonth() + 1).padStart(2, "0");
@@ -1348,15 +1361,34 @@ totalWorkMinutes = Math.max(0, diff);
   }
 
   const isSchedulePending = scheduleStatus === "pending";
+  const todayDateLabel = formatKstHeaderDate(now);
+  const todayWorkStatus = todaySummary.checkOut
+    ? "퇴근 완료"
+    : todaySummary.checkIn
+    ? "근무 중"
+    : "대기 중";
+  const todayWorkDescription =
+    message ||
+    (todaySummary.checkOut
+      ? "오늘 근무가 완료되었습니다."
+      : todaySummary.checkIn
+      ? "현재 근무 중입니다."
+      : "아직 출근 기록이 없습니다.");
 
   return (
     <main style={pageStyle}>
       <section style={cardStyle}>
-        <div style={{ marginBottom: "24px" }}>
-          <h1 style={titleStyle}>통합 관리 시스템</h1>
-          <p style={subtitleStyle}>
-            <strong>{employee.name}</strong>님, 오늘도 좋은 하루 되세요.
-          </p>
+        <div style={headerWrapStyle}>
+          <div>
+            <h1 style={titleStyle}>통합 관리 시스템</h1>
+            <p style={subtitleStyle}>
+              <strong>{employee.name}</strong>님, 오늘도 좋은 하루 되세요.
+            </p>
+          </div>
+          <div style={headerDateWrapStyle}>
+            <div style={headerDateIconStyle}>📅</div>
+            <div style={headerDateTextStyle}>{todayDateLabel}</div>
+          </div>
         </div>
 
         {isContractLoading && (
@@ -1498,112 +1530,100 @@ totalWorkMinutes = Math.max(0, diff);
           </div>
         )}
 
-        <div style={buttonRowStyle}>
-          <button
-            onClick={() => sendAttendance("check-in")}
-            disabled={isLoading}
-            style={{
-              ...primaryButtonStyle,
-              opacity: isLoading ? 0.6 : 1,
-              cursor: isLoading ? "not-allowed" : "pointer",
-            }}
-          >
-            {isLoading ? "처리 중..." : "출근하기"}
-          </button>
-
-          <button
-            onClick={() => sendAttendance("check-out")}
-            disabled={isLoading || !checkoutAvailability.enabled}
-            style={{
-              ...secondaryButtonStyle,
-              opacity: isLoading || !checkoutAvailability.enabled ? 0.6 : 1,
-              cursor:
-                isLoading || !checkoutAvailability.enabled
-                  ? "not-allowed"
-                  : "pointer",
-            }}
-          >
-            {isLoading ? "처리 중..." : "퇴근하기"}
-          </button>
-        </div>
-
-        <div style={noticeBoxStyle}>
-          <div style={noticeTitleStyle}>퇴근 안내</div>
-          <div style={noticeTextStyle}>
-            {checkoutAvailability.notice}
-            <br />
-            17시 이전 퇴근은 관리자에게 문의 바랍니다.
-            {!checkoutAvailability.enabled &&
-              checkoutAvailability.nextAvailableLabel && (
-                <>
-                  <br />
-                  다음 퇴근 가능 시간:{" "}
-                  <strong>{checkoutAvailability.nextAvailableLabel}</strong>
-                </>
-              )}
-          </div>
-        </div>
-
-        <Link href="/worker/payroll" style={payrollLinkStyle}>
-          <div style={payrollIconStyle}>💰</div>
-          <div>
-            <div style={payrollTitleStyle}>근로자 급여조회</div>
-            <div style={payrollDescStyle}>
-              실시간 주단위 급여 / 날짜별 조회 / 주급 명세서 확인
-            </div>
-          </div>
-        </Link>
-
-        <div style={statusBoxStyle}>
-          <div style={statusHeaderStyle}>현재 상태</div>
-          <p style={statusTextStyle}>{message || "대기 중"}</p>
-        </div>
-
-        <div style={todaySummarySectionStyle}>
-          <div style={todaySummaryHeaderStyle}>
-            <div style={todaySummaryTitleWrapStyle}>
-              <div style={todaySummaryIconStyle}>🗓️</div>
-              <div style={todaySummaryTitleStyle}>오늘 기록</div>
+        <div style={todayWorkCardStyle}>
+          <div style={todayWorkHeaderStyle}>
+            <div style={todayWorkTitleWrapStyle}>
+              <div style={todayWorkIconStyle}>👤</div>
+              <div style={todayWorkTitleStyle}>오늘 근무</div>
             </div>
           </div>
 
-          {todayRecords.length === 0 ? (
-            <div style={todaySummaryEmptyStyle}>오늘 기록이 없습니다.</div>
-          ) : (
-            <div style={todaySummaryGridStyle}>
-              <div style={todaySummaryItemStyle}>
-                <div style={todaySummaryLabelStyle}>출근 시간</div>
-                <div style={todaySummaryValueStyle}>
+          <div style={todayWorkPanelStyle}>
+            <div style={todayStatusWrapStyle}>
+              <div style={todayStatusIconStyle}>⏱</div>
+              <div>
+                <div style={todayStatusTextStyle}>{todayWorkStatus}</div>
+                <div style={todayDescriptionStyle}>{todayWorkDescription}</div>
+              </div>
+            </div>
+
+            <div style={todayInfoDividerStyle} />
+
+            <div style={todayInfoRowsStyle}>
+              <div style={todayInfoRowStyle}>
+                <span style={todayInfoLabelStyle}>출근</span>
+                <strong style={todayInfoValueStyle}>
                   {todaySummary.checkIn || "-"}
-                </div>
-                <div style={todaySummaryPillStyle}>출근 완료</div>
+                </strong>
               </div>
-
-              <div style={todaySummaryDividerStyle} />
-
-              <div style={todaySummaryItemStyle}>
-                <div style={todaySummaryLabelStyle}>퇴근 시간</div>
-                <div style={todaySummaryValueStyle}>
+              <div style={todayInfoRowStyle}>
+                <span style={todayInfoLabelStyle}>퇴근</span>
+                <strong style={todayInfoValueStyle}>
                   {todaySummary.checkOut || "-"}
-                </div>
-                <div style={todaySummaryPillStyle}>
-                  {todaySummary.checkOut ? "퇴근 완료" : "퇴근 전"}
-                </div>
+                </strong>
               </div>
-
-              <div style={todaySummaryDividerStyle} />
-
-              <div style={todaySummaryItemStyle}>
-                <div style={todaySummaryLabelStyle}>총 근무시간</div>
-                <div style={todaySummaryValueStyle}>
+              <div style={todayInfoRowStyle}>
+                <span style={todayInfoLabelStyle}>근무시간</span>
+                <strong style={todayInfoValueStyle}>
                   {todaySummary.totalWorkMinutes > 0
                     ? formatMinutesToKorean(todaySummary.totalWorkMinutes)
                     : "-"}
-                </div>
+                </strong>
               </div>
             </div>
-          )}
+          </div>
+
+          <div style={buttonRowStyle}>
+            <button
+              onClick={() => sendAttendance("check-in")}
+              disabled={isLoading}
+              style={{
+                ...primaryButtonStyle,
+                opacity: isLoading ? 0.6 : 1,
+                cursor: isLoading ? "not-allowed" : "pointer",
+              }}
+            >
+              {isLoading ? "처리 중..." : "↪ 출근하기"}
+            </button>
+
+            <button
+              onClick={() => sendAttendance("check-out")}
+              disabled={isLoading || !checkoutAvailability.enabled}
+              style={{
+                ...secondaryButtonStyle,
+                opacity: isLoading || !checkoutAvailability.enabled ? 0.6 : 1,
+                cursor:
+                  isLoading || !checkoutAvailability.enabled
+                    ? "not-allowed"
+                    : "pointer",
+              }}
+            >
+              {isLoading ? "처리 중..." : "↩ 퇴근하기"}
+            </button>
+          </div>
+
+          <div style={noticeInlineStyle}>
+            <div style={noticeIconStyle}>i</div>
+            <div style={noticeTextBlockStyle}>
+              <div>
+                <span style={noticeEmphasisStyle}>17시 이후</span> 퇴근은 30분
+                단위로 10분 동안만 가능합니다.
+              </div>
+              <div>
+                <span style={noticeEmphasisStyle}>17시 이전</span> 퇴근은
+                관리자에게 문의 바랍니다.
+              </div>
+              {!checkoutAvailability.enabled &&
+                checkoutAvailability.nextAvailableLabel && (
+                  <div>
+                    다음 퇴근 가능 시간:{" "}
+                    <strong>{checkoutAvailability.nextAvailableLabel}</strong>
+                  </div>
+                )}
+            </div>
+          </div>
         </div>
+
         <div
           style={
             isSchedulePending ? schedulePendingCardStyle : scheduleDoneCardStyle
@@ -1847,7 +1867,7 @@ totalWorkMinutes = Math.max(0, diff);
               {isHolidayLoading
                 ? "주간 일정 불러오는 중..."
                 : isSchedulePending
-                ? "스케줄 입력 열기"
+                ? "스케줄 제출하기"
                 : "스케줄 수정하기"}
             </button>
           )}
@@ -1864,70 +1884,284 @@ totalWorkMinutes = Math.max(0, diff);
 
         </div>
 
+
+        <Link href="/worker/payroll" style={payrollLinkStyle}>
+          <div style={payrollIconStyle}>💰</div>
+          <div style={payrollTextWrapStyle}>
+            <div style={payrollTitleStyle}>근로자 급여조회</div>
+            <div style={payrollDescStyle}>
+              실시간 주단위 급여 / 날짜별 조회 / 주급 명세서 확인
+            </div>
+          </div>
+          <div style={payrollArrowStyle}>›</div>
+        </Link>
+
       </section>
     </main>
   );
 }
 
+
+const headerWrapStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: "16px",
+  marginBottom: "24px",
+};
+
+const headerDateWrapStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "flex-end",
+  gap: "8px",
+  color: "#64748b",
+  fontSize: "14px",
+  fontWeight: 700,
+  whiteSpace: "nowrap",
+};
+
+const headerDateIconStyle: React.CSSProperties = {
+  width: "44px",
+  height: "44px",
+  borderRadius: "14px",
+  border: "1px solid #e2e8f0",
+  backgroundColor: "#ffffff",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  boxShadow: "0 8px 18px rgba(15, 23, 42, 0.06)",
+};
+
+const headerDateTextStyle: React.CSSProperties = {
+  color: "#64748b",
+  fontSize: "14px",
+  fontWeight: 700,
+};
+
+const todayWorkCardStyle: React.CSSProperties = {
+  border: "1px solid #e5e7eb",
+  backgroundColor: "#ffffff",
+  borderRadius: "22px",
+  padding: "18px",
+  marginBottom: "18px",
+  boxShadow: "0 14px 32px rgba(15, 23, 42, 0.08)",
+};
+
+const todayWorkHeaderStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: "14px",
+};
+
+const todayWorkTitleWrapStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "12px",
+};
+
+const todayWorkIconStyle: React.CSSProperties = {
+  width: "48px",
+  height: "48px",
+  minWidth: "48px",
+  borderRadius: "16px",
+  backgroundColor: "#eaf3ff",
+  color: "#1d4ed8",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "22px",
+};
+
+const todayWorkTitleStyle: React.CSSProperties = {
+  fontSize: "22px",
+  fontWeight: 900,
+  color: "#08224a",
+};
+
+const todayWorkPanelStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1.2fr auto 1fr",
+  alignItems: "center",
+  gap: "18px",
+  background: "linear-gradient(135deg, #f0f7ff 0%, #f8fbff 100%)",
+  borderRadius: "18px",
+  padding: "22px",
+  marginBottom: "14px",
+};
+
+const todayStatusWrapStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "16px",
+  minWidth: 0,
+};
+
+const todayStatusIconStyle: React.CSSProperties = {
+  width: "64px",
+  height: "64px",
+  minWidth: "64px",
+  borderRadius: "999px",
+  background: "linear-gradient(135deg, #60a5fa 0%, #2563eb 100%)",
+  color: "#ffffff",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "30px",
+  boxShadow: "0 12px 24px rgba(37, 99, 235, 0.22)",
+};
+
+const todayStatusTextStyle: React.CSSProperties = {
+  color: "#0b2a5b",
+  fontSize: "30px",
+  fontWeight: 900,
+  lineHeight: 1.1,
+  marginBottom: "8px",
+};
+
+const todayDescriptionStyle: React.CSSProperties = {
+  color: "#475569",
+  fontSize: "14px",
+  fontWeight: 600,
+  lineHeight: 1.45,
+  wordBreak: "keep-all",
+};
+
+const todayInfoDividerStyle: React.CSSProperties = {
+  width: "1px",
+  height: "100%",
+  minHeight: "100px",
+  backgroundColor: "#dbeafe",
+};
+
+const todayInfoRowsStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "12px",
+};
+
+const todayInfoRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "12px",
+};
+
+const todayInfoLabelStyle: React.CSSProperties = {
+  color: "#0f172a",
+  fontSize: "15px",
+  fontWeight: 800,
+};
+
+const todayInfoValueStyle: React.CSSProperties = {
+  color: "#0f172a",
+  fontSize: "15px",
+  fontWeight: 900,
+  whiteSpace: "nowrap",
+};
+
+const noticeInlineStyle: React.CSSProperties = {
+  display: "flex",
+  gap: "10px",
+  alignItems: "flex-start",
+  marginTop: "10px",
+  color: "#334155",
+  fontSize: "14px",
+  fontWeight: 600,
+  lineHeight: 1.7,
+  wordBreak: "keep-all",
+};
+
+const noticeIconStyle: React.CSSProperties = {
+  width: "22px",
+  height: "22px",
+  minWidth: "22px",
+  borderRadius: "999px",
+  border: "2px solid #f97316",
+  color: "#f97316",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "13px",
+  fontWeight: 900,
+  marginTop: "2px",
+};
+
+const noticeTextBlockStyle: React.CSSProperties = {
+  flex: 1,
+};
+
+const noticeEmphasisStyle: React.CSSProperties = {
+  color: "#f97316",
+  fontWeight: 900,
+};
+
 const pageStyle: React.CSSProperties = {
   minHeight: "100vh",
-  backgroundColor: "#f5f7fb",
+  background: "linear-gradient(180deg, #f8fbff 0%, #f3f6fb 100%)",
   display: "flex",
   justifyContent: "center",
-  alignItems: "center",
-  padding: "20px",
-  fontFamily: "sans-serif",
+  alignItems: "flex-start",
+  padding: "24px 16px",
+  fontFamily:
+    "Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
 };
 
 const cardStyle: React.CSSProperties = {
   width: "100%",
   maxWidth: "520px",
   backgroundColor: "#ffffff",
-  borderRadius: "20px 14px",
-  padding: "28px",
-  boxShadow: "0 10px 30px rgba(0,0,0,0.08)",
+  borderRadius: "28px",
+  padding: "26px",
+  boxShadow: "0 22px 60px rgba(15, 23, 42, 0.10)",
+  border: "1px solid rgba(226, 232, 240, 0.9)",
 };
 
 const titleStyle: React.CSSProperties = {
   margin: 0,
-  fontSize: "28px",
-  fontWeight: 700,
-  color: "#111827",
+  fontSize: "32px",
+  fontWeight: 900,
+  color: "#08224a",
+  letterSpacing: "-0.04em",
 };
 
 const subtitleStyle: React.CSSProperties = {
-  marginTop: "10px",
+  marginTop: "12px",
   marginBottom: 0,
   fontSize: "16px",
-  color: "#4b5563",
+  color: "#0f172a",
+  lineHeight: 1.45,
 };
 
 const buttonRowStyle: React.CSSProperties = {
-  display: "flex",
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
   gap: "12px",
-  marginBottom: "12px",
+  marginBottom: "10px",
 };
 
 const primaryButtonStyle: React.CSSProperties = {
-  flex: 1,
-  padding: "16px 20px",
+  width: "100%",
+  padding: "17px 16px",
   border: "none",
-  borderRadius: "14px",
-  backgroundColor: "#111827",
+  borderRadius: "16px",
+  background: "linear-gradient(135deg, #08224a 0%, #0f3b7a 100%)",
   color: "#ffffff",
   fontSize: "17px",
-  fontWeight: 700,
+  fontWeight: 900,
+  boxShadow: "0 12px 24px rgba(8, 34, 74, 0.18)",
 };
 
 const secondaryButtonStyle: React.CSSProperties = {
-  flex: 1,
-  padding: "16px 20px",
-  border: "1px solid #d1d5db",
-  borderRadius: "14px",
+  width: "100%",
+  padding: "17px 16px",
+  border: "1.5px solid #0f3b7a",
+  borderRadius: "16px",
   backgroundColor: "#ffffff",
-  color: "#111827",
+  color: "#08224a",
   fontSize: "17px",
-  fontWeight: 700,
+  fontWeight: 900,
 };
 
 const noticeBoxStyle: React.CSSProperties = {
@@ -1956,54 +2190,78 @@ const payrollLinkStyle: React.CSSProperties = {
   alignItems: "center",
   gap: "14px",
   textDecoration: "none",
-  border: "1px solid #dbeafe",
-  backgroundColor: "#eff6ff",
-  borderRadius: "16px",
+  border: "1px solid #bfdbfe",
+  background: "linear-gradient(135deg, #eff6ff 0%, #f8fbff 100%)",
+  borderRadius: "20px",
   padding: "16px",
-  marginBottom: "16px",
+  marginBottom: 0,
+  boxShadow: "0 10px 24px rgba(59, 130, 246, 0.08)",
 };
 
 const payrollIconStyle: React.CSSProperties = {
-  width: "52px",
-  height: "52px",
-  minWidth: "52px",
-  borderRadius: "14px",
+  width: "56px",
+  height: "56px",
+  minWidth: "56px",
+  borderRadius: "18px",
   backgroundColor: "#dbeafe",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  fontSize: "24px",
+  fontSize: "26px",
 };
 
 const payrollTitleStyle: React.CSSProperties = {
-  fontSize: "16px",
-  fontWeight: 700,
-  color: "#111827",
-  marginBottom: "4px",
+  fontSize: "18px",
+  fontWeight: 900,
+  color: "#08224a",
+  marginBottom: "5px",
 };
 
 const payrollDescStyle: React.CSSProperties = {
   fontSize: "13px",
-  color: "#4b5563",
+  color: "#475569",
   lineHeight: 1.5,
+  fontWeight: 600,
+};
+
+
+const payrollTextWrapStyle: React.CSSProperties = {
+  flex: 1,
+  minWidth: 0,
+};
+
+const payrollArrowStyle: React.CSSProperties = {
+  width: "38px",
+  height: "38px",
+  minWidth: "38px",
+  borderRadius: "999px",
+  backgroundColor: "#ffffff",
+  color: "#08224a",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "30px",
+  fontWeight: 700,
+  boxShadow: "0 8px 18px rgba(15, 23, 42, 0.08)",
 };
 
 const scheduleBaseCardStyle: React.CSSProperties = {
-  borderRadius: "18px",
-  padding: "18px 16px",
-  marginBottom: "16px",
+  borderRadius: "22px",
+  padding: "18px",
+  marginBottom: "18px",
+  boxShadow: "0 14px 32px rgba(15, 23, 42, 0.06)",
 };
 
 const schedulePendingCardStyle: React.CSSProperties = {
   ...scheduleBaseCardStyle,
-  backgroundColor: "#fffafa",
-  border: "1px solid #f87171",
+  background: "linear-gradient(135deg, #fff8f1 0%, #fffdf9 100%)",
+  border: "1px solid #fed7aa",
 };
 
 const scheduleDoneCardStyle: React.CSSProperties = {
   ...scheduleBaseCardStyle,
-  backgroundColor: "#f8fbff",
-  border: "1px solid #60a5fa",
+  background: "linear-gradient(135deg, #f0f9ff 0%, #f8fbff 100%)",
+  border: "1px solid #bfdbfe",
 };
 
 const scheduleHeaderRowStyle: React.CSSProperties = {
@@ -2021,51 +2279,51 @@ const scheduleTitleWrapStyle: React.CSSProperties = {
 };
 
 const schedulePendingIconStyle: React.CSSProperties = {
-  width: "54px",
-  height: "54px",
-  minWidth: "54px",
-  borderRadius: "14px",
-  backgroundColor: "#ef4444",
-  color: "#ffffff",
+  width: "52px",
+  height: "52px",
+  minWidth: "52px",
+  borderRadius: "16px",
+  backgroundColor: "#ffedd5",
+  color: "#f97316",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  fontSize: "26px",
+  fontSize: "25px",
 };
 
 const scheduleDoneIconStyle: React.CSSProperties = {
-  width: "54px",
-  height: "54px",
-  minWidth: "54px",
-  borderRadius: "14px",
-  backgroundColor: "#3b82f6",
-  color: "#ffffff",
+  width: "52px",
+  height: "52px",
+  minWidth: "52px",
+  borderRadius: "16px",
+  backgroundColor: "#dbeafe",
+  color: "#2563eb",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  fontSize: "26px",
+  fontSize: "25px",
 };
 
 const scheduleTitleStyle: React.CSSProperties = {
-  fontSize: "18px",
-  fontWeight: 800,
-  color: "#111827",
+  fontSize: "20px",
+  fontWeight: 900,
+  color: "#08224a",
   marginBottom: "4px",
 };
 
 const scheduleDateStyle: React.CSSProperties = {
   fontSize: "14px",
-  color: "#6b7280",
-  fontWeight: 600,
+  color: "#64748b",
+  fontWeight: 700,
 };
 
 const schedulePendingBadgeStyle: React.CSSProperties = {
   padding: "8px 14px",
   borderRadius: "999px",
-  backgroundColor: "#fee2e2",
+  backgroundColor: "#ffe4e6",
   color: "#dc2626",
   fontSize: "14px",
-  fontWeight: 800,
+  fontWeight: 900,
   whiteSpace: "nowrap",
 };
 
@@ -2075,21 +2333,24 @@ const scheduleDoneBadgeStyle: React.CSSProperties = {
   backgroundColor: "#dbeafe",
   color: "#2563eb",
   fontSize: "14px",
-  fontWeight: 800,
+  fontWeight: 900,
   whiteSpace: "nowrap",
 };
 
 const scheduleMainTextStyle: React.CSSProperties = {
-  fontSize: "17px",
-  fontWeight: 800,
+  fontSize: "18px",
+  fontWeight: 900,
   marginBottom: "6px",
-  color: "#111827",
+  color: "#08224a",
+  letterSpacing: "-0.02em",
 };
 
 const scheduleSubTextStyle: React.CSSProperties = {
-  fontSize: "15px",
-  color: "#374151",
-  lineHeight: 1.5,
+  fontSize: "14px",
+  color: "#475569",
+  lineHeight: 1.55,
+  fontWeight: 600,
+  wordBreak: "keep-all",
 };
 
 const scheduleMiniDayRowStyle: React.CSSProperties = {
@@ -2100,24 +2361,25 @@ const scheduleMiniDayRowStyle: React.CSSProperties = {
 };
 
 const scheduleMiniDayCardStyle: React.CSSProperties = {
-  border: "1px solid #e5e7eb",
-  borderRadius: "14px",
+  border: "1px solid #e2e8f0",
+  borderRadius: "16px",
   backgroundColor: "#ffffff",
-  padding: "10px 4px",
+  padding: "12px 4px",
   textAlign: "center",
+  boxShadow: "0 8px 18px rgba(15, 23, 42, 0.04)",
 };
 
 const scheduleMiniDayLabelStyle: React.CSSProperties = {
-  fontSize: "12px",
-  fontWeight: 700,
-  color: "#374151",
-  marginBottom: "6px",
+  fontSize: "13px",
+  fontWeight: 900,
+  color: "#0f172a",
+  marginBottom: "7px",
 };
 
 const scheduleMiniDayDateStyle: React.CSSProperties = {
-  fontSize: "11px",
-  color: "#111827",
-  fontWeight: 600,
+  fontSize: "12px",
+  color: "#334155",
+  fontWeight: 700,
   marginBottom: "10px",
 };
 
@@ -2272,25 +2534,27 @@ const scheduleOpenButtonStyle: React.CSSProperties = {
   border: "none",
   textAlign: "center",
   padding: "16px 20px",
-  borderRadius: "14px",
-  backgroundColor: "#ef4444",
+  borderRadius: "16px",
+  background: "linear-gradient(135deg, #08224a 0%, #0f3b7a 100%)",
   color: "#ffffff",
   fontSize: "18px",
-  fontWeight: 800,
+  fontWeight: 900,
   cursor: "pointer",
+  marginBottom: "16px",
+  boxShadow: "0 12px 24px rgba(8, 34, 74, 0.14)",
 };
 
 const scheduleCloseButtonStyle: React.CSSProperties = {
   display: "block",
   width: "100%",
-  border: "1px solid #fecaca",
+  border: "1px solid #cbd5e1",
   textAlign: "center",
   padding: "14px 20px",
-  borderRadius: "14px",
+  borderRadius: "16px",
   backgroundColor: "#ffffff",
-  color: "#dc2626",
+  color: "#334155",
   fontSize: "16px",
-  fontWeight: 800,
+  fontWeight: 900,
   cursor: "pointer",
 };
 
@@ -2300,11 +2564,11 @@ const scheduleSubmitButtonStyle: React.CSSProperties = {
   border: "none",
   textAlign: "center",
   padding: "16px 20px",
-  borderRadius: "14px",
-  backgroundColor: "#ef4444",
+  borderRadius: "16px",
+  background: "linear-gradient(135deg, #08224a 0%, #0f3b7a 100%)",
   color: "#ffffff",
   fontSize: "18px",
-  fontWeight: 800,
+  fontWeight: 900,
 };
 
 const scheduleDoneButtonStyle: React.CSSProperties = {
