@@ -1591,7 +1591,7 @@ totalWorkMinutes = Math.max(0, diff);
                 cursor: isLoading ? "not-allowed" : "pointer",
               }}
             >
-              {isLoading ? "처리 중..." : "↪ 출근하기"}
+              {isLoading ? "처리 중..." : "출근하기"}
             </button>
 
             <button
@@ -1606,7 +1606,7 @@ totalWorkMinutes = Math.max(0, diff);
                     : "pointer",
               }}
             >
-              {isLoading ? "처리 중..." : "↩ 퇴근하기"}
+              {isLoading ? "처리 중..." : "퇴근하기"}
             </button>
           </div>
 
@@ -1912,48 +1912,49 @@ totalWorkMinutes = Math.max(0, diff);
 
 const headerWrapStyle: React.CSSProperties = {
   display: "flex",
-  justifyContent: "space-between",
+  flexDirection: "column",
   alignItems: "flex-start",
-  gap: "16px",
-  marginBottom: "24px",
+  gap: "10px",
+  marginBottom: "20px",
 };
 
 const headerDateWrapStyle: React.CSSProperties = {
   display: "flex",
-  flexDirection: "column",
-  alignItems: "flex-end",
+  alignItems: "center",
   gap: "8px",
   color: "#64748b",
-  fontSize: "14px",
+  fontSize: "13px",
   fontWeight: 700,
   whiteSpace: "nowrap",
 };
 
 const headerDateIconStyle: React.CSSProperties = {
-  width: "44px",
-  height: "44px",
-  borderRadius: "14px",
+  width: "38px",
+  height: "38px",
+  minWidth: "38px",
+  borderRadius: "12px",
   border: "1px solid #e2e8f0",
   backgroundColor: "#ffffff",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  boxShadow: "0 8px 18px rgba(15, 23, 42, 0.06)",
+  boxShadow: "0 6px 14px rgba(15, 23, 42, 0.05)",
 };
 
 const headerDateTextStyle: React.CSSProperties = {
   color: "#64748b",
-  fontSize: "14px",
+  fontSize: "13px",
   fontWeight: 700,
+  lineHeight: 1.4,
 };
 
 const todayWorkCardStyle: React.CSSProperties = {
   border: "1px solid #e5e7eb",
   backgroundColor: "#ffffff",
-  borderRadius: "22px",
-  padding: "18px",
-  marginBottom: "18px",
-  boxShadow: "0 14px 32px rgba(15, 23, 42, 0.08)",
+  borderRadius: "20px",
+  padding: "14px",
+  marginBottom: "16px",
+  boxShadow: "0 10px 24px rgba(15, 23, 42, 0.06)",
 };
 
 const todayWorkHeaderStyle: React.CSSProperties = {
@@ -1983,71 +1984,72 @@ const todayWorkIconStyle: React.CSSProperties = {
 };
 
 const todayWorkTitleStyle: React.CSSProperties = {
-  fontSize: "21px",
+  fontSize: "18px",
   fontWeight: 700,
   color: "#08224a",
   letterSpacing: "-0.01em",
 };
 
 const todayWorkPanelStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1.2fr auto 1fr",
-  alignItems: "center",
-  gap: "18px",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "stretch",
+  gap: "14px",
   background: "linear-gradient(135deg, #f0f7ff 0%, #f8fbff 100%)",
   borderRadius: "18px",
-  padding: "22px",
-  marginBottom: "14px",
+  padding: "16px",
+  marginBottom: "12px",
 };
 
 const todayStatusWrapStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
-  gap: "16px",
+  gap: "14px",
   minWidth: 0,
 };
 
 const todayStatusIconStyle: React.CSSProperties = {
-  width: "64px",
-  height: "64px",
-  minWidth: "64px",
+  width: "58px",
+  height: "58px",
+  minWidth: "58px",
   borderRadius: "999px",
   background: "linear-gradient(135deg, #60a5fa 0%, #2563eb 100%)",
   color: "#ffffff",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  fontSize: "30px",
-  boxShadow: "0 12px 24px rgba(37, 99, 235, 0.22)",
+  fontSize: "26px",
+  boxShadow: "0 10px 18px rgba(37, 99, 235, 0.18)",
 };
 
 const todayStatusTextStyle: React.CSSProperties = {
   color: "#0b2a5b",
-  fontSize: "30px",
+  fontSize: "clamp(24px, 8vw, 30px)",
   fontWeight: 700,
-  lineHeight: 1.1,
-  marginBottom: "8px",
+  lineHeight: 1.15,
+  marginBottom: "6px",
+  wordBreak: "keep-all",
 };
 
 const todayDescriptionStyle: React.CSSProperties = {
   color: "#475569",
   fontSize: "14px",
   fontWeight: 600,
-  lineHeight: 1.45,
+  lineHeight: 1.5,
   wordBreak: "keep-all",
 };
 
 const todayInfoDividerStyle: React.CSSProperties = {
-  width: "1px",
-  height: "100%",
-  minHeight: "100px",
+  width: "100%",
+  height: "1px",
+  minHeight: "1px",
   backgroundColor: "#dbeafe",
 };
 
 const todayInfoRowsStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
-  gap: "12px",
+  gap: "10px",
 };
 
 const todayInfoRowStyle: React.CSSProperties = {
@@ -2059,24 +2061,24 @@ const todayInfoRowStyle: React.CSSProperties = {
 
 const todayInfoLabelStyle: React.CSSProperties = {
   color: "#0f172a",
-  fontSize: "15px",
+  fontSize: "14px",
   fontWeight: 700,
 };
 
 const todayInfoValueStyle: React.CSSProperties = {
   color: "#0f172a",
-  fontSize: "15px",
+  fontSize: "14px",
   fontWeight: 700,
   whiteSpace: "nowrap",
 };
 
 const noticeInlineStyle: React.CSSProperties = {
   display: "flex",
-  gap: "10px",
+  gap: "8px",
   alignItems: "flex-start",
-  marginTop: "10px",
+  marginTop: "8px",
   color: "#334155",
-  fontSize: "14px",
+  fontSize: "13px",
   fontWeight: 600,
   lineHeight: 1.7,
   wordBreak: "keep-all",
@@ -2112,7 +2114,7 @@ const pageStyle: React.CSSProperties = {
   display: "flex",
   justifyContent: "center",
   alignItems: "flex-start",
-  padding: "24px 16px",
+  padding: "10px 8px 24px",
   fontFamily:
     `${notoSansKr.style.fontFamily}, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif`,
   WebkitFontSmoothing: "antialiased",
@@ -2121,58 +2123,60 @@ const pageStyle: React.CSSProperties = {
 
 const cardStyle: React.CSSProperties = {
   width: "100%",
-  maxWidth: "520px",
+  maxWidth: "430px",
   backgroundColor: "#ffffff",
-  borderRadius: "28px",
-  padding: "26px",
-  boxShadow: "0 22px 60px rgba(15, 23, 42, 0.10)",
+  borderRadius: "24px",
+  padding: "18px 14px",
+  boxShadow: "0 18px 36px rgba(15, 23, 42, 0.08)",
   border: "1px solid rgba(226, 232, 240, 0.9)",
 };
 
 const titleStyle: React.CSSProperties = {
   margin: 0,
-  fontSize: "30px",
+  fontSize: "clamp(22px, 8vw, 30px)",
   fontWeight: 700,
   color: "#08224a",
-  letterSpacing: "-0.02em",
-  lineHeight: 1.18,
+  letterSpacing: "-0.03em",
+  lineHeight: 1.2,
+  wordBreak: "keep-all",
 };
 
 const subtitleStyle: React.CSSProperties = {
-  marginTop: "12px",
+  marginTop: "8px",
   marginBottom: 0,
-  fontSize: "16px",
+  fontSize: "15px",
   color: "#0f172a",
-  lineHeight: 1.45,
+  lineHeight: 1.55,
+  wordBreak: "keep-all",
 };
 
 const buttonRowStyle: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "1fr 1fr",
-  gap: "12px",
-  marginBottom: "10px",
+  gap: "10px",
+  marginBottom: "8px",
 };
 
 const primaryButtonStyle: React.CSSProperties = {
   width: "100%",
-  padding: "17px 16px",
+  padding: "15px 12px",
   border: "none",
   borderRadius: "16px",
   background: "linear-gradient(135deg, #08224a 0%, #0f3b7a 100%)",
   color: "#ffffff",
-  fontSize: "16px",
+  fontSize: "15px",
   fontWeight: 700,
-  boxShadow: "0 12px 24px rgba(8, 34, 74, 0.18)",
+  boxShadow: "0 10px 18px rgba(8, 34, 74, 0.15)",
 };
 
 const secondaryButtonStyle: React.CSSProperties = {
   width: "100%",
-  padding: "17px 16px",
+  padding: "15px 12px",
   border: "1.5px solid #0f3b7a",
   borderRadius: "16px",
   backgroundColor: "#ffffff",
   color: "#08224a",
-  fontSize: "16px",
+  fontSize: "15px",
   fontWeight: 700,
 };
 
@@ -2200,37 +2204,37 @@ const noticeTextStyle: React.CSSProperties = {
 const payrollLinkStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
-  gap: "14px",
+  gap: "12px",
   textDecoration: "none",
   border: "1px solid #bfdbfe",
   background: "linear-gradient(135deg, #eff6ff 0%, #f8fbff 100%)",
-  borderRadius: "20px",
-  padding: "16px",
+  borderRadius: "18px",
+  padding: "14px",
   marginBottom: 0,
-  boxShadow: "0 10px 24px rgba(59, 130, 246, 0.08)",
+  boxShadow: "0 8px 18px rgba(59, 130, 246, 0.07)",
 };
 
 const payrollIconStyle: React.CSSProperties = {
-  width: "56px",
-  height: "56px",
-  minWidth: "56px",
-  borderRadius: "18px",
+  width: "50px",
+  height: "50px",
+  minWidth: "50px",
+  borderRadius: "16px",
   backgroundColor: "#dbeafe",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  fontSize: "26px",
+  fontSize: "24px",
 };
 
 const payrollTitleStyle: React.CSSProperties = {
-  fontSize: "18px",
+  fontSize: "16px",
   fontWeight: 700,
   color: "#08224a",
-  marginBottom: "5px",
+  marginBottom: "4px",
 };
 
 const payrollDescStyle: React.CSSProperties = {
-  fontSize: "13px",
+  fontSize: "12px",
   color: "#475569",
   lineHeight: 1.5,
   fontWeight: 600,
@@ -2243,25 +2247,25 @@ const payrollTextWrapStyle: React.CSSProperties = {
 };
 
 const payrollArrowStyle: React.CSSProperties = {
-  width: "38px",
-  height: "38px",
-  minWidth: "38px",
+  width: "34px",
+  height: "34px",
+  minWidth: "34px",
   borderRadius: "999px",
   backgroundColor: "#ffffff",
   color: "#08224a",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  fontSize: "30px",
+  fontSize: "26px",
   fontWeight: 700,
-  boxShadow: "0 8px 18px rgba(15, 23, 42, 0.08)",
+  boxShadow: "0 6px 14px rgba(15, 23, 42, 0.07)",
 };
 
 const scheduleBaseCardStyle: React.CSSProperties = {
-  borderRadius: "22px",
-  padding: "18px",
-  marginBottom: "18px",
-  boxShadow: "0 14px 32px rgba(15, 23, 42, 0.06)",
+  borderRadius: "20px",
+  padding: "14px",
+  marginBottom: "16px",
+  boxShadow: "0 10px 24px rgba(15, 23, 42, 0.05)",
 };
 
 const schedulePendingCardStyle: React.CSSProperties = {
@@ -2278,46 +2282,47 @@ const scheduleDoneCardStyle: React.CSSProperties = {
 
 const scheduleHeaderRowStyle: React.CSSProperties = {
   display: "flex",
+  flexDirection: "column",
   alignItems: "flex-start",
   justifyContent: "space-between",
-  gap: "12px",
-  marginBottom: "16px",
+  gap: "10px",
+  marginBottom: "14px",
 };
 
 const scheduleTitleWrapStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
-  gap: "12px",
+  gap: "10px",
 };
 
 const schedulePendingIconStyle: React.CSSProperties = {
-  width: "52px",
-  height: "52px",
-  minWidth: "52px",
-  borderRadius: "16px",
+  width: "46px",
+  height: "46px",
+  minWidth: "46px",
+  borderRadius: "14px",
   backgroundColor: "#ffedd5",
   color: "#f97316",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  fontSize: "25px",
+  fontSize: "22px",
 };
 
 const scheduleDoneIconStyle: React.CSSProperties = {
-  width: "52px",
-  height: "52px",
-  minWidth: "52px",
-  borderRadius: "16px",
+  width: "46px",
+  height: "46px",
+  minWidth: "46px",
+  borderRadius: "14px",
   backgroundColor: "#dbeafe",
   color: "#2563eb",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  fontSize: "25px",
+  fontSize: "22px",
 };
 
 const scheduleTitleStyle: React.CSSProperties = {
-  fontSize: "19px",
+  fontSize: "18px",
   fontWeight: 700,
   color: "#08224a",
   letterSpacing: "-0.01em",
@@ -2325,75 +2330,80 @@ const scheduleTitleStyle: React.CSSProperties = {
 };
 
 const scheduleDateStyle: React.CSSProperties = {
-  fontSize: "14px",
+  fontSize: "13px",
   color: "#64748b",
   fontWeight: 700,
 };
 
 const schedulePendingBadgeStyle: React.CSSProperties = {
-  padding: "8px 14px",
+  padding: "7px 12px",
   borderRadius: "999px",
   backgroundColor: "#ffe4e6",
   color: "#dc2626",
-  fontSize: "14px",
+  fontSize: "13px",
   fontWeight: 700,
   whiteSpace: "nowrap",
 };
 
 const scheduleDoneBadgeStyle: React.CSSProperties = {
-  padding: "8px 14px",
+  padding: "7px 12px",
   borderRadius: "999px",
   backgroundColor: "#dbeafe",
   color: "#2563eb",
-  fontSize: "14px",
+  fontSize: "13px",
   fontWeight: 700,
   whiteSpace: "nowrap",
 };
 
 const scheduleMainTextStyle: React.CSSProperties = {
-  fontSize: "18px",
+  fontSize: "16px",
   fontWeight: 700,
   marginBottom: "6px",
   color: "#08224a",
   letterSpacing: "-0.02em",
+  lineHeight: 1.45,
+  wordBreak: "keep-all",
 };
 
 const scheduleSubTextStyle: React.CSSProperties = {
-  fontSize: "14px",
+  fontSize: "13px",
   color: "#475569",
-  lineHeight: 1.55,
+  lineHeight: 1.6,
   fontWeight: 600,
   wordBreak: "keep-all",
 };
 
 const scheduleMiniDayRowStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(6, 1fr)",
-  gap: "6px",
-  marginBottom: "16px",
+  display: "flex",
+  gap: "8px",
+  overflowX: "auto",
+  WebkitOverflowScrolling: "touch",
+  paddingBottom: "4px",
+  marginBottom: "14px",
 };
 
 const scheduleMiniDayCardStyle: React.CSSProperties = {
+  flex: "0 0 66px",
   border: "1px solid #e2e8f0",
   borderRadius: "16px",
   backgroundColor: "#ffffff",
-  padding: "12px 4px",
+  padding: "12px 6px",
   textAlign: "center",
-  boxShadow: "0 8px 18px rgba(15, 23, 42, 0.04)",
+  boxShadow: "0 6px 14px rgba(15, 23, 42, 0.04)",
 };
 
 const scheduleMiniDayLabelStyle: React.CSSProperties = {
-  fontSize: "13px",
+  fontSize: "12px",
   fontWeight: 700,
   color: "#0f172a",
-  marginBottom: "7px",
+  marginBottom: "6px",
 };
 
 const scheduleMiniDayDateStyle: React.CSSProperties = {
-  fontSize: "12px",
+  fontSize: "11px",
   color: "#334155",
   fontWeight: 700,
-  marginBottom: "10px",
+  marginBottom: "8px",
 };
 
 const scheduleHolidayStatusStyle: React.CSSProperties = {
@@ -2429,24 +2439,26 @@ const scheduleEditorWrapStyle: React.CSSProperties = {
 
 const scheduleEditorRowStyle: React.CSSProperties = {
   display: "flex",
+  flexWrap: "wrap",
   justifyContent: "space-between",
-  alignItems: "center",
-  gap: "12px",
+  alignItems: "flex-start",
+  gap: "10px",
   border: "1px solid #fecaca",
   backgroundColor: "#ffffff",
   borderRadius: "14px",
-  padding: "14px 12px",
+  padding: "13px 12px",
 };
 
 const scheduleEditorHolidayRowStyle: React.CSSProperties = {
   display: "flex",
+  flexWrap: "wrap",
   justifyContent: "space-between",
-  alignItems: "center",
-  gap: "12px",
+  alignItems: "flex-start",
+  gap: "10px",
   border: "1px solid #e5e7eb",
   backgroundColor: "#fff7f7",
   borderRadius: "14px",
-  padding: "14px 12px",
+  padding: "13px 12px",
 };
 
 const scheduleEditorLeftStyle: React.CSSProperties = {
@@ -2456,7 +2468,7 @@ const scheduleEditorLeftStyle: React.CSSProperties = {
 };
 
 const scheduleEditorDayStyle: React.CSSProperties = {
-  fontSize: "15px",
+  fontSize: "14px",
   fontWeight: 700,
   color: "#111827",
 };
@@ -2471,7 +2483,7 @@ const scheduleCheckboxLabelStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: "8px",
-  fontSize: "14px",
+  fontSize: "13px",
   color: "#374151",
   fontWeight: 600,
 };
@@ -2536,9 +2548,10 @@ const scheduleUnselectedBadgeStyle: React.CSSProperties = {
 };
 
 const scheduleHelperTextStyle: React.CSSProperties = {
-  fontSize: "14px",
+  fontSize: "13px",
   color: "#374151",
   marginTop: "2px",
+  lineHeight: 1.5,
 };
 
 const scheduleOpenButtonStyle: React.CSSProperties = {
@@ -2546,15 +2559,15 @@ const scheduleOpenButtonStyle: React.CSSProperties = {
   width: "100%",
   border: "none",
   textAlign: "center",
-  padding: "16px 20px",
+  padding: "15px 16px",
   borderRadius: "16px",
   background: "linear-gradient(135deg, #08224a 0%, #0f3b7a 100%)",
   color: "#ffffff",
-  fontSize: "18px",
+  fontSize: "16px",
   fontWeight: 700,
   cursor: "pointer",
-  marginBottom: "16px",
-  boxShadow: "0 12px 24px rgba(8, 34, 74, 0.14)",
+  marginBottom: "14px",
+  boxShadow: "0 10px 18px rgba(8, 34, 74, 0.12)",
 };
 
 const scheduleCloseButtonStyle: React.CSSProperties = {
@@ -2562,11 +2575,11 @@ const scheduleCloseButtonStyle: React.CSSProperties = {
   width: "100%",
   border: "1px solid #cbd5e1",
   textAlign: "center",
-  padding: "14px 20px",
+  padding: "13px 16px",
   borderRadius: "16px",
   backgroundColor: "#ffffff",
   color: "#334155",
-  fontSize: "16px",
+  fontSize: "15px",
   fontWeight: 700,
   cursor: "pointer",
 };
@@ -2576,11 +2589,11 @@ const scheduleSubmitButtonStyle: React.CSSProperties = {
   width: "100%",
   border: "none",
   textAlign: "center",
-  padding: "16px 20px",
+  padding: "15px 16px",
   borderRadius: "16px",
   background: "linear-gradient(135deg, #08224a 0%, #0f3b7a 100%)",
   color: "#ffffff",
-  fontSize: "18px",
+  fontSize: "16px",
   fontWeight: 700,
 };
 
@@ -2745,16 +2758,17 @@ const contractSignedCardStyle: React.CSSProperties = {
 
 const contractHeaderRowStyle: React.CSSProperties = {
   display: "flex",
+  flexDirection: "column",
   alignItems: "flex-start",
   justifyContent: "space-between",
-  gap: "12px",
+  gap: "10px",
   marginBottom: "12px",
 };
 
 const contractTitleWrapStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
-  gap: "12px",
+  gap: "10px",
 };
 
 const contractPendingIconStyle: React.CSSProperties = {
@@ -2908,6 +2922,7 @@ const signatureCanvasStyle: React.CSSProperties = {
 
 const signatureButtonRowStyle: React.CSSProperties = {
   display: "flex",
+  flexDirection: "column",
   gap: "10px",
   marginTop: "12px",
 };
