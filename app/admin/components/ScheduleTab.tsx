@@ -456,6 +456,14 @@ function getEmployeesForRoleAndDate({
         return false;
       }
 
+      const shift = getEmployeeShiftForDate(employee, date);
+
+      // 야간 근무자는 일반 역할그룹/당근 칸에 중복 표시하지 않고
+      // 아래의 "야간근무" 칸에만 표시합니다.
+      if (shift === "night") {
+        return false;
+      }
+
       if (group.key === "carrot") {
         return isCarrotEmployee(employee);
       }
@@ -1186,7 +1194,6 @@ export default function ScheduleTab() {
                           ? allEmployees
                               .filter(
                                 (employee) =>
-                                  !isCarrotEmployee(employee) &&
                                   isEmployeeAvailableOnDate(
                                     employee,
                                     day.value,
