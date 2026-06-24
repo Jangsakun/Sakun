@@ -293,6 +293,9 @@ export async function POST(request: Request) {
 
     const workplaceName = getEmployeeWorkplaceName(employee);
 
+    const hourlyWage = Number(employee.hourly_wage || 0);
+    const hourlyWageSnapshot = hourlyWage > 0 ? hourlyWage : 10320;
+
     const checkoutRule = isCheckoutAllowedAtKst(checkedDate, workplaceName);
     if (!checkoutRule.allowed) {
       return NextResponse.json(
@@ -319,7 +322,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const normalizedCheckedAt = normalizeCheckOutTime(checkedAt, workplaceName).toISOString();
+    const normalizedCheckedAt = normalizeCheckOutTime(
+      checkedAt,
+      workplaceName
+    ).toISOString();
 
     const payload: any = {
       employee_id: employee.id,
@@ -329,6 +335,7 @@ export async function POST(request: Request) {
       checked_at: normalizedCheckedAt,
       accuracy: parsedAccuracy,
       distance: Math.round(distance),
+      hourly_wage_snapshot: hourlyWageSnapshot,
     };
 
     const { error } = await supabase

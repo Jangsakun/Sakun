@@ -247,6 +247,9 @@ export async function POST(request: Request) {
       employeeWorkplace
     ).toISOString();
 
+    const hourlyWage = Number(employee.hourly_wage || 0);
+    const hourlyWageSnapshot = hourlyWage > 0 ? hourlyWage : 10320;
+
     const { startUtc, endUtc } = getKstDayRangeFromIso(checkedAt);
 
     const { data: existing } = await supabase
@@ -273,6 +276,7 @@ export async function POST(request: Request) {
       checked_at: normalizedCheckedAt,
       accuracy: parsedAccuracy,
       distance: Math.round(distance),
+      hourly_wage_snapshot: hourlyWageSnapshot,
     };
 
     const { error } = await supabase.from("attendance_records").insert([payload]);

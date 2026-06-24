@@ -23,6 +23,7 @@ type AttendanceRecord = {
   record_type: string;
   checked_at: string;
   employee_id: number;
+  hourly_wage_snapshot?: number | null;
   employees: EmployeeNested;
 };
 
@@ -34,6 +35,7 @@ type DailyWorkRow = {
   hours: number;
   workedMinutes: number;
   wage: number;
+  basePay: number;
   weeklyAllowanceStatus: string;
 };
 
@@ -45,6 +47,7 @@ type WeeklyPayrollRow = {
   weekEnd: string;
   totalHours: number;
   totalMinutes: number;
+  totalBasePay: number;
   hourlyWage: number;
   weeklyAllowanceStatus: string;
 };
@@ -83,13 +86,26 @@ function isCheckOutType(value: string) {
   );
 }
 
-function roundToWon(value: number) {
-  return Math.round(value);
-}
-
 function getEmployeeObject(rawEmployee: EmployeeNested) {
   if (!rawEmployee) return null;
   return Array.isArray(rawEmployee) ? rawEmployee[0] || null : rawEmployee;
+}
+
+function getWageForDay(items: AttendanceRecord[], employee: any) {
+  const snapshotWage = items
+    .map((item) => Number(item.hourly_wage_snapshot || 0))
+    .find((wage) => wage > 0);
+
+  if (snapshotWage) {
+    return snapshotWage;
+  }
+
+  const employeeWage = Number(employee?.hourly_wage || 0);
+  if (employeeWage > 0) {
+    return employeeWage;
+  }
+
+  return 10320;
 }
 
 function pairSessions(items: AttendanceRecord[]) {
@@ -210,6 +226,7 @@ export async function POST(request: Request) {
           record_type,
           checked_at,
           employee_id,
+          hourly_wage_snapshot,
           employees (
             id,
             name,
@@ -276,12 +293,7 @@ export async function POST(request: Request) {
       const employeeId = items[0]?.employee_id;
       const employeeName = employee?.name || "이름없음";
       const workplaceName = employee?.workplace_name || "장사꾼";
-
-      const wage =
-        typeof employee?.hourly_wage === "number" && employee.hourly_wage > 0
-          ? employee.hourly_wage
-          : 10320;
-
+      const wage = getWageForDay(items, employee);
       const weeklyAllowanceStatus =
         employee?.weekly_allowance_status || "검토필요";
 
@@ -290,6 +302,7 @@ export async function POST(request: Request) {
       const sessions = pairSessions(items);
       const workedMinutes = calculateDailyWorkedMinutes(date, sessions);
       const hours = workedMinutes / 60;
+      const basePay = Math.floor((workedMinutes / 60) * wage);
 
       dailyWorks.push({
         employeeId,
@@ -299,6 +312,7 @@ export async function POST(request: Request) {
         hours,
         workedMinutes,
         wage,
+        basePay,
         weeklyAllowanceStatus,
       });
     }
@@ -345,6 +359,7 @@ export async function POST(request: Request) {
           weekEnd,
           totalHours: 0,
           totalMinutes: 0,
+          totalBasePay: 0,
           hourlyWage: row.wage,
           weeklyAllowanceStatus: row.weeklyAllowanceStatus || "검토필요",
         };
@@ -352,18 +367,21 @@ export async function POST(request: Request) {
 
       weekly[key].totalHours += row.hours;
       weekly[key].totalMinutes += row.workedMinutes;
+      weekly[key].totalBasePay += row.basePay;
     }
 
     const result = Object.values(weekly).map((w) => {
       // 화면 표시는 시간 단위로 전달하되, 급여 계산은 소수점 반올림 시간이 아닌 총 분 기준으로 계산합니다.
-      // 예: 35시간 40분 = 2,140분 기준 계산 → 근로자 급여조회와 동일한 금액
+      // 시급이 주 중간에 바뀐 경우를 위해 일별 기본급을 먼저 계산한 뒤 합산합니다.
       const totalHours = Number((w.totalMinutes / 60).toFixed(4));
-      const basePay = Math.floor((w.totalMinutes / 60) * w.hourlyWage);
+      const basePay = Math.floor(w.totalBasePay);
+      const averageHourlyWage =
+        totalHours > 0 ? basePay / totalHours : w.hourlyWage;
 
       let weeklyAllowance = 0;
 
       if (w.weeklyAllowanceStatus === "대상" && w.totalMinutes >= 15 * 60) {
-        weeklyAllowance = Math.floor((w.totalMinutes / 60 / 5) * w.hourlyWage);
+        weeklyAllowance = Math.floor((w.totalMinutes / 60 / 5) * averageHourlyWage);
       } else {
         weeklyAllowance = 0;
       }
@@ -378,7 +396,7 @@ export async function POST(request: Request) {
         weekStart: w.weekStart,
         weekEnd: w.weekEnd,
         totalHours,
-        hourlyWage: w.hourlyWage,
+        hourlyWage: Math.round(averageHourlyWage),
         weeklyAllowanceStatus: w.weeklyAllowanceStatus,
         basePay,
         weeklyAllowance,

@@ -159,6 +159,17 @@ function isCheckOutType(value: string) {
   );
 }
 
+function getWageForDay(items: any[], fallbackWage: number) {
+  const snapshotWage = items
+    .map((item) => Number(item.hourly_wage_snapshot || 0))
+    .find((wage) => wage > 0);
+
+  if (snapshotWage) return snapshotWage;
+  if (fallbackWage > 0) return fallbackWage;
+
+  return 10320;
+}
+
 function getCurrentWeekRangeKst() {
   const now = new Date();
   const seoulNow = new Date(
@@ -326,6 +337,8 @@ export async function POST(request: NextRequest) {
             new Date(b.checked_at).getTime()
         );
 
+        const dayWage = getWageForDay(sortedItems, hourlyWage);
+
         const checkIn = sortedItems.find((item) =>
           isCheckInType(item.record_type)
         );
@@ -340,6 +353,7 @@ export async function POST(request: NextRequest) {
             checkIn: null,
             checkOut: null,
             paidMinutes: 0,
+            hourlyWage: dayWage,
             grossPay: 0,
             netPay: 0,
             isWorking: false,
@@ -383,7 +397,7 @@ export async function POST(request: NextRequest) {
           paidMinutes = Math.max(0, paidMinutes - 60);
         }
 
-        const grossPay = Math.floor((paidMinutes / 60) * hourlyWage);
+        const grossPay = Math.floor((paidMinutes / 60) * dayWage);
         const netPay = calcNetPay(grossPay);
 
         totalMinutes += paidMinutes;
@@ -394,6 +408,7 @@ export async function POST(request: NextRequest) {
           checkIn: checkIn.checked_at,
           checkOut: finalCheckOut?.checked_at || null,
           paidMinutes,
+          hourlyWage: dayWage,
           grossPay,
           netPay,
           isWorking: Boolean(checkIn && !finalCheckOut),
@@ -413,10 +428,12 @@ export async function POST(request: NextRequest) {
       employee.weekly_allowance_status || "검토필요";
 
     const totalHours = totalMinutes / 60;
+    const averageHourlyWage =
+      totalHours > 0 ? totalGrossPay / totalHours : hourlyWage;
 
     const weeklyAllowanceAmount =
       weeklyAllowanceStatus === "대상" && totalHours >= 15
-        ? Math.floor((totalHours / 5) * hourlyWage)
+        ? Math.floor((totalHours / 5) * averageHourlyWage)
         : 0;
 
     // 관리자 급여관리 화면과 동일하게
@@ -431,6 +448,7 @@ export async function POST(request: NextRequest) {
         name: employee.name,
         residentNumber: employee.resident_number,
         hourlyWage,
+        averageHourlyWage: Math.round(averageHourlyWage),
         workplace,
         companyName,
         payslipTitle,

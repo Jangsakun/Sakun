@@ -45,6 +45,7 @@ export async function POST(request: Request) {
         checked_at,
         created_at,
         employee_id,
+        hourly_wage_snapshot,
         employees (
           id,
           name,
@@ -98,7 +99,10 @@ export async function PUT(request: Request) {
       );
     }
 
-    if (!trimmedWorkplaceName || !["장사꾼", "헤모즈"].includes(trimmedWorkplaceName)) {
+    if (
+      !trimmedWorkplaceName ||
+      !["장사꾼", "헤모즈"].includes(trimmedWorkplaceName)
+    ) {
       return NextResponse.json(
         { success: false, message: "근무지를 선택해 주세요." },
         { status: 400 }
@@ -116,7 +120,7 @@ export async function PUT(request: Request) {
 
     const { data: employees, error: employeeError } = await supabase
       .from("employees")
-      .select("id, name, is_active, workplace_name")
+      .select("id, name, is_active, workplace_name, hourly_wage")
       .eq("name", trimmedEmployeeName)
       .eq("workplace_name", trimmedWorkplaceName)
       .eq("is_active", true);
@@ -151,6 +155,11 @@ export async function PUT(request: Request) {
 
     const employee = employees[0];
 
+    const hourlyWageSnapshot =
+      typeof employee.hourly_wage === "number" && employee.hourly_wage > 0
+        ? employee.hourly_wage
+        : 10320;
+
     const rows = [
       {
         employee_id: employee.id,
@@ -158,6 +167,7 @@ export async function PUT(request: Request) {
         checked_at: new Date(`${date}T${checkInTime}:00+09:00`).toISOString(),
         lat: null,
         lng: null,
+        hourly_wage_snapshot: hourlyWageSnapshot,
       },
     ];
 
@@ -168,6 +178,7 @@ export async function PUT(request: Request) {
         checked_at: new Date(`${date}T${checkOutTime}:00+09:00`).toISOString(),
         lat: null,
         lng: null,
+        hourly_wage_snapshot: hourlyWageSnapshot,
       });
     }
 
