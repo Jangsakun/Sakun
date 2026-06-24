@@ -1548,7 +1548,7 @@ totalWorkMinutes = Math.max(0, diff);
 
           <div style={todayWorkPanelStyle}>
             <div style={todayStatusWrapStyle}>
-              <div style={todayStatusIconStyle}>⏱</div>
+              <div style={todayStatusIconStyle}>🕘</div>
               <div>
                 <div style={todayStatusTextStyle}>{todayWorkStatus}</div>
                 <div style={todayDescriptionStyle}>{todayWorkDescription}</div>
@@ -1994,48 +1994,48 @@ const todayWorkPanelStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
   alignItems: "stretch",
-  gap: "14px",
+  gap: "12px",
   background: "linear-gradient(135deg, #f0f7ff 0%, #f8fbff 100%)",
   borderRadius: "18px",
-  padding: "16px",
+  padding: "14px",
   marginBottom: "12px",
 };
 
 const todayStatusWrapStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
-  gap: "14px",
+  gap: "12px",
   minWidth: 0,
 };
 
 const todayStatusIconStyle: React.CSSProperties = {
-  width: "58px",
-  height: "58px",
-  minWidth: "58px",
+  width: "50px",
+  height: "50px",
+  minWidth: "50px",
   borderRadius: "999px",
   background: "linear-gradient(135deg, #60a5fa 0%, #2563eb 100%)",
   color: "#ffffff",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  fontSize: "26px",
-  boxShadow: "0 10px 18px rgba(37, 99, 235, 0.18)",
+  fontSize: "22px",
+  boxShadow: "0 8px 14px rgba(37, 99, 235, 0.16)",
 };
 
 const todayStatusTextStyle: React.CSSProperties = {
   color: "#0b2a5b",
-  fontSize: "clamp(24px, 8vw, 30px)",
+  fontSize: "clamp(20px, 7vw, 26px)",
   fontWeight: 700,
   lineHeight: 1.15,
-  marginBottom: "6px",
+  marginBottom: "4px",
   wordBreak: "keep-all",
 };
 
 const todayDescriptionStyle: React.CSSProperties = {
   color: "#475569",
-  fontSize: "14px",
+  fontSize: "13px",
   fontWeight: 600,
-  lineHeight: 1.5,
+  lineHeight: 1.45,
   wordBreak: "keep-all",
 };
 
@@ -2049,7 +2049,7 @@ const todayInfoDividerStyle: React.CSSProperties = {
 const todayInfoRowsStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
-  gap: "10px",
+  gap: "8px",
 };
 
 const todayInfoRowStyle: React.CSSProperties = {
@@ -2061,13 +2061,13 @@ const todayInfoRowStyle: React.CSSProperties = {
 
 const todayInfoLabelStyle: React.CSSProperties = {
   color: "#0f172a",
-  fontSize: "14px",
+  fontSize: "13px",
   fontWeight: 700,
 };
 
 const todayInfoValueStyle: React.CSSProperties = {
   color: "#0f172a",
-  fontSize: "14px",
+  fontSize: "13px",
   fontWeight: 700,
   whiteSpace: "nowrap",
 };
