@@ -1,8 +1,16 @@
 "use client";
 
+import { Noto_Sans_KR } from "next/font/google";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+
+const notoSansKr = Noto_Sans_KR({
+  subsets: ["latin"],
+  weight: ["400", "500", "700", "900"],
+  display: "swap",
+  preload: false,
+});
 
 type Employee = {
   id?: string;
@@ -1354,7 +1362,7 @@ totalWorkMinutes = Math.max(0, diff);
 
   if (!employee) {
     return (
-      <main style={pageStyle}>
+      <main style={pageStyle} className={notoSansKr.className}>
         <div style={cardStyle}>불러오는 중...</div>
       </main>
     );
@@ -1376,7 +1384,7 @@ totalWorkMinutes = Math.max(0, diff);
       : "아직 출근 기록이 없습니다.");
 
   return (
-    <main style={pageStyle}>
+    <main style={pageStyle} className={notoSansKr.className}>
       <section style={cardStyle}>
         <div style={headerWrapStyle}>
           <div>
@@ -1975,9 +1983,10 @@ const todayWorkIconStyle: React.CSSProperties = {
 };
 
 const todayWorkTitleStyle: React.CSSProperties = {
-  fontSize: "22px",
-  fontWeight: 900,
+  fontSize: "21px",
+  fontWeight: 700,
   color: "#08224a",
+  letterSpacing: "-0.01em",
 };
 
 const todayWorkPanelStyle: React.CSSProperties = {
@@ -2015,7 +2024,7 @@ const todayStatusIconStyle: React.CSSProperties = {
 const todayStatusTextStyle: React.CSSProperties = {
   color: "#0b2a5b",
   fontSize: "30px",
-  fontWeight: 900,
+  fontWeight: 700,
   lineHeight: 1.1,
   marginBottom: "8px",
 };
@@ -2051,13 +2060,13 @@ const todayInfoRowStyle: React.CSSProperties = {
 const todayInfoLabelStyle: React.CSSProperties = {
   color: "#0f172a",
   fontSize: "15px",
-  fontWeight: 800,
+  fontWeight: 700,
 };
 
 const todayInfoValueStyle: React.CSSProperties = {
   color: "#0f172a",
   fontSize: "15px",
-  fontWeight: 900,
+  fontWeight: 700,
   whiteSpace: "nowrap",
 };
 
@@ -2084,7 +2093,7 @@ const noticeIconStyle: React.CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   fontSize: "13px",
-  fontWeight: 900,
+  fontWeight: 700,
   marginTop: "2px",
 };
 
@@ -2094,7 +2103,7 @@ const noticeTextBlockStyle: React.CSSProperties = {
 
 const noticeEmphasisStyle: React.CSSProperties = {
   color: "#f97316",
-  fontWeight: 900,
+  fontWeight: 700,
 };
 
 const pageStyle: React.CSSProperties = {
@@ -2105,7 +2114,9 @@ const pageStyle: React.CSSProperties = {
   alignItems: "flex-start",
   padding: "24px 16px",
   fontFamily:
-    "Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+    `${notoSansKr.style.fontFamily}, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif`,
+  WebkitFontSmoothing: "antialiased",
+  MozOsxFontSmoothing: "grayscale",
 };
 
 const cardStyle: React.CSSProperties = {
@@ -2120,10 +2131,11 @@ const cardStyle: React.CSSProperties = {
 
 const titleStyle: React.CSSProperties = {
   margin: 0,
-  fontSize: "32px",
-  fontWeight: 900,
+  fontSize: "30px",
+  fontWeight: 700,
   color: "#08224a",
-  letterSpacing: "-0.04em",
+  letterSpacing: "-0.02em",
+  lineHeight: 1.18,
 };
 
 const subtitleStyle: React.CSSProperties = {
@@ -2148,8 +2160,8 @@ const primaryButtonStyle: React.CSSProperties = {
   borderRadius: "16px",
   background: "linear-gradient(135deg, #08224a 0%, #0f3b7a 100%)",
   color: "#ffffff",
-  fontSize: "17px",
-  fontWeight: 900,
+  fontSize: "16px",
+  fontWeight: 700,
   boxShadow: "0 12px 24px rgba(8, 34, 74, 0.18)",
 };
 
@@ -2160,8 +2172,8 @@ const secondaryButtonStyle: React.CSSProperties = {
   borderRadius: "16px",
   backgroundColor: "#ffffff",
   color: "#08224a",
-  fontSize: "17px",
-  fontWeight: 900,
+  fontSize: "16px",
+  fontWeight: 700,
 };
 
 const noticeBoxStyle: React.CSSProperties = {
@@ -2212,7 +2224,7 @@ const payrollIconStyle: React.CSSProperties = {
 
 const payrollTitleStyle: React.CSSProperties = {
   fontSize: "18px",
-  fontWeight: 900,
+  fontWeight: 700,
   color: "#08224a",
   marginBottom: "5px",
 };
@@ -2305,9 +2317,10 @@ const scheduleDoneIconStyle: React.CSSProperties = {
 };
 
 const scheduleTitleStyle: React.CSSProperties = {
-  fontSize: "20px",
-  fontWeight: 900,
+  fontSize: "19px",
+  fontWeight: 700,
   color: "#08224a",
+  letterSpacing: "-0.01em",
   marginBottom: "4px",
 };
 
@@ -2323,7 +2336,7 @@ const schedulePendingBadgeStyle: React.CSSProperties = {
   backgroundColor: "#ffe4e6",
   color: "#dc2626",
   fontSize: "14px",
-  fontWeight: 900,
+  fontWeight: 700,
   whiteSpace: "nowrap",
 };
 
@@ -2333,13 +2346,13 @@ const scheduleDoneBadgeStyle: React.CSSProperties = {
   backgroundColor: "#dbeafe",
   color: "#2563eb",
   fontSize: "14px",
-  fontWeight: 900,
+  fontWeight: 700,
   whiteSpace: "nowrap",
 };
 
 const scheduleMainTextStyle: React.CSSProperties = {
   fontSize: "18px",
-  fontWeight: 900,
+  fontWeight: 700,
   marginBottom: "6px",
   color: "#08224a",
   letterSpacing: "-0.02em",
@@ -2371,7 +2384,7 @@ const scheduleMiniDayCardStyle: React.CSSProperties = {
 
 const scheduleMiniDayLabelStyle: React.CSSProperties = {
   fontSize: "13px",
-  fontWeight: 900,
+  fontWeight: 700,
   color: "#0f172a",
   marginBottom: "7px",
 };
@@ -2444,7 +2457,7 @@ const scheduleEditorLeftStyle: React.CSSProperties = {
 
 const scheduleEditorDayStyle: React.CSSProperties = {
   fontSize: "15px",
-  fontWeight: 800,
+  fontWeight: 700,
   color: "#111827",
 };
 
@@ -2476,7 +2489,7 @@ const scheduleShiftButtonStyle: React.CSSProperties = {
   color: "#374151",
   padding: "8px 12px",
   fontSize: "13px",
-  fontWeight: 800,
+  fontWeight: 700,
   cursor: "pointer",
 };
 
@@ -2508,7 +2521,7 @@ const scheduleSelectedBadgeStyle: React.CSSProperties = {
   backgroundColor: "#fee2e2",
   color: "#dc2626",
   fontSize: "13px",
-  fontWeight: 800,
+  fontWeight: 700,
 };
 
 const scheduleUnselectedBadgeStyle: React.CSSProperties = {
@@ -2519,7 +2532,7 @@ const scheduleUnselectedBadgeStyle: React.CSSProperties = {
   backgroundColor: "#f3f4f6",
   color: "#6b7280",
   fontSize: "13px",
-  fontWeight: 800,
+  fontWeight: 700,
 };
 
 const scheduleHelperTextStyle: React.CSSProperties = {
@@ -2538,7 +2551,7 @@ const scheduleOpenButtonStyle: React.CSSProperties = {
   background: "linear-gradient(135deg, #08224a 0%, #0f3b7a 100%)",
   color: "#ffffff",
   fontSize: "18px",
-  fontWeight: 900,
+  fontWeight: 700,
   cursor: "pointer",
   marginBottom: "16px",
   boxShadow: "0 12px 24px rgba(8, 34, 74, 0.14)",
@@ -2554,7 +2567,7 @@ const scheduleCloseButtonStyle: React.CSSProperties = {
   backgroundColor: "#ffffff",
   color: "#334155",
   fontSize: "16px",
-  fontWeight: 900,
+  fontWeight: 700,
   cursor: "pointer",
 };
 
@@ -2568,7 +2581,7 @@ const scheduleSubmitButtonStyle: React.CSSProperties = {
   background: "linear-gradient(135deg, #08224a 0%, #0f3b7a 100%)",
   color: "#ffffff",
   fontSize: "18px",
-  fontWeight: 900,
+  fontWeight: 700,
 };
 
 const scheduleDoneButtonStyle: React.CSSProperties = {
@@ -2580,7 +2593,7 @@ const scheduleDoneButtonStyle: React.CSSProperties = {
   backgroundColor: "#dbeafe",
   color: "#2563eb",
   fontSize: "18px",
-  fontWeight: 800,
+  fontWeight: 700,
 };
 
 const statusBoxStyle: React.CSSProperties = {
@@ -2641,7 +2654,7 @@ const todaySummaryIconStyle: React.CSSProperties = {
 
 const todaySummaryTitleStyle: React.CSSProperties = {
   fontSize: "18px",
-  fontWeight: 800,
+  fontWeight: 700,
   color: "#111827",
 };
 
@@ -2687,7 +2700,7 @@ const todaySummaryLabelStyle: React.CSSProperties = {
 const todaySummaryValueStyle: React.CSSProperties = {
   fontSize: "22px",
   color: "#111827",
-  fontWeight: 800,
+  fontWeight: 700,
   textAlign: "center",
   lineHeight: 1.2,
 };
@@ -2772,7 +2785,7 @@ const contractSignedIconStyle: React.CSSProperties = {
 
 const contractTitleStyle: React.CSSProperties = {
   fontSize: "18px",
-  fontWeight: 800,
+  fontWeight: 700,
   color: "#111827",
   marginBottom: "4px",
 };
@@ -2790,7 +2803,7 @@ const contractPendingBadgeStyle: React.CSSProperties = {
   backgroundColor: "#ffedd5",
   color: "#c2410c",
   fontSize: "14px",
-  fontWeight: 800,
+  fontWeight: 700,
   whiteSpace: "nowrap",
 };
 
@@ -2800,7 +2813,7 @@ const contractSignedBadgeStyle: React.CSSProperties = {
   backgroundColor: "#dcfce7",
   color: "#15803d",
   fontSize: "14px",
-  fontWeight: 800,
+  fontWeight: 700,
   whiteSpace: "nowrap",
 };
 
@@ -2822,7 +2835,7 @@ const contractOpenPendingButtonStyle: React.CSSProperties = {
   backgroundColor: "#f97316",
   color: "#ffffff",
   fontSize: "17px",
-  fontWeight: 800,
+  fontWeight: 700,
   cursor: "pointer",
 };
 
@@ -2836,7 +2849,7 @@ const contractOpenSignedButtonStyle: React.CSSProperties = {
   backgroundColor: "#22c55e",
   color: "#ffffff",
   fontSize: "17px",
-  fontWeight: 800,
+  fontWeight: 700,
   cursor: "pointer",
 };
 
@@ -2908,7 +2921,7 @@ const signatureClearButtonStyle: React.CSSProperties = {
   backgroundColor: "#ffffff",
   color: "#374151",
   fontSize: "15px",
-  fontWeight: 800,
+  fontWeight: 700,
   cursor: "pointer",
 };
 
@@ -2921,5 +2934,5 @@ const signatureSubmitButtonStyle: React.CSSProperties = {
   backgroundColor: "#111827",
   color: "#ffffff",
   fontSize: "15px",
-  fontWeight: 800,
+  fontWeight: 700,
 };
