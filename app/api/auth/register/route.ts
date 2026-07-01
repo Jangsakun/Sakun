@@ -178,6 +178,7 @@ export async function POST(request: Request) {
             workplace_name,
             employment_type,
             reconnect_code,
+            reconnect_code_fixed,
             reconnect_expires_at,
             is_active
             `
@@ -222,34 +223,41 @@ export async function POST(request: Request) {
         );
       }
 
-      if (!reconnectEmployee.reconnect_expires_at) {
-        return NextResponse.json(
-          {
-            success: false,
-            message:
-              "재연결 코드 만료시간이 없습니다. 관리자에게 다시 발급 요청해주세요.",
-          },
-          { status: 400 }
-        );
+      const isFixedReconnectCode =
+        reconnectEmployee.reconnect_code_fixed === true;
+
+      if (!isFixedReconnectCode) {
+        if (!reconnectEmployee.reconnect_expires_at) {
+          return NextResponse.json(
+            {
+              success: false,
+              message:
+                "재연결 코드 만료시간이 없습니다. 관리자에게 다시 발급 요청해주세요.",
+            },
+            { status: 400 }
+          );
+        }
+
+        const expiresAtTime = new Date(
+          reconnectEmployee.reconnect_expires_at
+        ).getTime();
+
+        if (Number.isNaN(expiresAtTime) || expiresAtTime < Date.now()) {
+          return NextResponse.json(
+            {
+              success: false,
+              message:
+                "재연결 코드가 만료되었습니다. 관리자에게 다시 요청해주세요.",
+            },
+            { status: 400 }
+          );
+        }
       }
 
-      const expiresAtTime = new Date(
-        reconnectEmployee.reconnect_expires_at
-      ).getTime();
+      let updatedEmployee = reconnectEmployee;
 
-      if (Number.isNaN(expiresAtTime) || expiresAtTime < Date.now()) {
-        return NextResponse.json(
-          {
-            success: false,
-            message:
-              "재연결 코드가 만료되었습니다. 관리자에게 다시 요청해주세요.",
-          },
-          { status: 400 }
-        );
-      }
-
-      const { data: updatedEmployee, error: updateReconnectError } =
-        await supabase
+      if (!isFixedReconnectCode) {
+        const { data, error: updateReconnectError } = await supabase
           .from("employees")
           .update({
             reconnect_code: null,
@@ -259,20 +267,23 @@ export async function POST(request: Request) {
           .select()
           .single();
 
-      if (updateReconnectError) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: "재연결 코드 초기화 중 오류가 발생했습니다.",
-            debug: {
-              message: updateReconnectError.message,
-              details: updateReconnectError.details,
-              hint: updateReconnectError.hint,
-              code: updateReconnectError.code,
+        if (updateReconnectError) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: "재연결 코드 초기화 중 오류가 발생했습니다.",
+              debug: {
+                message: updateReconnectError.message,
+                details: updateReconnectError.details,
+                hint: updateReconnectError.hint,
+                code: updateReconnectError.code,
+              },
             },
-          },
-          { status: 500 }
-        );
+            { status: 500 }
+          );
+        }
+
+        updatedEmployee = data;
       }
 
       const { error: deleteDeviceError } = await supabase
