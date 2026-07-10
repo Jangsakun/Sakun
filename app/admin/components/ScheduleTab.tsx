@@ -318,19 +318,47 @@ function getEmployeeKey(employee: EmployeeItem) {
 }
 
 function getAttendanceDateKey(record: AttendanceItem) {
-  const rawDate =
+  const directDate =
     record.work_date ||
     record.workDate ||
     record.date ||
+    "";
+
+  // YYYY-MM-DD 형식으로 이미 전달된 날짜는 그대로 사용
+  if (directDate) {
+    return String(directDate).slice(0, 10);
+  }
+
+  const rawDateTime =
     record.checked_at ||
     record.checkedAt ||
     record.check_in_time ||
     record.checkInTime ||
     "";
 
-  if (!rawDate) return "";
+  if (!rawDateTime) return "";
 
-  return String(rawDate).slice(0, 10);
+  const parsedDate = new Date(rawDateTime);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return "";
+  }
+
+  // UTC로 저장된 시간을 한국 날짜로 변환
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(parsedDate);
+
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+
+  if (!year || !month || !day) return "";
+
+  return `${year}-${month}-${day}`;
 }
 
 function getAttendanceEmployeeKey(record: AttendanceItem) {
