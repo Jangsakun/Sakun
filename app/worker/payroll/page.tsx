@@ -53,6 +53,17 @@ function formatWon(value: number) {
   return `${value.toLocaleString("ko-KR")}원`;
 }
 
+function formatPayrollDate(date: string) {
+  const [year, month, day] = date.split("-").map(Number);
+
+  if (!year || !month || !day) return date;
+
+  const weekDays = ["일", "월", "화", "수", "목", "금", "토"];
+  const weekDay = weekDays[new Date(year, month - 1, day).getDay()];
+
+  return `${String(month).padStart(2, "0")}.${String(day).padStart(2, "0")} (${weekDay})`;
+}
+
 function getToday() {
   const now = new Date();
   const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
@@ -542,21 +553,107 @@ export default function WorkerPayrollPage() {
               </div>
             </div>
 
-            <div className="rounded-2xl bg-white p-5 shadow-sm">
+            <div className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
               <h3 className="mb-4 text-lg font-bold text-gray-900">상세 내역</h3>
 
-              <div className="overflow-x-auto">
+              {/* 모바일 상세 내역 */}
+              <div className="space-y-3 md:hidden">
+                {(result.dailyRows || []).length === 0 ? (
+                  <div className="rounded-2xl border border-gray-200 px-4 py-8 text-center text-sm text-gray-500">
+                    조회된 출퇴근 기록이 없습니다.
+                  </div>
+                ) : (
+                  result.dailyRows!.map((row) => (
+                    <div
+                      key={`mobile-${row.date}`}
+                      className="rounded-2xl border border-gray-200 bg-white p-4"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-base font-bold text-gray-900">
+                            {formatPayrollDate(row.date)}
+                          </p>
+                          <p className="mt-1 text-xs text-gray-400">{row.date}</p>
+                        </div>
+
+                        <div className="min-w-0 text-right">
+                          <p className="text-xs font-medium text-gray-500">지급 급여</p>
+                          {row.isWorking ? (
+                            <p className="mt-1 whitespace-nowrap text-sm font-bold text-green-700">
+                              계산 중
+                            </p>
+                          ) : (
+                            <p className="mt-1 whitespace-nowrap text-lg font-bold text-gray-900">
+                              {formatWon(row.grossPay)}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-xl bg-gray-50 px-3 py-3">
+                        <div>
+                          <p className="text-xs text-gray-500">출근</p>
+                          <p className="mt-1 whitespace-nowrap text-base font-semibold text-gray-900">
+                            {row.checkInText}
+                          </p>
+                        </div>
+
+                        <span className="text-lg text-gray-300">→</span>
+
+                        <div className="text-right">
+                          <p className="text-xs text-gray-500">퇴근</p>
+                          <p className="mt-1 whitespace-nowrap text-base font-semibold text-gray-900">
+                            {row.checkOutText}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <span className="whitespace-nowrap rounded-full bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700">
+                          근무 {row.isWorking ? "퇴근 후 계산" : row.workText}
+                        </span>
+
+                        {row.lunchDeducted && (
+                          <span className="whitespace-nowrap rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-700">
+                            점심 1시간 제외
+                          </span>
+                        )}
+
+                        {row.isWorking ? (
+                          <span className="whitespace-nowrap rounded-full bg-green-100 px-3 py-1.5 text-xs font-semibold text-green-700">
+                            근무 중
+                          </span>
+                        ) : (
+                          <span className="whitespace-nowrap rounded-full bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-600">
+                            확정
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-3">
+                        <span className="text-sm text-gray-500">세후 급여</span>
+                        <span className="whitespace-nowrap text-base font-bold text-blue-600">
+                          {row.isWorking ? "-" : formatWon(row.netPay)}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* 태블릿·PC 상세 내역 */}
+              <div className="hidden overflow-x-auto md:block">
                 <table className="min-w-full border-collapse">
                   <thead>
                     <tr className="border-b border-gray-200 text-left">
-                      <th className="px-3 py-3 text-sm font-semibold text-gray-700">날짜</th>
-                      <th className="px-3 py-3 text-sm font-semibold text-gray-700">출근</th>
-                      <th className="px-3 py-3 text-sm font-semibold text-gray-700">퇴근</th>
-                      <th className="px-3 py-3 text-sm font-semibold text-gray-700">근무시간</th>
-                      <th className="px-3 py-3 text-sm font-semibold text-gray-700">휴게 반영</th>
-                      <th className="px-3 py-3 text-sm font-semibold text-gray-700">지급 급여</th>
-                      <th className="px-3 py-3 text-sm font-semibold text-gray-700">세후 급여</th>
-                      <th className="px-3 py-3 text-sm font-semibold text-gray-700">상태</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-sm font-semibold text-gray-700">날짜</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-sm font-semibold text-gray-700">출근</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-sm font-semibold text-gray-700">퇴근</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-sm font-semibold text-gray-700">근무시간</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-sm font-semibold text-gray-700">휴게 반영</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-sm font-semibold text-gray-700">지급 급여</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-sm font-semibold text-gray-700">세후 급여</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-sm font-semibold text-gray-700">상태</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -572,32 +669,40 @@ export default function WorkerPayrollPage() {
                     ) : (
                       result.dailyRows!.map((row) => (
                         <tr key={row.date} className="border-b border-gray-100">
-                          <td className="px-3 py-3 text-sm text-gray-900">{row.date}</td>
-                          <td className="px-3 py-3 text-sm text-gray-900">{row.checkInText}</td>
-                          <td className="px-3 py-3 text-sm text-gray-900">{row.checkOutText}</td>
-                          <td className="px-3 py-3 text-sm text-gray-900">{row.workText}</td>
-                          <td className="px-3 py-3 text-sm text-gray-900">
+                          <td className="whitespace-nowrap px-3 py-3 text-sm text-gray-900">
+                            {row.date}
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-3 text-sm text-gray-900">
+                            {row.checkInText}
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-3 text-sm text-gray-900">
+                            {row.checkOutText}
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-3 text-sm text-gray-900">
+                            {row.isWorking ? "퇴근 후 계산" : row.workText}
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-3 text-sm text-gray-900">
                             {row.lunchDeducted ? (
-                              <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
+                              <span className="whitespace-nowrap rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
                                 점심 1시간 제외
                               </span>
                             ) : (
                               "-"
                             )}
                           </td>
-                          <td className="px-3 py-3 text-sm font-semibold text-gray-900">
-                            {formatWon(row.grossPay)}
+                          <td className="whitespace-nowrap px-3 py-3 text-sm font-semibold text-gray-900">
+                            {row.isWorking ? "계산 중" : formatWon(row.grossPay)}
                           </td>
-                          <td className="px-3 py-3 text-sm font-semibold text-blue-600">
-                            {formatWon(row.netPay)}
+                          <td className="whitespace-nowrap px-3 py-3 text-sm font-semibold text-blue-600">
+                            {row.isWorking ? "-" : formatWon(row.netPay)}
                           </td>
-                          <td className="px-3 py-3 text-sm">
+                          <td className="whitespace-nowrap px-3 py-3 text-sm">
                             {row.isWorking ? (
-                              <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
-                                실시간 계산중
+                              <span className="whitespace-nowrap rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
+                                근무 중
                               </span>
                             ) : (
-                              <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">
+                              <span className="whitespace-nowrap rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">
                                 확정
                               </span>
                             )}
@@ -608,7 +713,6 @@ export default function WorkerPayrollPage() {
                   </tbody>
                 </table>
               </div>
-
             </div>
 
             <div className="mt-6 hidden">
