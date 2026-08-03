@@ -198,12 +198,14 @@ function formatTimeLabel(hour: number, minute: number) {
 
 function getCheckoutAvailability(date = new Date()): CheckoutAvailability {
   const { hour, minute } = getKstParts(date);
+  const totalMinutes = hour * 60 + minute;
+  const checkoutStartMinutes = 12 * 60 + 30;
 
-  if (hour < 17) {
+  if (totalMinutes < checkoutStartMinutes) {
     return {
-      enabled: true,
-      notice: "17시 이후 퇴근은 30분 단위로 10분 동안만 가능합니다.",
-      nextAvailableLabel: "",
+      enabled: false,
+      notice: "12시 30분 이후 퇴근은 30분 단위로 10분 동안만 가능합니다.",
+      nextAvailableLabel: "12:30",
     };
   }
 
@@ -230,7 +232,7 @@ function getCheckoutAvailability(date = new Date()): CheckoutAvailability {
 
   return {
     enabled: false,
-    notice: "17시 이후 퇴근은 30분 단위로 10분 동안만 가능합니다.",
+    notice: "12시 30분 이후 퇴근은 30분 단위로 10분 동안만 가능합니다.",
     nextAvailableLabel: formatTimeLabel(nextHour, nextMinute),
   };
 }
@@ -325,9 +327,10 @@ function normalizeDisplayCheckIn(value: string) {
 function normalizeDisplayCheckOut(value: string) {
   const source = new Date(value);
   const dateKey = getSeoulDateKey(source);
-  const { hour, minute } = getSeoulHourMinute(source);
+  const { hour, minute, totalMinutes } = getSeoulHourMinute(source);
+  const checkoutStartMinutes = 12 * 60 + 30;
 
-  if (hour >= 17) {
+  if (totalMinutes >= checkoutStartMinutes) {
     if (minute <= 10) {
       return createSeoulDateTime(dateKey, hour, 0);
     }
@@ -1614,11 +1617,11 @@ totalWorkMinutes = Math.max(0, diff);
             <div style={noticeIconStyle}>i</div>
             <div style={noticeTextBlockStyle}>
               <div>
-                <span style={noticeEmphasisStyle}>17시 이후</span> 퇴근은 30분
-                단위로 10분 동안만 가능합니다.
+                <span style={noticeEmphasisStyle}>12시 30분 이후</span> 퇴근은
+                30분 단위로 10분 동안만 가능합니다.
               </div>
               <div>
-                <span style={noticeEmphasisStyle}>17시 이전</span> 퇴근은
+                <span style={noticeEmphasisStyle}>12시 30분 이전</span> 퇴근은
                 관리자에게 문의 바랍니다.
               </div>
               {!checkoutAvailability.enabled &&

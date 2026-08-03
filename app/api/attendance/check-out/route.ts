@@ -82,20 +82,21 @@ function isHemozEarlyCheckoutWindow(date: Date) {
   const { hour, minute } = getKstDateParts(date);
   const totalMinutes = hour * 60 + minute;
 
-  return totalMinutes >= 12 * 60 + 20 && totalMinutes <= 12 * 60 + 40;
+  return totalMinutes >= 12 * 60 + 30 && totalMinutes <= 12 * 60 + 40;
 }
 
 function isCheckoutAllowedAtKst(date: Date, workplaceName: string) {
   const { hour, minute } = getKstDateParts(date);
+  const totalMinutes = hour * 60 + minute;
 
   if (workplaceName === "헤모즈" && isHemozEarlyCheckoutWindow(date)) {
     return { allowed: true, message: "" };
   }
 
-  if (hour < 17) {
+  if (totalMinutes < 12 * 60 + 30) {
     return {
       allowed: false,
-      message: "17시 이후부터 퇴근 가능합니다.",
+      message: "12시 30분 이후부터 퇴근 가능합니다.",
     };
   }
 
@@ -122,7 +123,7 @@ function normalizeCheckOutTime(checkedAt: string, workplaceName: string): Date {
 
   if (
     workplaceName === "헤모즈" &&
-    totalMinutes >= 12 * 60 + 20 &&
+    totalMinutes >= 12 * 60 + 30 &&
     totalMinutes <= 12 * 60 + 40
   ) {
     return toKstDateFromParts(year, month, day, 12, 30);
