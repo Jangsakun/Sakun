@@ -1921,20 +1921,23 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                           </td>
 
                           <td style={tdStyle}>
-                            {employee.schedule_group ? (
-                              <span
-                                style={{
-                                  ...badgeStyle,
-                                  backgroundColor: "#f5f3ff",
-                                  color: "#6d28d9",
-                                }}
-                              >
-                                {employee.schedule_group}
-                              </span>
-                            ) : (
-                              <span style={mutedTextStyle}>선택안함</span>
-                            )}
-                          </td>
+  {employee.workplace_name === "헤모즈" ||
+  employee.workplace_name === "깨소금" ? (
+    <span style={mutedTextStyle}>없음</span>
+  ) : employee.schedule_group ? (
+    <span
+      style={{
+        ...badgeStyle,
+        backgroundColor: "#f5f3ff",
+        color: "#6d28d9",
+      }}
+    >
+      {employee.schedule_group}
+    </span>
+  ) : (
+    <span style={mutedTextStyle}>선택안함</span>
+  )}
+</td>
 
                           <td style={tdStyle}>
                             <div style={wageWrapStyle}>
