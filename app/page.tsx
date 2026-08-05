@@ -17,6 +17,8 @@ type Employee = {
   name: string;
   birthDate: string;
   phoneLast4: string;
+  workplaceName?: string;
+  workplace_name?: string;
 };
 
 type AttendanceResponse = {
@@ -68,6 +70,8 @@ type DeviceStatusResponse = {
     name?: string;
     birthDate?: string;
     phoneLast4?: string;
+    workplaceName?: string;
+    workplace_name?: string;
   };
 };
 
@@ -911,6 +915,14 @@ export default function Home() {
     const initializeEmployee = async () => {
       const deviceId = getOrCreateDeviceId();
 
+      let storedEmployee: Partial<Employee> = {};
+
+      try {
+        storedEmployee = JSON.parse(localStorage.getItem("employee") || "{}");
+      } catch {
+        storedEmployee = {};
+      }
+
       try {
         const deviceResponse = await fetch("/api/device/status", {
           method: "POST",
@@ -937,6 +949,11 @@ export default function Home() {
             name: deviceData.employee.name,
             birthDate: deviceData.employee.birthDate,
             phoneLast4: deviceData.employee.phoneLast4,
+            workplaceName:
+              deviceData.employee.workplaceName ||
+              deviceData.employee.workplace_name ||
+              storedEmployee.workplaceName ||
+              storedEmployee.workplace_name,
           };
 
           localStorage.setItem("employee", JSON.stringify(connectedEmployee));
@@ -967,6 +984,19 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    const employeeWorkplace = String(
+      employee?.workplaceName || employee?.workplace_name || ""
+    ).trim();
+
+    if (
+      employee &&
+      (employeeWorkplace === "헤모즈" || employeeWorkplace === "깨소금")
+    ) {
+      setIsHolidayLoading(false);
+      setScheduleOpen(false);
+      return;
+    }
+
     const loadWeekAndHolidays = async () => {
       try {
         setIsHolidayLoading(true);
@@ -1371,6 +1401,12 @@ totalWorkMinutes = Math.max(0, diff);
     );
   }
 
+  const employeeWorkplace = String(
+    employee.workplaceName || employee.workplace_name || ""
+  ).trim();
+  const shouldShowSchedule =
+    employeeWorkplace !== "헤모즈" && employeeWorkplace !== "깨소금";
+
   const isSchedulePending = scheduleStatus === "pending";
   const todayDateLabel = formatKstHeaderDate(now);
   const todayWorkStatus = todaySummary.checkOut
@@ -1635,11 +1671,14 @@ totalWorkMinutes = Math.max(0, diff);
           </div>
         </div>
 
-        <div
-          style={
-            isSchedulePending ? schedulePendingCardStyle : scheduleDoneCardStyle
-          }
-        >
+        {shouldShowSchedule && (
+          <div
+            style={
+              isSchedulePending
+                ? schedulePendingCardStyle
+                : scheduleDoneCardStyle
+            }
+          >
           <div style={scheduleHeaderRowStyle}>
             <div style={scheduleTitleWrapStyle}>
               <div
@@ -1893,7 +1932,8 @@ totalWorkMinutes = Math.max(0, diff);
             </button>
           )}
 
-        </div>
+          </div>
+        )}
 
 
         <Link href="/worker/payroll" style={payrollLinkStyle}>

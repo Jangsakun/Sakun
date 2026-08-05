@@ -117,6 +117,9 @@ type ReconnectCodeInfo = {
   expiresAt: string;
 };
 
+type WorkplaceName = "장사꾼" | "헤모즈" | "깨소금";
+type WorkplaceFilter = "전체" | WorkplaceName;
+
 const JANGSAGGUN_SCHEDULE_GROUP_OPTIONS = [
   { value: "", label: "선택안함" },
   { value: "랄라", label: "랄라" },
@@ -132,14 +135,24 @@ const HEMOZ_SCHEDULE_GROUP_OPTIONS = [
   { value: "주간", label: "주간" },
 ];
 
-function getScheduleGroupOptions(workplaceName: "장사꾼" | "헤모즈") {
-  return workplaceName === "헤모즈"
-    ? HEMOZ_SCHEDULE_GROUP_OPTIONS
-    : JANGSAGGUN_SCHEDULE_GROUP_OPTIONS;
+const KKAESOGEUM_SCHEDULE_GROUP_OPTIONS = [
+  { value: "", label: "선택안함" },
+];
+
+function getScheduleGroupOptions(workplaceName: WorkplaceName) {
+  if (workplaceName === "헤모즈") {
+    return HEMOZ_SCHEDULE_GROUP_OPTIONS;
+  }
+
+  if (workplaceName === "깨소금") {
+    return KKAESOGEUM_SCHEDULE_GROUP_OPTIONS;
+  }
+
+  return JANGSAGGUN_SCHEDULE_GROUP_OPTIONS;
 }
 
 function isValidScheduleGroupForWorkplace(
-  workplaceName: "장사꾼" | "헤모즈",
+  workplaceName: WorkplaceName,
   scheduleGroup: string
 ) {
   return getScheduleGroupOptions(workplaceName).some(
@@ -155,9 +168,8 @@ export default function AdminPage() {
     "attendance" | "employees" | "payroll" | "contracts" | "schedule"
   >("attendance");
 
-  const [selectedWorkplace, setSelectedWorkplace] = useState<
-    "전체" | "장사꾼" | "헤모즈"
-  >("전체");
+  const [selectedWorkplace, setSelectedWorkplace] =
+    useState<WorkplaceFilter>("전체");
 
   const [startDate, setStartDate] = useState(() => {
     const today = new Date();
@@ -192,9 +204,8 @@ export default function AdminPage() {
   const [editResidentNumber, setEditResidentNumber] = useState("");
   const [editBankName, setEditBankName] = useState("");
   const [editAccountNumber, setEditAccountNumber] = useState("");
-  const [editWorkplaceName, setEditWorkplaceName] = useState<"장사꾼" | "헤모즈">(
-    "장사꾼"
-  );
+  const [editWorkplaceName, setEditWorkplaceName] =
+    useState<WorkplaceName>("장사꾼");
   const [editEmploymentType, setEditEmploymentType] = useState<"fixed" | "carrot">(
     "fixed"
   );
@@ -207,9 +218,8 @@ export default function AdminPage() {
   const [editCheckOutTime, setEditCheckOutTime] = useState("");
   const [attendanceSaving, setAttendanceSaving] = useState(false);
 
-const [manualWorkplace, setManualWorkplace] = useState<"장사꾼" | "헤모즈">(
-  "장사꾼"
-);
+const [manualWorkplace, setManualWorkplace] =
+  useState<WorkplaceName>("장사꾼");
 const [manualEmployeeName, setManualEmployeeName] = useState("");
 const [manualDate, setManualDate] = useState("");
 const [manualCheckInTime, setManualCheckInTime] = useState("");
@@ -620,7 +630,11 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
   }, [filteredPayrollRows]);
 
   const startEdit = (employee: Employee) => {
-    const workplaceName = employee.workplace_name === "헤모즈" ? "헤모즈" : "장사꾼";
+    const rawWorkplaceName = employee.workplace_name;
+    const workplaceName: WorkplaceName =
+      rawWorkplaceName === "헤모즈" || rawWorkplaceName === "깨소금"
+        ? rawWorkplaceName
+        : "장사꾼";
     const scheduleGroup = employee.schedule_group || "";
 
     setEditingEmployeeId(employee.id);
@@ -1170,7 +1184,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
         <header style={headerStyle}>
           <div>
             <p style={eyebrowStyle}>Admin Dashboard</p>
-            <h1 style={titleStyle}>장사꾼/헤모즈 관리자 대시보드</h1>
+            <h1 style={titleStyle}>장사꾼/헤모즈/깨소금 관리자 대시보드</h1>
             <p style={descriptionStyle}>
               직원 상태와 출퇴근 기록, 급여를 한 화면에서 관리할 수 있습니다.
             </p>
@@ -1387,7 +1401,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
       <select
         value={manualWorkplace}
         onChange={(e) =>
-          setManualWorkplace(e.target.value as "장사꾼" | "헤모즈")
+          setManualWorkplace(e.target.value as WorkplaceName)
         }
         style={{
           ...inputStyle,
@@ -1399,6 +1413,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
       >
         <option value="장사꾼">장사꾼</option>
         <option value="헤모즈">헤모즈</option>
+        <option value="깨소금">깨소금</option>
       </select>
     </div>
 
@@ -1584,7 +1599,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                   value={selectedWorkplace}
                   onChange={(e) =>
                     setSelectedWorkplace(
-                      e.target.value as "전체" | "장사꾼" | "헤모즈"
+                      e.target.value as WorkplaceFilter
                     )
                   }
                   style={inputStyle}
@@ -1592,6 +1607,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                   <option value="전체">전체</option>
                   <option value="장사꾼">장사꾼</option>
                   <option value="헤모즈">헤모즈</option>
+                  <option value="깨소금">깨소금</option>
                 </select>
               </div>
 
@@ -1806,7 +1822,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                   value={selectedWorkplace}
                   onChange={(e) =>
                     setSelectedWorkplace(
-                      e.target.value as "전체" | "장사꾼" | "헤모즈"
+                      e.target.value as WorkplaceFilter
                     )
                   }
                   style={inputStyle}
@@ -1814,6 +1830,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                   <option value="전체">전체</option>
                   <option value="장사꾼">장사꾼</option>
                   <option value="헤모즈">헤모즈</option>
+                  <option value="깨소금">깨소금</option>
                 </select>
               </div>
 
@@ -2169,7 +2186,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                     <select
                       value={editWorkplaceName}
                       onChange={(e) => {
-                        const nextWorkplace = e.target.value as "장사꾼" | "헤모즈";
+                        const nextWorkplace = e.target.value as WorkplaceName;
 
                         setEditWorkplaceName(nextWorkplace);
 
@@ -2181,6 +2198,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                     >
                       <option value="장사꾼">장사꾼</option>
                       <option value="헤모즈">헤모즈</option>
+                      <option value="깨소금">깨소금</option>
                     </select>
                   </div>
 
@@ -2343,7 +2361,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                   value={selectedWorkplace}
                   onChange={(e) =>
                     setSelectedWorkplace(
-                      e.target.value as "전체" | "장사꾼" | "헤모즈"
+                      e.target.value as WorkplaceFilter
                     )
                   }
                   style={inputStyle}
@@ -2351,6 +2369,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                   <option value="전체">전체</option>
                   <option value="장사꾼">장사꾼</option>
                   <option value="헤모즈">헤모즈</option>
+                  <option value="깨소금">깨소금</option>
                 </select>
               </div>
 
@@ -2579,7 +2598,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
             value={selectedWorkplace}
             onChange={(e) =>
               setSelectedWorkplace(
-                e.target.value as "전체" | "장사꾼" | "헤모즈"
+                e.target.value as WorkplaceFilter
               )
             }
             style={inputStyle}
@@ -2587,6 +2606,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
             <option value="전체">전체</option>
             <option value="장사꾼">장사꾼</option>
             <option value="헤모즈">헤모즈</option>
+            <option value="깨소금">깨소금</option>
           </select>
         </div>
 

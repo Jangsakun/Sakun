@@ -13,6 +13,11 @@ const WORKPLACES = [
     lat: 35.8107177466899,
     lng: 127.094791615869,
   },
+  {
+    name: "깨소금",
+    lat: 35.8066759247072,
+    lng: 127.121648527169,
+  },
 ];
 
 function getKstDateParts(date: Date) {

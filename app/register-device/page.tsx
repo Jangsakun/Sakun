@@ -183,13 +183,14 @@ export default function RegisterDevicePage() {
                   </label>
 
                   <select
-                    value={workplaceName}
-                    onChange={(e) => setWorkplaceName(e.target.value)}
-                    className={inputClassName}
-                  >
-                    <option value="장사꾼">장사꾼(팔복동)</option>
-                    <option value="헤모즈">헤모즈(효자동)</option>
-                  </select>
+  value={workplaceName}
+  onChange={(e) => setWorkplaceName(e.target.value)}
+  className={inputClassName}
+>
+  <option value="장사꾼">장사꾼(팔복동)</option>
+  <option value="헤모즈">헤모즈(효자동)</option>
+  <option value="깨소금">깨소금</option>
+</select>
                 </div>
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-gray-800">
