@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-type WorkplaceName = "장사꾼" | "헤모즈";
+type WorkplaceName = "장사꾼" | "헤모즈" | "깨소금";
 type AllowanceStatus = "대상" | "비대상" | "검토필요";
 
 type Employee = {
@@ -155,6 +155,18 @@ export default function AdminWeeklyAllowancePage() {
                   }
                 >
                   헤모즈
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedWorkplace("깨소금")}
+                  className={
+                    selectedWorkplace === "깨소금"
+                      ? "h-11 flex-1 rounded-xl bg-slate-950 px-4 text-sm font-black text-white shadow"
+                      : "h-11 flex-1 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+                  }
+                >
+                  깨소금
                 </button>
               </div>
             </div>
@@ -450,6 +462,8 @@ function EmployeeAllowanceRow({
             className={
               workplaceName === "헤모즈"
                 ? "rounded-full bg-pink-100 px-3 py-1 text-xs font-bold text-pink-700"
+                : workplaceName === "깨소금"
+                ? "rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700"
                 : "rounded-full bg-sky-100 px-3 py-1 text-xs font-bold text-sky-700"
             }
           >
