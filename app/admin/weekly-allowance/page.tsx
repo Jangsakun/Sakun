@@ -95,7 +95,7 @@ export default function AdminWeeklyAllowancePage() {
 
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-8 text-slate-900">
-      <div className="mx-auto max-w-7xl">
+      <div className="mx-auto max-w-[1600px]">
         <header className="mb-7 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
             <h1 className="text-3xl font-black tracking-tight text-slate-950">
@@ -126,7 +126,7 @@ export default function AdminWeeklyAllowancePage() {
         </header>
 
         <section className="mb-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="grid gap-4 lg:grid-cols-[280px_1fr_220px_360px] lg:items-end">
+          <div className="grid gap-4 lg:grid-cols-[300px_minmax(260px,1fr)_220px_360px] lg:items-end">
             <div>
               <label className="mb-2 block text-sm font-black text-slate-800">
                 근무지
@@ -138,8 +138,8 @@ export default function AdminWeeklyAllowancePage() {
                   onClick={() => setSelectedWorkplace("장사꾼")}
                   className={
                     selectedWorkplace === "장사꾼"
-                      ? "h-11 flex-1 rounded-xl bg-slate-950 px-4 text-sm font-black text-white shadow"
-                      : "h-11 flex-1 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+                      ? "h-11 flex-1 whitespace-nowrap rounded-xl bg-slate-950 px-4 text-sm font-black text-white shadow"
+                      : "h-11 flex-1 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50"
                   }
                 >
                   장사꾼
@@ -150,8 +150,8 @@ export default function AdminWeeklyAllowancePage() {
                   onClick={() => setSelectedWorkplace("헤모즈")}
                   className={
                     selectedWorkplace === "헤모즈"
-                      ? "h-11 flex-1 rounded-xl bg-slate-950 px-4 text-sm font-black text-white shadow"
-                      : "h-11 flex-1 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+                      ? "h-11 flex-1 whitespace-nowrap rounded-xl bg-slate-950 px-4 text-sm font-black text-white shadow"
+                      : "h-11 flex-1 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50"
                   }
                 >
                   헤모즈
@@ -162,8 +162,8 @@ export default function AdminWeeklyAllowancePage() {
                   onClick={() => setSelectedWorkplace("깨소금")}
                   className={
                     selectedWorkplace === "깨소금"
-                      ? "h-11 flex-1 rounded-xl bg-slate-950 px-4 text-sm font-black text-white shadow"
-                      : "h-11 flex-1 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+                      ? "h-11 flex-1 whitespace-nowrap rounded-xl bg-slate-950 px-4 text-sm font-black text-white shadow"
+                      : "h-11 flex-1 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50"
                   }
                 >
                   깨소금
@@ -240,7 +240,17 @@ export default function AdminWeeklyAllowancePage() {
         ) : (
           <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1220px] border-collapse bg-white text-sm">
+              <table className="w-full min-w-[1480px] table-fixed border-collapse bg-white text-sm">
+                <colgroup>
+                  <col className="w-[180px]" />
+                  <col className="w-[110px]" />
+                  <col className="w-[110px]" />
+                  <col className="w-[110px]" />
+                  <col className="w-[190px]" />
+                  <col className="w-[240px]" />
+                  <col className="w-[240px]" />
+                  <col className="w-[250px]" />
+                </colgroup>
                 <thead className="bg-slate-50">
                   <tr className="border-b border-slate-100">
                     <TableHead>직원</TableHead>
@@ -289,8 +299,8 @@ function TableHead({
     <th
       className={
         align === "center"
-          ? "px-4 py-4 text-center text-xs font-black uppercase tracking-wide text-slate-500"
-          : "px-4 py-4 text-left text-xs font-black uppercase tracking-wide text-slate-500"
+          ? "px-4 py-4 text-center text-xs font-black uppercase tracking-wide text-slate-500 whitespace-nowrap"
+          : "px-4 py-4 text-left text-xs font-black uppercase tracking-wide text-slate-500 whitespace-nowrap"
       }
     >
       {children}
@@ -457,35 +467,35 @@ function EmployeeAllowanceRow({
           </div>
         </td>
 
-        <td className="px-4 py-4">
+        <td className="px-4 py-4 whitespace-nowrap">
           <span
             className={
               workplaceName === "헤모즈"
-                ? "rounded-full bg-pink-100 px-3 py-1 text-xs font-bold text-pink-700"
+                ? "inline-flex items-center whitespace-nowrap rounded-full bg-pink-100 px-3 py-1 text-xs font-bold text-pink-700"
                 : workplaceName === "깨소금"
-                ? "rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700"
-                : "rounded-full bg-sky-100 px-3 py-1 text-xs font-bold text-sky-700"
+                ? "inline-flex items-center whitespace-nowrap rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700"
+                : "inline-flex items-center whitespace-nowrap rounded-full bg-sky-100 px-3 py-1 text-xs font-bold text-sky-700"
             }
           >
             {workplaceName}
           </span>
         </td>
 
-        <td className="px-4 py-4">
+        <td className="px-4 py-4 whitespace-nowrap">
           <span
             className={
               employee.employment_type === "carrot"
-                ? "rounded-full bg-orange-100 px-3 py-1 text-xs font-bold text-orange-700"
+                ? "inline-flex items-center whitespace-nowrap rounded-full bg-orange-100 px-3 py-1 text-xs font-bold text-orange-700"
                 : employee.employment_type === "fixed"
-                ? "rounded-full bg-indigo-100 px-3 py-1 text-xs font-bold text-indigo-700"
-                : "rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600"
+                ? "inline-flex items-center whitespace-nowrap rounded-full bg-indigo-100 px-3 py-1 text-xs font-bold text-indigo-700"
+                : "inline-flex items-center whitespace-nowrap rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600"
             }
           >
             {employmentTypeLabel}
           </span>
         </td>
 
-        <td className="px-4 py-4 font-semibold text-slate-900">
+        <td className="px-4 py-4 whitespace-nowrap font-semibold text-slate-900">
           {(employee.hourly_wage ?? 10320).toLocaleString("ko-KR")}원
         </td>
 
@@ -511,7 +521,7 @@ function EmployeeAllowanceRow({
             value={weeklyAllowanceReason}
             onChange={(e) => setWeeklyAllowanceReason(e.target.value)}
             placeholder="예: 계약조건상 비대상"
-            className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 placeholder-slate-400 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+            className="h-11 w-full min-w-[210px] rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 placeholder-slate-400 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
           />
         </td>
 
@@ -521,17 +531,17 @@ function EmployeeAllowanceRow({
             value={weeklyAllowanceNote}
             onChange={(e) => setWeeklyAllowanceNote(e.target.value)}
             placeholder="메모 입력 (선택)"
-            className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 placeholder-slate-400 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+            className="h-11 w-full min-w-[210px] rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 placeholder-slate-400 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
           />
         </td>
 
-        <td className="px-4 py-4">
-          <div className="flex items-center justify-center gap-3">
+        <td className="px-4 py-4 whitespace-nowrap">
+          <div className="flex min-w-[220px] items-center justify-center gap-3">
             <button
               type="button"
               onClick={handleSave}
               disabled={saving}
-              className="h-11 rounded-xl bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
+              className="h-11 min-w-[68px] whitespace-nowrap rounded-xl bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
             >
               {saving ? "저장중" : "저장"}
             </button>
@@ -539,7 +549,7 @@ function EmployeeAllowanceRow({
             <button
               type="button"
               onClick={() => setWeeklyAllowanceStatus(defaultWeeklyAllowanceStatus)}
-              className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+              className="h-11 min-w-[76px] whitespace-nowrap rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50"
             >
               초기화
             </button>
