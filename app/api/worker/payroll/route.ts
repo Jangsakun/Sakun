@@ -302,17 +302,22 @@ export async function POST(request: NextRequest) {
 
     const hourlyWage = Number(employee.hourly_wage || 10320);
 
-    const workplace = String(
+    const actualWorkplace = String(
       employee.workplace_name ||
         employee.workplace ||
         employee.workplace_label ||
         "장사꾼"
     ).trim();
 
-    const companyName = workplace === "헤모즈" ? "헤모즈" : "장사꾼";
+    // 깨소금 직원의 주급명세서는 장사꾼 기준으로 표시합니다.
+    const payrollWorkplace =
+      actualWorkplace === "깨소금" ? "장사꾼" : actualWorkplace;
+
+    const companyName =
+      payrollWorkplace === "헤모즈" ? "헤모즈" : "장사꾼";
 
     const payslipTitle =
-      workplace === "헤모즈"
+      payrollWorkplace === "헤모즈"
         ? "헤모즈 급여명세서"
         : "장사꾼 급여명세서";
 
@@ -449,7 +454,8 @@ export async function POST(request: NextRequest) {
         residentNumber: employee.resident_number,
         hourlyWage,
         averageHourlyWage: Math.round(averageHourlyWage),
-        workplace,
+        workplace: payrollWorkplace,
+        actualWorkplace,
         companyName,
         payslipTitle,
       },
