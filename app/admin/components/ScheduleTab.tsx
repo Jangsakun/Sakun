@@ -1607,31 +1607,6 @@ export default function ScheduleTab() {
               장사꾼
             </button>
 
-            <button
-              type="button"
-              onClick={() => handleChangeWorkplace("헤모즈")}
-              style={{
-                height: "40px",
-                padding: "0 18px",
-                borderRadius: "999px",
-                border:
-                  selectedWorkplace === "헤모즈"
-                    ? "1px solid #111827"
-                    : "1px solid #d1d5db",
-                background:
-                  selectedWorkplace === "헤모즈" ? "#111827" : "#ffffff",
-                color: selectedWorkplace === "헤모즈" ? "#ffffff" : "#111827",
-                fontSize: "14px",
-                fontWeight: 900,
-                cursor: "pointer",
-                boxShadow:
-                  selectedWorkplace === "헤모즈"
-                    ? "0 8px 18px rgba(17, 24, 39, 0.16)"
-                    : "none",
-              }}
-            >
-              헤모즈
-            </button>
           </div>
 
           <div
