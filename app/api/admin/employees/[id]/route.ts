@@ -34,14 +34,20 @@ export async function PATCH(
 
     if (!supabaseUrl || !serviceRoleKey) {
       return NextResponse.json(
-        { success: false, message: "환경변수가 없습니다." },
+        {
+          success: false,
+          message: "환경변수가 없습니다.",
+        },
         { status: 500 }
       );
     }
 
     if (!id) {
       return NextResponse.json(
-        { success: false, message: "직원 id가 필요합니다." },
+        {
+          success: false,
+          message: "직원 id가 필요합니다.",
+        },
         { status: 400 }
       );
     }
@@ -70,20 +76,34 @@ export async function PATCH(
       updatePayload.account_number = account_number.trim();
     }
 
+    let nextWorkplaceName: "장사꾼" | "헤모즈" | "깨소금" | undefined;
+
     if (typeof workplaceName === "string") {
       const trimmedWorkplaceName = workplaceName.trim();
 
-      if (
-        trimmedWorkplaceName !== "장사꾼" &&
-        trimmedWorkplaceName !== "헤모즈"
-      ) {
+      const allowedWorkplaces = ["장사꾼", "헤모즈", "깨소금"];
+
+      if (!allowedWorkplaces.includes(trimmedWorkplaceName)) {
         return NextResponse.json(
-          { success: false, message: "근무지 값이 올바르지 않습니다." },
+          {
+            success: false,
+            message: "근무지 값이 올바르지 않습니다.",
+          },
           { status: 400 }
         );
       }
 
-      updatePayload.workplace_name = trimmedWorkplaceName;
+      nextWorkplaceName = trimmedWorkplaceName as
+        | "장사꾼"
+        | "헤모즈"
+        | "깨소금";
+
+      updatePayload.workplace_name = nextWorkplaceName;
+
+      // 깨소금은 스케줄 역할그룹을 사용하지 않으므로 자동 초기화
+      if (nextWorkplaceName === "깨소금") {
+        updatePayload.schedule_group = null;
+      }
     }
 
     if (typeof employmentType === "string") {
@@ -94,7 +114,10 @@ export async function PATCH(
         trimmedEmploymentType !== "carrot"
       ) {
         return NextResponse.json(
-          { success: false, message: "고용형태 값이 올바르지 않습니다." },
+          {
+            success: false,
+            message: "고용형태 값이 올바르지 않습니다.",
+          },
           { status: 400 }
         );
       }
@@ -102,27 +125,38 @@ export async function PATCH(
       updatePayload.employment_type = trimmedEmploymentType;
     }
 
-    const incomingScheduleGroup =
-      typeof scheduleGroup === "string"
-        ? scheduleGroup
-        : typeof schedule_group === "string"
-        ? schedule_group
-        : undefined;
+    const hasScheduleGroupField =
+      Object.prototype.hasOwnProperty.call(body, "scheduleGroup") ||
+      Object.prototype.hasOwnProperty.call(body, "schedule_group");
 
-    if (incomingScheduleGroup !== undefined) {
-      const trimmedScheduleGroup = incomingScheduleGroup.trim();
+    if (hasScheduleGroupField && nextWorkplaceName !== "깨소금") {
+      const rawScheduleGroup =
+        scheduleGroup !== undefined ? scheduleGroup : schedule_group;
 
-      const nextWorkplaceName =
-        typeof workplaceName === "string" ? workplaceName.trim() : undefined;
+      const trimmedScheduleGroup =
+        typeof rawScheduleGroup === "string" ? rawScheduleGroup.trim() : "";
 
-      const allowedScheduleGroups =
-        nextWorkplaceName === "헤모즈"
-          ? ["", "오픈", "주간"]
-          : ["", "랄라", "모아림", "몽글솜", "택배", "자수"];
+      let allowedScheduleGroups: string[] = [];
+
+      if (nextWorkplaceName === "헤모즈") {
+        allowedScheduleGroups = ["", "오픈", "주간"];
+      } else {
+        allowedScheduleGroups = [
+          "",
+          "랄라",
+          "모아림",
+          "몽글솜",
+          "택배",
+          "자수",
+        ];
+      }
 
       if (!allowedScheduleGroups.includes(trimmedScheduleGroup)) {
         return NextResponse.json(
-          { success: false, message: "역할그룹 값이 올바르지 않습니다." },
+          {
+            success: false,
+            message: "역할그룹 값이 올바르지 않습니다.",
+          },
           { status: 400 }
         );
       }
@@ -143,7 +177,10 @@ export async function PATCH(
 
       if (!Number.isFinite(wageNumber) || wageNumber < 0) {
         return NextResponse.json(
-          { success: false, message: "올바른 시급을 입력해주세요." },
+          {
+            success: false,
+            message: "올바른 시급을 입력해주세요.",
+          },
           { status: 400 }
         );
       }
@@ -156,7 +193,8 @@ export async function PATCH(
     }
 
     if (typeof weeklyAllowanceReason === "string") {
-      updatePayload.weekly_allowance_reason = weeklyAllowanceReason.trim();
+      updatePayload.weekly_allowance_reason =
+        weeklyAllowanceReason.trim();
     }
 
     if (typeof weeklyAllowanceNote === "string") {
@@ -164,11 +202,23 @@ export async function PATCH(
     }
 
     if (typeof contract_start_date === "string") {
-      updatePayload.contract_start_date = contract_start_date.trim() || null;
+      updatePayload.contract_start_date =
+        contract_start_date.trim() || null;
     }
 
     if (typeof contract_end_date === "string") {
-      updatePayload.contract_end_date = contract_end_date.trim() || null;
+      updatePayload.contract_end_date =
+        contract_end_date.trim() || null;
+    }
+
+    if (Object.keys(updatePayload).length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "수정할 값이 없습니다.",
+        },
+        { status: 400 }
+      );
     }
 
     const { error } = await supabase
@@ -178,7 +228,11 @@ export async function PATCH(
 
     if (error) {
       return NextResponse.json(
-        { success: false, message: error.message, debug: updatePayload },
+        {
+          success: false,
+          message: error.message,
+          debug: updatePayload,
+        },
         { status: 500 }
       );
     }
@@ -190,8 +244,16 @@ export async function PATCH(
     });
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.";
+      error instanceof Error
+        ? error.message
+        : "알 수 없는 오류가 발생했습니다.";
 
-    return NextResponse.json({ success: false, message }, { status: 500 });
+    return NextResponse.json(
+      {
+        success: false,
+        message,
+      },
+      { status: 500 }
+    );
   }
 }
