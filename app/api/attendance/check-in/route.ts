@@ -73,13 +73,39 @@ function toKstDateFromParts(
   return new Date(utcMillis);
 }
 
-function normalizeCheckInTime(checkedAt: string, workplaceName?: string | null): Date {
+function normalizeCheckInTime(
+  checkedAt: string,
+  workplaceName?: string | null
+): Date {
   const originalDate = new Date(checkedAt);
   const { year, month, day, hour, minute } = getKstDateParts(originalDate);
 
   const totalMinutes = hour * 60 + minute;
   const workplace = String(workplaceName || "장사꾼").trim();
 
+  // 깨소금 전용 출근시간 보정
+  //
+  // 08:00 이전       -> 08:00
+  // 매시 :15 ~ :30  -> 해당 시각 :30
+  // 매시 :45 ~ :59  -> 다음 정각
+  // 그 외 시간       -> 실제 출근시간 그대로
+  if (workplace === "깨소금") {
+    if (totalMinutes < 8 * 60) {
+      return toKstDateFromParts(year, month, day, 8, 0, 0);
+    }
+
+    if (minute >= 15 && minute <= 30) {
+      return toKstDateFromParts(year, month, day, hour, 30, 0);
+    }
+
+    if (minute >= 45) {
+      return toKstDateFromParts(year, month, day, hour + 1, 0, 0);
+    }
+
+    return originalDate;
+  }
+
+  // 헤모즈 조기 출근 보정
   if (
     workplace === "헤모즈" &&
     totalMinutes >= 6 * 60 + 45 &&
@@ -88,6 +114,7 @@ function normalizeCheckInTime(checkedAt: string, workplaceName?: string | null):
     return toKstDateFromParts(year, month, day, 7, 0, 0);
   }
 
+  // 기존 장사꾼 / 헤모즈 출근 보정
   if (totalMinutes >= 8 * 60 + 45 && totalMinutes <= 9 * 60 + 10) {
     return toKstDateFromParts(year, month, day, 9, 0, 0);
   }
@@ -176,7 +203,10 @@ export async function POST(request: Request) {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
-    const nearestWorkplace = getNearestWorkplaceDistance(parsedLat, parsedLng);
+    const nearestWorkplace = getNearestWorkplaceDistance(
+      parsedLat,
+      parsedLng
+    );
     const distance = nearestWorkplace.distance;
 
     const MAX_DISTANCE = 150;
@@ -284,7 +314,9 @@ export async function POST(request: Request) {
       hourly_wage_snapshot: hourlyWageSnapshot,
     };
 
-    const { error } = await supabase.from("attendance_records").insert([payload]);
+    const { error } = await supabase
+      .from("attendance_records")
+      .insert([payload]);
 
     if (error) {
       return NextResponse.json(
