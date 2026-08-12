@@ -76,12 +76,22 @@ export async function PATCH(
       updatePayload.account_number = account_number.trim();
     }
 
-    let nextWorkplaceName: "장사꾼" | "헤모즈" | "깨소금" | undefined;
+    let nextWorkplaceName:
+      | "장사꾼"
+      | "헤모즈"
+      | "깨소금"
+      | "로엔티크"
+      | undefined;
 
     if (typeof workplaceName === "string") {
       const trimmedWorkplaceName = workplaceName.trim();
 
-      const allowedWorkplaces = ["장사꾼", "헤모즈", "깨소금"];
+      const allowedWorkplaces = [
+        "장사꾼",
+        "헤모즈",
+        "깨소금",
+        "로엔티크",
+      ];
 
       if (!allowedWorkplaces.includes(trimmedWorkplaceName)) {
         return NextResponse.json(
@@ -96,12 +106,16 @@ export async function PATCH(
       nextWorkplaceName = trimmedWorkplaceName as
         | "장사꾼"
         | "헤모즈"
-        | "깨소금";
+        | "깨소금"
+        | "로엔티크";
 
       updatePayload.workplace_name = nextWorkplaceName;
 
-      // 깨소금은 스케줄 역할그룹을 사용하지 않으므로 자동 초기화
-      if (nextWorkplaceName === "깨소금") {
+      // 깨소금, 로엔티크는 스케줄 역할그룹을 사용하지 않으므로 자동 초기화
+      if (
+        nextWorkplaceName === "깨소금" ||
+        nextWorkplaceName === "로엔티크"
+      ) {
         updatePayload.schedule_group = null;
       }
     }
@@ -129,7 +143,11 @@ export async function PATCH(
       Object.prototype.hasOwnProperty.call(body, "scheduleGroup") ||
       Object.prototype.hasOwnProperty.call(body, "schedule_group");
 
-    if (hasScheduleGroupField && nextWorkplaceName !== "깨소금") {
+    if (
+      hasScheduleGroupField &&
+      nextWorkplaceName !== "깨소금" &&
+      nextWorkplaceName !== "로엔티크"
+    ) {
       const rawScheduleGroup =
         scheduleGroup !== undefined ? scheduleGroup : schedule_group;
 

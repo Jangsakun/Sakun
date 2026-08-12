@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const ALLOWED_WORKPLACES = ["장사꾼", "헤모즈", "깨소금"];
+const ALLOWED_WORKPLACES = ["장사꾼", "헤모즈", "깨소금", "로엔티크"];
 
 export async function POST(request: Request) {
   try {
