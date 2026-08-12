@@ -605,11 +605,14 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
   const filteredContractEmployees = useMemo(() => {
     return employees.filter((employee) => {
       const employeeWorkplace = employee.workplace_name || "장사꾼";
-      const matchesName = employee.name
-        .toLowerCase()
-        .includes(contractSearch.trim().toLowerCase());
+      const keyword = contractSearch.trim().toLowerCase();
+
+      const matchesName =
+        keyword === "" || employee.name.toLowerCase().includes(keyword);
+
       const matchesWorkplace =
-        selectedWorkplace === "전체" || employeeWorkplace === selectedWorkplace;
+        selectedWorkplace === "전체" ||
+        employeeWorkplace === selectedWorkplace;
 
       return matchesName && matchesWorkplace;
     });
@@ -2610,15 +2613,26 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
         </div>
       </div>
 
-      <div style={filterRowStyle}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(280px, 1.2fr) minmax(240px, 1fr) auto",
+          gap: "12px",
+          alignItems: "end",
+          marginBottom: "18px",
+        }}
+      >
         <div style={fieldGroupStyle}>
           <label style={labelStyle}>직원 이름 검색</label>
           <input
             type="text"
-            placeholder="직원 이름 입력"
             value={contractSearch}
             onChange={(e) => setContractSearch(e.target.value)}
-            style={inputStyle}
+            placeholder="직원 이름을 입력하세요"
+            style={{
+              ...inputStyle,
+              width: "100%",
+            }}
           />
         </div>
 
@@ -2627,9 +2641,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
           <select
             value={selectedWorkplace}
             onChange={(e) =>
-              setSelectedWorkplace(
-                e.target.value as WorkplaceFilter
-              )
+              setSelectedWorkplace(e.target.value as WorkplaceFilter)
             }
             style={inputStyle}
           >
@@ -2637,7 +2649,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
             <option value="장사꾼">장사꾼</option>
             <option value="헤모즈">헤모즈</option>
             <option value="깨소금">깨소금</option>
-                  <option value="로엔티크">로엔티크</option>
+            <option value="로엔티크">로엔티크</option>
           </select>
         </div>
 
