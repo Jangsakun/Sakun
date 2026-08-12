@@ -190,6 +190,7 @@ export default function RegisterDevicePage() {
   <option value="장사꾼">장사꾼(팔복동)</option>
   <option value="헤모즈">헤모즈(효자동)</option>
   <option value="깨소금">깨소금</option>
+  <option value="로엔티크">로엔티크</option>
 </select>
                 </div>
                 <div>

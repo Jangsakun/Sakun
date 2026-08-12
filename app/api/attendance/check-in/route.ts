@@ -18,6 +18,11 @@ const WORKPLACES = [
     lat: 35.8066759247072,
     lng: 127.121648527169,
   },
+  {
+    name: "로엔티크",
+    lat: 35.8826859288948,
+    lng: 127.033338413219,
+  },
 ];
 
 function getKstDateParts(date: Date) {

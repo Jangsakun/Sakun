@@ -117,7 +117,7 @@ type ReconnectCodeInfo = {
   expiresAt: string;
 };
 
-type WorkplaceName = "장사꾼" | "헤모즈" | "깨소금";
+type WorkplaceName = "장사꾼" | "헤모즈" | "깨소금" | "로엔티크";
 type WorkplaceFilter = "전체" | WorkplaceName;
 
 const JANGSAGGUN_SCHEDULE_GROUP_OPTIONS = [
@@ -144,7 +144,7 @@ function getScheduleGroupOptions(workplaceName: WorkplaceName) {
     return HEMOZ_SCHEDULE_GROUP_OPTIONS;
   }
 
-  if (workplaceName === "깨소금") {
+  if (workplaceName === "깨소금" || workplaceName === "로엔티크") {
     return KKAESOGEUM_SCHEDULE_GROUP_OPTIONS;
   }
 
@@ -632,7 +632,9 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
   const startEdit = (employee: Employee) => {
     const rawWorkplaceName = employee.workplace_name;
     const workplaceName: WorkplaceName =
-      rawWorkplaceName === "헤모즈" || rawWorkplaceName === "깨소금"
+      rawWorkplaceName === "헤모즈" ||
+      rawWorkplaceName === "깨소금" ||
+      rawWorkplaceName === "로엔티크"
         ? rawWorkplaceName
         : "장사꾼";
     const scheduleGroup = employee.schedule_group || "";
@@ -1184,7 +1186,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
         <header style={headerStyle}>
           <div>
             <p style={eyebrowStyle}>Admin Dashboard</p>
-            <h1 style={titleStyle}>장사꾼/헤모즈/깨소금 관리자 대시보드</h1>
+            <h1 style={titleStyle}>장사꾼/헤모즈/깨소금/로엔티크 관리자 대시보드</h1>
             <p style={descriptionStyle}>
               직원 상태와 출퇴근 기록, 급여를 한 화면에서 관리할 수 있습니다.
             </p>
@@ -1414,6 +1416,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
         <option value="장사꾼">장사꾼</option>
         <option value="헤모즈">헤모즈</option>
         <option value="깨소금">깨소금</option>
+                  <option value="로엔티크">로엔티크</option>
       </select>
     </div>
 
@@ -1608,6 +1611,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                   <option value="장사꾼">장사꾼</option>
                   <option value="헤모즈">헤모즈</option>
                   <option value="깨소금">깨소금</option>
+                  <option value="로엔티크">로엔티크</option>
                 </select>
               </div>
 
@@ -1831,6 +1835,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                   <option value="장사꾼">장사꾼</option>
                   <option value="헤모즈">헤모즈</option>
                   <option value="깨소금">깨소금</option>
+                  <option value="로엔티크">로엔티크</option>
                 </select>
               </div>
 
@@ -1922,7 +1927,8 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
 
                           <td style={tdStyle}>
   {employee.workplace_name === "헤모즈" ||
-  employee.workplace_name === "깨소금" ? (
+  employee.workplace_name === "깨소금" ||
+  employee.workplace_name === "로엔티크" ? (
     <span style={mutedTextStyle}>없음</span>
   ) : employee.schedule_group ? (
     <span
@@ -2202,6 +2208,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                       <option value="장사꾼">장사꾼</option>
                       <option value="헤모즈">헤모즈</option>
                       <option value="깨소금">깨소금</option>
+                  <option value="로엔티크">로엔티크</option>
                     </select>
                   </div>
 
@@ -2219,20 +2226,22 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                     </select>
                   </div>
 
-                  <div style={{ gridColumn: "1 / -1" }}>
-                    <label style={labelStyle}>역할그룹</label>
-                    <select
-                      value={editScheduleGroup}
-                      onChange={(e) => setEditScheduleGroup(e.target.value)}
-                      style={inputStyle}
-                    >
-                      {getScheduleGroupOptions(editWorkplaceName).map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  {editWorkplaceName !== "로엔티크" && (
+                    <div style={{ gridColumn: "1 / -1" }}>
+                      <label style={labelStyle}>역할그룹</label>
+                      <select
+                        value={editScheduleGroup}
+                        onChange={(e) => setEditScheduleGroup(e.target.value)}
+                        style={inputStyle}
+                      >
+                        {getScheduleGroupOptions(editWorkplaceName).map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
 
                 <div
@@ -2373,6 +2382,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                   <option value="장사꾼">장사꾼</option>
                   <option value="헤모즈">헤모즈</option>
                   <option value="깨소금">깨소금</option>
+                  <option value="로엔티크">로엔티크</option>
                 </select>
               </div>
 
@@ -2610,6 +2620,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
             <option value="장사꾼">장사꾼</option>
             <option value="헤모즈">헤모즈</option>
             <option value="깨소금">깨소금</option>
+                  <option value="로엔티크">로엔티크</option>
           </select>
         </div>
 
