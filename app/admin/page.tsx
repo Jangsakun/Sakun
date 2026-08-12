@@ -190,6 +190,7 @@ export default function AdminPage() {
   const [employeeLoading, setEmployeeLoading] = useState(false);
   const [employeeMessage, setEmployeeMessage] = useState("");
   const [employeeSearch, setEmployeeSearch] = useState("");
+  const [contractSearch, setContractSearch] = useState("");
   const [wages, setWages] = useState<{ [key: number]: number }>({});
 
   const [payrollRows, setPayrollRows] = useState<PayrollRow[]>([]);
@@ -604,10 +605,15 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
   const filteredContractEmployees = useMemo(() => {
     return employees.filter((employee) => {
       const employeeWorkplace = employee.workplace_name || "장사꾼";
+      const matchesName = employee.name
+        .toLowerCase()
+        .includes(contractSearch.trim().toLowerCase());
+      const matchesWorkplace =
+        selectedWorkplace === "전체" || employeeWorkplace === selectedWorkplace;
 
-      return selectedWorkplace === "전체" || employeeWorkplace === selectedWorkplace;
+      return matchesName && matchesWorkplace;
     });
-  }, [employees, selectedWorkplace]);
+  }, [employees, selectedWorkplace, contractSearch]);
 
   const payrollSummary = useMemo(() => {
     return filteredPayrollRows.reduce(
@@ -2605,6 +2611,17 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
       </div>
 
       <div style={filterRowStyle}>
+        <div style={fieldGroupStyle}>
+          <label style={labelStyle}>직원 이름 검색</label>
+          <input
+            type="text"
+            placeholder="직원 이름 입력"
+            value={contractSearch}
+            onChange={(e) => setContractSearch(e.target.value)}
+            style={inputStyle}
+          />
+        </div>
+
         <div style={fieldGroupStyle}>
           <label style={labelStyle}>근무지 필터</label>
           <select
