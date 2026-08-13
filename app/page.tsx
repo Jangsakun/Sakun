@@ -494,6 +494,10 @@ function formatWeekRangeLabel(startDate: Date, endDate: Date) {
   )}) ~ ${endMonth}.${endDay} (${getKoreanDayLabel(endDate)})`;
 }
 
+const WORKABLE_HOLIDAYS = new Set([
+  "2026-08-17",
+]);
+
 function createWeekdaysWithHolidayInfo(holidays: HolidayItem[]) {
   const monday = getScheduleTargetMondayInKst();
   const weekdays = [0, 1, 2, 3, 4, 5].map((offset) => addDays(monday, offset));
@@ -507,7 +511,9 @@ function createWeekdaysWithHolidayInfo(holidays: HolidayItem[]) {
       dayLabel: getKoreanDayLabel(date),
       dateLabel: formatShortDate(date),
       fullDate,
-      isHoliday: Boolean(matchedHoliday),
+      isHoliday:
+        Boolean(matchedHoliday) &&
+        !WORKABLE_HOLIDAYS.has(fullDate),
       holidayName: matchedHoliday?.localName || matchedHoliday?.name || "",
       available: false,
       shift: null,
