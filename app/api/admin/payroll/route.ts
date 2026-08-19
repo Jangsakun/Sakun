@@ -114,7 +114,7 @@ function getWageForDay(items: AttendanceRecord[], employee: any) {
 }
 
 async function freezeMissingWageSnapshots(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   records: AttendanceRecord[]
 ) {
   const groups = new Map<number, { wage: number; ids: number[] }>();
