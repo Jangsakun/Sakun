@@ -92,6 +92,8 @@ function getEmployeeObject(rawEmployee: EmployeeNested) {
 }
 
 function getWageForDay(items: AttendanceRecord[], employee: any) {
+  // 급여 계산은 출퇴근 당시 저장된 시급 스냅샷을 최우선으로 사용합니다.
+  // 이 값이 있으면 employees.hourly_wage가 나중에 바뀌어도 과거 급여는 바뀌지 않습니다.
   const snapshotWage = items
     .map((item) => Number(item.hourly_wage_snapshot || 0))
     .find((wage) => wage > 0);
@@ -100,12 +102,79 @@ function getWageForDay(items: AttendanceRecord[], employee: any) {
     return snapshotWage;
   }
 
+  // 구버전 출퇴근 기록처럼 스냅샷이 아직 없는 데이터만 현재 시급을 임시 사용합니다.
+  // 아래 freezeMissingWageSnapshots()가 조회 시 해당 값을 DB에 즉시 고정하므로
+  // 이후 직원 시급이 변경되어도 같은 과거 기록은 다시 바뀌지 않습니다.
   const employeeWage = Number(employee?.hourly_wage || 0);
   if (employeeWage > 0) {
     return employeeWage;
   }
 
   return 10320;
+}
+
+async function freezeMissingWageSnapshots(
+  supabase: ReturnType<typeof createClient>,
+  records: AttendanceRecord[]
+) {
+  const groups = new Map<number, { wage: number; ids: number[] }>();
+
+  for (const record of records) {
+    const currentSnapshot = Number(record.hourly_wage_snapshot || 0);
+
+    if (currentSnapshot > 0) {
+      continue;
+    }
+
+    const employee = getEmployeeObject(record.employees);
+    const currentWage = Number(employee?.hourly_wage || 0);
+
+    if (currentWage <= 0) {
+      continue;
+    }
+
+    const existing = groups.get(record.employee_id);
+
+    if (existing) {
+      existing.ids.push(record.id);
+    } else {
+      groups.set(record.employee_id, {
+        wage: currentWage,
+        ids: [record.id],
+      });
+    }
+  }
+
+  for (const [employeeId, group] of groups) {
+    // Supabase/PostgREST의 IN 조건이 너무 길어지지 않도록 나눠서 저장합니다.
+    const chunkSize = 500;
+
+    for (let i = 0; i < group.ids.length; i += chunkSize) {
+      const ids = group.ids.slice(i, i + chunkSize);
+
+      const { error } = await supabase
+        .from("attendance_records")
+        .update({ hourly_wage_snapshot: group.wage })
+        .in("id", ids)
+        .is("hourly_wage_snapshot", null);
+
+      if (error) {
+        return error;
+      }
+    }
+
+    // 이번 요청에서 바로 스냅샷 값을 사용하도록 메모리 데이터도 동기화합니다.
+    for (const record of records) {
+      if (
+        record.employee_id === employeeId &&
+        Number(record.hourly_wage_snapshot || 0) <= 0
+      ) {
+        record.hourly_wage_snapshot = group.wage;
+      }
+    }
+  }
+
+  return null;
 }
 
 function pairSessions(items: AttendanceRecord[]) {
@@ -266,6 +335,24 @@ export async function POST(request: Request) {
         const employee = getEmployeeObject(r.employees);
         return employee?.name?.includes(keyword);
       });
+    }
+
+    // 구버전 기록 중 hourly_wage_snapshot이 비어 있으면
+    // 현재 표시 중인 시급을 해당 출퇴근 기록에 한 번만 고정합니다.
+    // 직원관리에서 시급을 바꾸기 전 이 API를 조회한 기록은 이후에도 과거 시급이 유지됩니다.
+    const snapshotFreezeError = await freezeMissingWageSnapshots(
+      supabase,
+      filtered
+    );
+
+    if (snapshotFreezeError) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: `과거 시급 고정 실패: ${snapshotFreezeError.message}`,
+        },
+        { status: 500 }
+      );
     }
 
     const grouped: Record<string, AttendanceRecord[]> = {};
