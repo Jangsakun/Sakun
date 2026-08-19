@@ -12,6 +12,7 @@ type AdminRecord = {
   checked_at: string;
   created_at: string;
   employee_id: number;
+  hourly_wage_snapshot?: number | null;
   employees: {
     id: number;
     name: string;
@@ -474,7 +475,16 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
       }
 
       const employee = employeeMap.get(employeeId);
-      const hourlyWage = employee?.hourly_wage || 0;
+
+      // 과거 출퇴근 기록은 당시 저장된 시급 스냅샷을 우선 사용합니다.
+      // 스냅샷이 없는 구버전 기록만 현재 직원 시급을 임시 fallback으로 사용합니다.
+      const snapshotWage =
+        sorted
+          .map((item) => Number(item.hourly_wage_snapshot || 0))
+          .find((wage) => wage > 0) || 0;
+
+      const hourlyWage =
+        snapshotWage > 0 ? snapshotWage : employee?.hourly_wage || 0;
 
       let grossPay: number | null = null;
       let netPay: number | null = null;
@@ -741,7 +751,8 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
       }
 
       alert("시급 수정 완료");
-      fetchEmployees();
+      await fetchEmployees();
+      await fetchRecords();
     } catch (error) {
       console.error(error);
       alert("시급 수정 중 오류 발생");

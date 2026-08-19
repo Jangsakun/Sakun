@@ -304,9 +304,6 @@ export async function POST(request: Request) {
 
     const workplaceName = getEmployeeWorkplaceName(employee);
 
-    const hourlyWage = Number(employee.hourly_wage || 0);
-    const hourlyWageSnapshot = hourlyWage > 0 ? hourlyWage : 10320;
-
     const checkoutRule = isCheckoutAllowedAtKst(checkedDate, workplaceName);
     if (!checkoutRule.allowed) {
       return NextResponse.json(
@@ -316,6 +313,37 @@ export async function POST(request: Request) {
     }
 
     const { startUtc, endUtc } = getKstDayRangeFromIso(checkedAt);
+
+    // 같은 날 출근 기록의 시급 스냅샷을 우선 사용합니다.
+    // 이렇게 하면 출근/퇴근 사이에 현재 시급이 바뀌어도 하루의 시급이 서로 달라지지 않습니다.
+    const { data: checkInRecords, error: checkInError } = await supabase
+      .from("attendance_records")
+      .select("id, hourly_wage_snapshot, checked_at")
+      .eq("employee_id", employee.id)
+      .eq("record_type", "check_in")
+      .gte("checked_at", startUtc)
+      .lte("checked_at", endUtc)
+      .order("checked_at", { ascending: true })
+      .limit(1);
+
+    if (checkInError) {
+      return NextResponse.json(
+        { success: false, message: `출근 기록 조회 실패: ${checkInError.message}` },
+        { status: 500 }
+      );
+    }
+
+    const currentHourlyWage = Number(employee.hourly_wage || 0);
+    const checkInSnapshot = Number(
+      checkInRecords?.[0]?.hourly_wage_snapshot || 0
+    );
+
+    const hourlyWageSnapshot =
+      checkInSnapshot > 0
+        ? checkInSnapshot
+        : currentHourlyWage > 0
+        ? currentHourlyWage
+        : 10320;
 
     const { data: existing } = await supabase
       .from("attendance_records")

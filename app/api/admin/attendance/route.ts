@@ -3,6 +3,87 @@ import { createClient } from "@supabase/supabase-js";
 
 const ALLOWED_WORKPLACES = ["장사꾼", "헤모즈", "깨소금", "로엔티크"];
 
+function getKstDateKey(date = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+/**
+ * 관리자 수동 출퇴근 추가 시 사용할 당시 시급을 결정합니다.
+ *
+ * 우선순위
+ * 1) 같은 날짜에 이미 저장된 hourly_wage_snapshot
+ * 2) 과거 날짜라면 해당 날짜 이전 가장 최근 snapshot
+ * 3) 오늘/미래 날짜 또는 과거 snapshot이 전혀 없으면 현재 employees.hourly_wage
+ *
+ * ※ 완전한 "시급 변경 이력" 테이블이 없는 현재 구조에서,
+ *    과거 수동 추가가 현재 시급으로 잘못 저장되는 문제를 최대한 방지합니다.
+ */
+async function resolveManualHourlyWageSnapshot(
+  supabase: any,
+  employeeId: number,
+  targetDate: string,
+  currentHourlyWage: number
+) {
+  const dayStart = new Date(`${targetDate}T00:00:00+09:00`).toISOString();
+  const dayEnd = new Date(`${targetDate}T23:59:59.999+09:00`).toISOString();
+
+  // 1. 같은 날짜에 이미 스냅샷이 있으면 그 값을 사용
+  const { data: sameDayRows, error: sameDayError } = await supabase
+    .from("attendance_records")
+    .select("hourly_wage_snapshot, checked_at")
+    .eq("employee_id", employeeId)
+    .gte("checked_at", dayStart)
+    .lte("checked_at", dayEnd)
+    .not("hourly_wage_snapshot", "is", null)
+    .order("checked_at", { ascending: false })
+    .limit(1);
+
+  if (sameDayError) {
+    throw new Error(`같은 날짜 시급 조회 실패: ${sameDayError.message}`);
+  }
+
+  const sameDayWage = Number(sameDayRows?.[0]?.hourly_wage_snapshot || 0);
+
+  if (sameDayWage > 0) {
+    return sameDayWage;
+  }
+
+  const todayKst = getKstDateKey();
+
+  // 오늘 이후 날짜는 현재 시급을 사용
+  if (targetDate >= todayKst) {
+    return currentHourlyWage > 0 ? currentHourlyWage : 10320;
+  }
+
+  // 2. 과거 날짜라면 그 날짜까지의 가장 최근 시급 스냅샷을 사용
+  const { data: previousRows, error: previousError } = await supabase
+    .from("attendance_records")
+    .select("hourly_wage_snapshot, checked_at")
+    .eq("employee_id", employeeId)
+    .lte("checked_at", dayEnd)
+    .not("hourly_wage_snapshot", "is", null)
+    .order("checked_at", { ascending: false })
+    .limit(1);
+
+  if (previousError) {
+    throw new Error(`과거 시급 조회 실패: ${previousError.message}`);
+  }
+
+  const previousWage = Number(previousRows?.[0]?.hourly_wage_snapshot || 0);
+
+  if (previousWage > 0) {
+    return previousWage;
+  }
+
+  // 3. 과거 스냅샷 자체가 없는 아주 오래된 데이터는 현재 시급으로 fallback
+  return currentHourlyWage > 0 ? currentHourlyWage : 10320;
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -261,14 +342,19 @@ export async function PUT(request: Request) {
 
     const employee = employees[0];
 
-    const hourlyWage = Number(
+    const currentHourlyWage = Number(
       employee.hourly_wage || 0
     );
 
+    // 수동으로 과거 날짜를 추가할 때 현재 시급을 무조건 쓰지 않고,
+    // 해당 날짜에 맞는 기존 시급 스냅샷을 찾아 사용합니다.
     const hourlyWageSnapshot =
-      Number.isFinite(hourlyWage) && hourlyWage > 0
-        ? hourlyWage
-        : 10320;
+      await resolveManualHourlyWageSnapshot(
+        supabase,
+        employee.id,
+        String(date),
+        currentHourlyWage
+      );
 
     const rows: {
       employee_id: number;
@@ -316,6 +402,7 @@ export async function PUT(request: Request) {
     return NextResponse.json({
       success: true,
       message: "출퇴근 기록이 추가되었습니다.",
+      hourlyWageSnapshot,
     });
   } catch (error) {
     return NextResponse.json(
