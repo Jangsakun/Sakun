@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-type WorkplaceName = "장사꾼" | "헤모즈" | "깨소금";
+type WorkplaceName = "장사꾼" | "헤모즈" | "깨소금" | "로엔티크";
 type AllowanceStatus = "대상" | "비대상" | "검토필요";
 
 type Employee = {
@@ -126,7 +126,7 @@ export default function AdminWeeklyAllowancePage() {
         </header>
 
         <section className="mb-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="grid gap-4 lg:grid-cols-[300px_minmax(260px,1fr)_220px_360px] lg:items-end">
+          <div className="grid gap-4 lg:grid-cols-[420px_minmax(260px,1fr)_220px_360px] lg:items-end">
             <div>
               <label className="mb-2 block text-sm font-black text-slate-800">
                 근무지
@@ -167,6 +167,18 @@ export default function AdminWeeklyAllowancePage() {
                   }
                 >
                   깨소금
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedWorkplace("로엔티크")}
+                  className={
+                    selectedWorkplace === "로엔티크"
+                      ? "h-11 flex-1 whitespace-nowrap rounded-xl bg-slate-950 px-4 text-sm font-black text-white shadow"
+                      : "h-11 flex-1 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+                  }
+                >
+                  로엔티크
                 </button>
               </div>
             </div>
@@ -474,6 +486,8 @@ function EmployeeAllowanceRow({
                 ? "inline-flex items-center whitespace-nowrap rounded-full bg-pink-100 px-3 py-1 text-xs font-bold text-pink-700"
                 : workplaceName === "깨소금"
                 ? "inline-flex items-center whitespace-nowrap rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700"
+                : workplaceName === "로엔티크"
+                ? "inline-flex items-center whitespace-nowrap rounded-full bg-violet-100 px-3 py-1 text-xs font-bold text-violet-700"
                 : "inline-flex items-center whitespace-nowrap rounded-full bg-sky-100 px-3 py-1 text-xs font-bold text-sky-700"
             }
           >
