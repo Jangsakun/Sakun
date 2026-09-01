@@ -121,6 +121,7 @@ type ReconnectCodeInfo = {
 
 type WorkplaceName = "장사꾼" | "헤모즈" | "깨소금" | "로엔티크";
 type WorkplaceFilter = "전체" | WorkplaceName;
+type StatusFilter = "전체" | "활성" | "비활성";
 
 const JANGSAGGUN_SCHEDULE_GROUP_OPTIONS = [
   { value: "", label: "선택안함" },
@@ -163,6 +164,19 @@ function isValidScheduleGroupForWorkplace(
 }
 
 
+// 직원 상태 필터. is_active 는 employees 테이블의 boolean 컬럼입니다.
+// 목록의 상태 뱃지(employee.is_active ? "활성" : "비활성")와 같은 truthy 기준으로 판정합니다.
+function matchesStatusFilter(
+  isActive: boolean | undefined,
+  statusFilter: StatusFilter
+) {
+  if (statusFilter === "전체") return true;
+
+  const isActiveEmployee = Boolean(isActive);
+
+  return statusFilter === "활성" ? isActiveEmployee : !isActiveEmployee;
+}
+
 export default function AdminPage() {
   const router = useRouter();
 
@@ -172,6 +186,8 @@ export default function AdminPage() {
 
   const [selectedWorkplace, setSelectedWorkplace] =
     useState<WorkplaceFilter>("전체");
+
+  const [selectedStatus, setSelectedStatus] = useState<StatusFilter>("전체");
 
   const [startDate, setStartDate] = useState(() => {
     const today = new Date();
@@ -407,9 +423,14 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
       const matchesWorkplace =
         selectedWorkplace === "전체" || employeeWorkplace === selectedWorkplace;
 
-      return matchesName && matchesWorkplace;
+      const matchesStatus = matchesStatusFilter(
+        employee.is_active,
+        selectedStatus
+      );
+
+      return matchesName && matchesWorkplace && matchesStatus;
     });
-  }, [employees, employeeSearch, selectedWorkplace]);
+  }, [employees, employeeSearch, selectedWorkplace, selectedStatus]);
 
   const groupedAttendanceRows = useMemo(() => {
     const grouped = new Map<string, AdminRecord[]>();
@@ -555,7 +576,12 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
     const matchesWorkplace =
       selectedWorkplace === "전체" || employeeWorkplace === selectedWorkplace;
 
-    return employee.is_active && matchesWorkplace;
+    const matchesStatus = matchesStatusFilter(
+      employee.is_active,
+      selectedStatus
+    );
+
+    return employee.is_active && matchesWorkplace && matchesStatus;
   }).length;
 
   const incompleteAttendanceCount = groupedAttendanceRows.filter(
@@ -1868,6 +1894,21 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                   <option value="헤모즈">헤모즈</option>
                   <option value="깨소금">깨소금</option>
                   <option value="로엔티크">로엔티크</option>
+                </select>
+              </div>
+
+              <div style={fieldGroupStyle}>
+                <label style={labelStyle}>상태 필터</label>
+                <select
+                  value={selectedStatus}
+                  onChange={(e) =>
+                    setSelectedStatus(e.target.value as StatusFilter)
+                  }
+                  style={inputStyle}
+                >
+                  <option value="전체">전체</option>
+                  <option value="활성">활성</option>
+                  <option value="비활성">비활성</option>
                 </select>
               </div>
 
