@@ -3,6 +3,7 @@
 import { CSSProperties, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import ScheduleTab from "./components/ScheduleTab";
+import DbSizeTab from "./components/DbSizeTab";
 
 type AdminRecord = {
   id: number;
@@ -166,7 +167,7 @@ export default function AdminPage() {
   const router = useRouter();
 
   const [tab, setTab] = useState<
-    "attendance" | "employees" | "payroll" | "contracts" | "schedule"
+    "attendance" | "employees" | "payroll" | "contracts" | "schedule" | "dbSize"
   >("attendance");
 
   const [selectedWorkplace, setSelectedWorkplace] =
@@ -1318,6 +1319,17 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
             }}
           >
             스케줄 조회
+          </button>
+
+          <button
+            onClick={() => setTab("dbSize")}
+            style={{
+              ...tabButtonStyle,
+              backgroundColor: tab === "dbSize" ? "#111827" : "#f3f4f6",
+              color: tab === "dbSize" ? "#ffffff" : "#111827",
+            }}
+          >
+            DB 용량
           </button>
 
           <button
@@ -2789,6 +2801,22 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
             </div>
 
             <ScheduleTab />
+          </section>
+        )}
+
+        {tab === "dbSize" && (
+          <section style={cardStyle}>
+            <div style={sectionHeaderStyle}>
+              <div>
+                <h2 style={sectionTitleStyle}>DB 용량 모니터링</h2>
+                <p style={sectionDescriptionStyle}>
+                  Supabase 데이터베이스 사용량과 일별 증가 추세, 한도 도달 예상
+                  시점을 확인할 수 있습니다.
+                </p>
+              </div>
+            </div>
+
+            <DbSizeTab />
           </section>
         )}
 
