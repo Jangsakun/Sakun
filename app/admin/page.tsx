@@ -66,6 +66,7 @@ type GroupedAttendanceRow = {
   key: string;
   employeeId: number;
   employeeName: string;
+  residentPrefix: string;
   workplaceName: string;
   date: string;
   checkIn: string | null;
@@ -538,6 +539,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
         key,
         employeeId,
         employeeName,
+        residentPrefix: getResidentPrefix(employee?.resident_number_masked),
         workplaceName,
         date,
         checkIn: checkInRecord?.checked_at || null,
@@ -1692,6 +1694,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                   <thead>
                     <tr>
                       <th style={thStyle}>이름</th>
+                      <th style={thStyle}>주민번호</th>
                       <th style={thStyle}>근무지</th>
                       <th style={thStyle}>날짜</th>
                       <th style={thStyle}>출근</th>
@@ -1714,6 +1717,8 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                           <td style={tdStyle}>
                             <span style={nameTextStyle}>{row.employeeName}</span>
                           </td>
+
+                          <td style={tdStyle}>{row.residentPrefix || "-"}</td>
 
                           <td style={tdStyle}>
                             <span
@@ -2883,6 +2888,14 @@ function SummaryCard({
       <p style={summaryHelperStyle}>{helper}</p>
     </div>
   );
+}
+
+// 동명이인 구분용. 직원 목록 API 가 이미 내려주는
+// resident_number_masked("710906-2******") 에서 앞 6자리만 사용합니다.
+function getResidentPrefix(residentNumberMasked?: string | null) {
+  const digits = String(residentNumberMasked || "").replace(/[^0-9]/g, "");
+
+  return digits.length >= 6 ? digits.slice(0, 6) : "";
 }
 
 function toSeoulDateKey(value: string) {
