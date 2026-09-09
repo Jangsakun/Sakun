@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { logAttendanceChanges } from "@/app/lib/attendanceAudit";
 
 const ALLOWED_WORKPLACES = ["장사꾼", "헤모즈", "깨소금", "로엔티크"];
 
@@ -385,9 +386,10 @@ export async function PUT(request: Request) {
       });
     }
 
-    const { error } = await supabase
+    const { data: insertedRows, error } = await supabase
       .from("attendance_records")
-      .insert(rows);
+      .insert(rows)
+      .select("id, employee_id, record_type, checked_at");
 
     if (error) {
       return NextResponse.json(
@@ -398,6 +400,38 @@ export async function PUT(request: Request) {
         { status: 500 }
       );
     }
+
+    if (!insertedRows || insertedRows.length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "출퇴근 기록이 추가되지 않았습니다. 다시 시도해주세요.",
+        },
+        { status: 500 }
+      );
+    }
+
+    // 감사 기록은 실패해도 요청을 실패시키지 않습니다(추가는 이미 성공).
+    await logAttendanceChanges(
+      supabase,
+      request,
+      (
+        insertedRows as {
+          id: number;
+          employee_id: number;
+          record_type: string;
+          checked_at: string;
+        }[]
+      ).map((row) => ({
+        recordId: row.id,
+        employeeId: row.employee_id,
+        action: "insert" as const,
+        field: "checked_at",
+        oldValue: null,
+        newValue: row.checked_at,
+        source: "admin-manual-add" as const,
+      }))
+    );
 
     return NextResponse.json({
       success: true,
