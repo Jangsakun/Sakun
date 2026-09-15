@@ -4,6 +4,7 @@ import { CSSProperties, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import ScheduleTab from "./components/ScheduleTab";
 import DbSizeTab from "./components/DbSizeTab";
+import { cell, downloadXlsx, textCell } from "@/app/lib/excelExport";
 
 type AdminRecord = {
   id: number;
@@ -994,7 +995,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
     }
   };
 
-  const downloadAttendanceCsv = () => {
+  const downloadAttendanceExcel = () => {
     if (groupedAttendanceRows.length === 0) {
       alert("다운로드할 출퇴근 기록이 없습니다.");
       return;
@@ -1026,31 +1027,18 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
       row.statusText,
     ]);
 
-    const csvContent = [headers, ...rows]
-      .map((line) =>
-        line
-          .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
-          .join(",")
-      )
-      .join("\n");
-
-    const blob = new Blob(["\ufeff" + csvContent], {
-      type: "text/csv;charset=utf-8;",
+    // \uc774 \ud45c\uc5d0\ub294 \uc55e\uc790\ub9ac 0 \uc774 \uc788\uc744 \uc218 \uc788\ub294 \uceec\ub7fc(\uc8fc\ubbfc\ubc88\ud638/\uacc4\uc88c\ubc88\ud638/\uc804\ud654\ubc88\ud638)\uc774 \uc5c6\uc2b5\ub2c8\ub2e4.
+    downloadXlsx({
+      fileName: `attendance_${startDate}_${endDate}.xlsx`,
+      columns: headers.map((header) => ({ header })),
+      rows: rows.map((line) => line.map((value) => cell(value))),
+    }).catch((error) => {
+      console.error("\ucd9c\ud1f4\uadfc \uc5d1\uc140 \ub2e4\uc6b4\ub85c\ub4dc \uc2e4\ud328:", error);
+      alert("\uc5d1\uc140 \ud30c\uc77c\uc744 \ub9cc\ub4dc\ub294 \uc911 \uc624\ub958\uac00 \ubc1c\uc0dd\ud588\uc2b5\ub2c8\ub2e4.");
     });
-
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    const fileName = `attendance_${startDate}_${endDate}.csv`;
-
-    link.href = url;
-    link.setAttribute("download", fileName);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
   };
 
-  const downloadPayrollCsv = () => {
+  const downloadPayrollExcel = () => {
     if (filteredPayrollRows.length === 0) {
       alert("다운로드할 급여 데이터가 없습니다.");
       return;
@@ -1077,48 +1065,35 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
       const workplaceName = row.workplaceName || employee?.workplace_name || "장사꾼";
 
       return [
-        row.employeeName,
-        workplaceName,
-        employee?.resident_number || "-",
-        employee?.bank_name || "-",
-        employee?.account_number || "-",
-        row.weekStart,
-        row.weekEnd,
-        formatHoursToText(row.totalHours),
-        String(row.hourlyWage),
-        String(Math.round(row.basePay)),
-        String(Math.round(row.weeklyAllowance)),
-        String(Math.round(row.grossPay)),
-        String(Math.round(row.netPay)),
+        cell(row.employeeName),
+        cell(workplaceName),
+        // \uc8fc\ubbfc\ubc88\ud638\u00b7\uacc4\uc88c\ubc88\ud638\ub294 \uc55e\uc790\ub9ac 0 \uc774 \uc0ac\ub77c\uc9c0\uc9c0 \uc54a\ub3c4\ub85d \ud14d\uc2a4\ud2b8 \uc140\ub85c \uace0\uc815\ud569\ub2c8\ub2e4.
+        textCell(employee?.resident_number || "-"),
+        cell(employee?.bank_name || "-"),
+        textCell(employee?.account_number || "-"),
+        cell(row.weekStart),
+        cell(row.weekEnd),
+        cell(formatHoursToText(row.totalHours)),
+        cell(row.hourlyWage),
+        cell(Math.round(row.basePay)),
+        cell(Math.round(row.weeklyAllowance)),
+        cell(Math.round(row.grossPay)),
+        cell(Math.round(row.netPay)),
       ];
     });
 
-    const csvContent = [headers, ...rows]
-      .map((line) =>
-        line
-          .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
-          .join(",")
-      )
-      .join("\n");
-
-    const blob = new Blob(["\ufeff" + csvContent], {
-      type: "text/csv;charset=utf-8;",
+    downloadXlsx({
+      fileName: `payroll_${startDate}_${endDate}.xlsx`,
+      columns: headers.map((header) => ({ header })),
+      rows,
+    }).catch((error) => {
+      console.error("\uae09\uc5ec \uc5d1\uc140 \ub2e4\uc6b4\ub85c\ub4dc \uc2e4\ud328:", error);
+      alert("\uc5d1\uc140 \ud30c\uc77c\uc744 \ub9cc\ub4dc\ub294 \uc911 \uc624\ub958\uac00 \ubc1c\uc0dd\ud588\uc2b5\ub2c8\ub2e4.");
     });
-
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    const fileName = `payroll_${startDate}_${endDate}.csv`;
-
-    link.href = url;
-    link.setAttribute("download", fileName);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
   };
 
 
-  const downloadPayrollSummaryCsv = () => {
+  const downloadPayrollSummaryExcel = () => {
     if (filteredPayrollRows.length === 0) {
       alert("다운로드할 급여 데이터가 없습니다.");
       return;
@@ -1191,42 +1166,29 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
     ];
 
     const rows = Array.from(grouped.values()).map((row) => [
-      row.employeeName,
-      row.workplaceName,
-      row.residentNumber,
-      row.bankName,
-      row.accountNumber,
-      row.period,
-      formatHoursToText(row.totalHours),
-      String(row.hourlyWage),
-      String(Math.round(row.basePay)),
-      String(Math.round(row.weeklyAllowance)),
-      String(Math.round(row.grossPay)),
-      String(Math.round(row.netPay)),
+      cell(row.employeeName),
+      cell(row.workplaceName),
+      // \uc8fc\ubbfc\ubc88\ud638\u00b7\uacc4\uc88c\ubc88\ud638\ub294 \uc55e\uc790\ub9ac 0 \uc774 \uc0ac\ub77c\uc9c0\uc9c0 \uc54a\ub3c4\ub85d \ud14d\uc2a4\ud2b8 \uc140\ub85c \uace0\uc815\ud569\ub2c8\ub2e4.
+      textCell(row.residentNumber),
+      cell(row.bankName),
+      textCell(row.accountNumber),
+      cell(row.period),
+      cell(formatHoursToText(row.totalHours)),
+      cell(row.hourlyWage),
+      cell(Math.round(row.basePay)),
+      cell(Math.round(row.weeklyAllowance)),
+      cell(Math.round(row.grossPay)),
+      cell(Math.round(row.netPay)),
     ]);
 
-    const csvContent = [headers, ...rows]
-      .map((line) =>
-        line
-          .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
-          .join(",")
-      )
-      .join("\n");
-
-    const blob = new Blob(["\ufeff" + csvContent], {
-      type: "text/csv;charset=utf-8;",
+    downloadXlsx({
+      fileName: `payroll_summary_${startDate}_${endDate}.xlsx`,
+      columns: headers.map((header) => ({ header })),
+      rows,
+    }).catch((error) => {
+      console.error("\uae09\uc5ec \uc694\uc57d \uc5d1\uc140 \ub2e4\uc6b4\ub85c\ub4dc \uc2e4\ud328:", error);
+      alert("\uc5d1\uc140 \ud30c\uc77c\uc744 \ub9cc\ub4dc\ub294 \uc911 \uc624\ub958\uac00 \ubc1c\uc0dd\ud588\uc2b5\ub2c8\ub2e4.");
     });
-
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    const fileName = `payroll_summary_${startDate}_${endDate}.csv`;
-
-    link.href = url;
-    link.setAttribute("download", fileName);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
   };
 
   return (
@@ -1384,7 +1346,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
 
       <div style={sectionHeaderButtonWrapStyle}>
         <button
-          onClick={downloadAttendanceCsv}
+          onClick={downloadAttendanceExcel}
           style={primaryButtonStyle}
         >
           엑셀 다운로드
@@ -2363,12 +2325,12 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
               </div>
 
               <div style={sectionHeaderButtonWrapStyle}>
-                <button onClick={downloadPayrollCsv} style={primaryButtonStyle}>
+                <button onClick={downloadPayrollExcel} style={primaryButtonStyle}>
                   상세 엑셀 다운로드
                 </button>
 
                 <button
-                  onClick={downloadPayrollSummaryCsv}
+                  onClick={downloadPayrollSummaryExcel}
                   style={primaryButtonStyle}
                 >
                   직원별 합산 다운로드
@@ -2898,6 +2860,15 @@ function getResidentPrefix(residentNumberMasked?: string | null) {
   return digits.length >= 6 ? digits.slice(0, 6) : "";
 }
 
+function createSeoulDateTime(dateKey: string, hour: number, minute: number) {
+  return new Date(
+    `${dateKey}T${String(hour).padStart(2, "0")}:${String(minute).padStart(
+      2,
+      "0"
+    )}:00+09:00`
+  );
+}
+
 function toSeoulDateKey(value: string) {
   const date = new Date(value);
   const formatter = new Intl.DateTimeFormat("en-CA", {
@@ -2908,81 +2879,6 @@ function toSeoulDateKey(value: string) {
   });
 
   return formatter.format(date);
-}
-
-function createSeoulDateTime(dateKey: string, hour: number, minute: number) {
-  return new Date(
-    `${dateKey}T${String(hour).padStart(2, "0")}:${String(minute).padStart(
-      2,
-      "0"
-    )}:00+09:00`
-  );
-}
-
-function normalizeAttendanceCheckIn(value: string) {
-  const source = new Date(value);
-  const dateKey = toSeoulDateKey(value);
-
-  const hourMinute = source.toLocaleTimeString("en-GB", {
-    timeZone: "Asia/Seoul",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-
-  const [hourText, minuteText] = hourMinute.split(":");
-  const minutes = Number(hourText) * 60 + Number(minuteText);
-
-  const start0900Window = 8 * 60 + 45;
-  const end0910Window = 9 * 60 + 10;
-  const start0911Window = 9 * 60 + 11;
-  const end0930Window = 9 * 60 + 30;
-  const start1800Window = 17 * 60 + 50;
-  const end1800Window = 18 * 60 + 10;
-
-  if (minutes >= start0900Window && minutes <= end0910Window) {
-    return createSeoulDateTime(dateKey, 9, 0);
-  }
-
-  if (minutes >= start0911Window && minutes <= end0930Window) {
-    return createSeoulDateTime(dateKey, 9, 30);
-  }
-
-  if (minutes >= start1800Window && minutes <= end1800Window) {
-    return createSeoulDateTime(dateKey, 18, 0);
-  }
-
-  return source;
-}
-
-function normalizeAttendanceCheckOut(value: string) {
-  const source = new Date(value);
-  const dateKey = toSeoulDateKey(value);
-
-  const hourMinute = source.toLocaleTimeString("en-GB", {
-    timeZone: "Asia/Seoul",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-
-  const [hourText, minuteText] = hourMinute.split(":");
-  const hour = Number(hourText);
-  const minute = Number(minuteText);
-
-  if (hour >= 17) {
-    if (minute <= 10) {
-      return createSeoulDateTime(dateKey, hour, 0);
-    }
-
-    if (minute <= 40) {
-      return createSeoulDateTime(dateKey, hour, 30);
-    }
-
-    return createSeoulDateTime(dateKey, hour + 1, 0);
-  }
-
-  return source;
 }
 
 function formatTime(value: string | null) {
