@@ -1,18 +1,18 @@
 # 근태 SaaS — 미처리 작업 목록
 
 세션이 바뀌어도 남아야 하는 항목만 적는다. 처리하면 이 파일에서 지운다.
-최종 갱신: 2026-09-09
+최종 갱신: 2026-09-15
 
 ---
 
-## ⚠️ 지금 당장 해야 하는 것
+## 마이그레이션 실행 현황
 
-### 마이그레이션 실행 대기
-`supabase/migrations/20260909100000_attendance_record_audit.sql` 을
-Supabase SQL Editor(근태 SaaS 프로젝트 `weaydriyldnfuotzigzh`)에서 실행해야 한다.
+| 파일 | 상태 |
+|---|---|
+| `20260828100000_db_size_monitor.sql` | ✅ 2026-09-15 실행 완료 |
+| `20260909100000_attendance_record_audit.sql` | ✅ 2026-09-09 실행 완료 |
 
-실행 전까지는 감사 기록이 남지 않는다. 단 코드는 감사 실패를 비치명적으로 처리하므로
-출퇴근 수정/추가/삭제 기능 자체는 정상 동작한다(실측 확인).
+둘 다 반영돼 관리자 화면 "DB 용량" 탭과 출퇴근 수정 이력이 정상 동작한다(실측 확인).
 
 ---
 
@@ -62,13 +62,34 @@ Supabase SQL Editor(근태 SaaS 프로젝트 `weaydriyldnfuotzigzh`)에서 실�
 넓은 기간 조회 시 출퇴근 기록 표와 급여 금액이 달라 보이는 원인.
 `app/api/admin/payroll/route.ts:288-327` 은 이미 올바르게 페이지네이션돼 있으니 같은 방식으로.
 
-### 6. Supabase DB 용량 SQL 미실행
-`supabase/migrations/20260828100000_db_size_monitor.sql` 미실행 상태.
-실행 전까지 관리자 화면 "DB 용량" 탭은 안내 메시지만 표시한다.
+### 6. ~~Vercel 크론 정리~~ — 2026-09-15 완료
+pg_cron 잡 `record-db-size-daily` 등록 확인 후 `vercel.json` 의 `crons` 를 제거했다.
+(`/api/cron/db-size-snapshot` 라우트는 수동·백업용으로 유지)
 
-### 7. Vercel 크론이 매일 실패
-`CRON_SECRET` 미설정으로 `/api/cron/db-size-snapshot` 이 매일 500을 반환한다.
-pg_cron(위 6번 SQL에 포함)을 쓰면 `vercel.json` 의 `crons` 항목을 지우는 게 맞다.
+### 7. 응답 속도 — Vercel 함수 리전과 Supabase 리전 불일치
+2026-09-15 실측. 원인은 번들도 DB 도 아니고 **서버 위치**였다.
+
+```
+X-Vercel-Id: icn1::iad1::...     엣지는 서울(icn1), 함수는 미국 버지니아(iad1)
+Supabase                          ap-northeast-1 (도쿄)
+```
+
+| 구간 | 실측 |
+|---|---|
+| 내 PC → Vercel (DB 미사용) | 0.16초 |
+| 내 PC → Supabase 직접 | 0.10초 |
+| Supabase 쿼리 자체 (1000행 + 조인) | 0.047초 |
+| **Vercel API (Supabase 쿼리 1회)** | **1.03초** ← 차액 0.87초가 태평양 왕복 |
+
+그래서 급여 API 가 느렸다: 전체기간 9,291행 = 1000행씩 10페이지를
+`while` 루프로 **순차** 요청(`app/api/admin/payroll/route.ts`) → 11회 × 0.85초 ≈ 9.4초 (실측 9.62초).
+
+→ `vercel.json` 에 `"regions": ["icn1"]` 추가함. Hobby 플랜은 단일 리전만 가능.
+   적용 여부는 배포 후 `X-Vercel-Id` 의 두 번째 값으로 확인할 것.
+   안 먹히면 Vercel Dashboard → Project Settings → Functions → Function Region 에서 변경.
+
+참고: `freezeMissingWageSnapshots` 의 UPDATE 는 병목이 아니다.
+null 스냅샷이 9,292행 중 1행뿐이라 사실상 no-op.
 
 ---
 
