@@ -1,6 +1,27 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+/** PostgREST 한 번에 받을 수 있는 최대 행 수. */
+const PAGE_SIZE = 1000;
+
+/** 폭주 방지 상한. 10만 행이면 어떤 조회 기간이든 충분합니다. */
+const MAX_PAGES = 100;
+
+const ATTENDANCE_SELECT = `
+  id,
+  record_type,
+  checked_at,
+  employee_id,
+  hourly_wage_snapshot,
+  employees (
+    id,
+    name,
+    hourly_wage,
+    weekly_allowance_status,
+    workplace_name
+  )
+`;
+
 type EmployeeNested =
   | {
       id: number;
@@ -281,50 +302,57 @@ export async function POST(request: Request) {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    const allRecords: AttendanceRecord[] = [];
-    const pageSize = 1000;
-    let from = 0;
+    const startUtc = `${startDate}T00:00:00+09:00`;
+    const endUtc = `${endDate}T23:59:59.999+09:00`;
 
-    while (true) {
-      const to = from + pageSize - 1;
+    // 총 건수를 먼저 받아 페이지 수를 정하고, 페이지를 동시에 요청합니다.
+    // 순차 while 루프였을 때는 왕복 지연이 페이지 수만큼 곱해졌습니다
+    // (전체기간 9,291행 = 10페이지 → 조회 1회에 9.6초).
+    const { count, error: countError } = await supabase
+      .from("attendance_records")
+      .select("id", { count: "exact", head: true })
+      .gte("checked_at", startUtc)
+      .lte("checked_at", endUtc);
 
-      const { data, error } = await supabase
-        .from("attendance_records")
-        .select(`
-          id,
-          record_type,
-          checked_at,
-          employee_id,
-          hourly_wage_snapshot,
-          employees (
-            id,
-            name,
-            hourly_wage,
-            weekly_allowance_status,
-            workplace_name
-          )
-        `)
-        .gte("checked_at", `${startDate}T00:00:00+09:00`)
-        .lte("checked_at", `${endDate}T23:59:59.999+09:00`)
-        .order("checked_at", { ascending: true })
-        .range(from, to);
-
-      if (error) {
-        return NextResponse.json(
-          { success: false, message: error.message },
-          { status: 500 }
-        );
-      }
-
-      const pageRecords = (data || []) as AttendanceRecord[];
-      allRecords.push(...pageRecords);
-
-      if (pageRecords.length < pageSize) {
-        break;
-      }
-
-      from += pageSize;
+    if (countError) {
+      return NextResponse.json(
+        { success: false, message: countError.message },
+        { status: 500 }
+      );
     }
+
+    const totalCount = count ?? 0;
+    const pageCount = Math.min(MAX_PAGES, Math.ceil(totalCount / PAGE_SIZE));
+
+    const pages = await Promise.all(
+      Array.from({ length: pageCount }, (_, index) =>
+        supabase
+          .from("attendance_records")
+          .select(ATTENDANCE_SELECT)
+          .gte("checked_at", startUtc)
+          .lte("checked_at", endUtc)
+          .order("checked_at", { ascending: true })
+          // ★ id 타이브레이커 필수.
+          //   checked_at 만으로 정렬하면 같은 시각 행이 많을 때
+          //   (2026-06-02 09:30:00 한 시각에만 39건) 페이지마다 순서가 달라져
+          //   경계에서 행이 중복되거나 누락됩니다.
+          .order("id", { ascending: true })
+          .range(index * PAGE_SIZE, index * PAGE_SIZE + PAGE_SIZE - 1)
+      )
+    );
+
+    const pageError = pages.find((page) => page.error)?.error;
+
+    if (pageError) {
+      return NextResponse.json(
+        { success: false, message: pageError.message },
+        { status: 500 }
+      );
+    }
+
+    const allRecords = pages.flatMap(
+      (page) => (page.data || []) as unknown as AttendanceRecord[]
+    );
 
     const safeRecords = allRecords;
     let filtered = safeRecords;
