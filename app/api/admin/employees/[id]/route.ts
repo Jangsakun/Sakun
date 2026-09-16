@@ -355,3 +355,224 @@ export async function PATCH(
     );
   }
 }
+/**
+ * 직원 삭제.
+ *
+ * ⚠️ 되돌릴 수 없습니다. 출퇴근 기록까지 함께 지웁니다.
+ *    근로기준법상 임금대장·근로계약 서류는 3년 보존 대상이라
+ *    원래는 비활성 처리를 쓰는 게 맞지만, 사용자 결정으로 완전 삭제를 지원합니다(2026-09-16).
+ *
+ * attendance_records / employee_devices 가 employees 를 FK 로 참조합니다.
+ * FK 의 ON DELETE 동작(CASCADE/RESTRICT)에 의존하지 않도록
+ * 자식 행을 명시적으로 먼저 지웁니다.
+ *
+ * ?dryRun=1 을 붙이면 아무것도 지우지 않고 삭제될 건수만 돌려줍니다.
+ * 화면에서 확인 문구에 실제 건수를 띄우는 데 씁니다.
+ */
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+
+    // 삭제는 파급이 커서 이 라우트만 관리자 쿠키를 직접 확인합니다.
+    // (미들웨어가 /api/admin 을 인증에서 제외하고 있습니다)
+    const cookieHeader = request.headers.get("cookie") || "";
+
+    if (!/(?:^|;\s*)admin_auth=ok(?:;|$)/.test(cookieHeader)) {
+      return NextResponse.json(
+        { success: false, message: "관리자 인증이 필요합니다." },
+        { status: 401 }
+      );
+    }
+
+    const employeeId = Number(id);
+
+    if (!Number.isInteger(employeeId) || employeeId <= 0) {
+      return NextResponse.json(
+        { success: false, message: "직원 id가 올바르지 않습니다." },
+        { status: 400 }
+      );
+    }
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!supabaseUrl || !serviceRoleKey) {
+      return NextResponse.json(
+        { success: false, message: "환경변수가 없습니다." },
+        { status: 500 }
+      );
+    }
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+    const { data: employee, error: findError } = await supabase
+      .from("employees")
+      .select("id, name, workplace_name, is_active")
+      .eq("id", employeeId)
+      .maybeSingle();
+
+    if (findError) {
+      return NextResponse.json(
+        { success: false, message: `직원 조회 실패: ${findError.message}` },
+        { status: 500 }
+      );
+    }
+
+    if (!employee) {
+      return NextResponse.json(
+        { success: false, message: "해당 직원을 찾을 수 없습니다." },
+        { status: 404 }
+      );
+    }
+
+    const countOf = async (table: string) => {
+      const { count } = await supabase
+        .from(table)
+        .select("*", { count: "exact", head: true })
+        .eq("employee_id", employeeId);
+
+      return count ?? 0;
+    };
+
+    const attendanceCount = await countOf("attendance_records");
+    const deviceCount = await countOf("employee_devices");
+    const scheduleCount = await countOf("weekly_schedules");
+
+    const dryRun =
+      new URL(request.url).searchParams.get("dryRun") === "1";
+
+    if (dryRun) {
+      return NextResponse.json({
+        success: true,
+        dryRun: true,
+        employee: {
+          id: employee.id,
+          name: employee.name,
+          workplaceName: employee.workplace_name,
+          isActive: employee.is_active,
+        },
+        counts: {
+          attendance: attendanceCount,
+          devices: deviceCount,
+          schedules: scheduleCount,
+        },
+      });
+    }
+
+    // 지우기 전에 출퇴근 기록 원값을 감사 테이블에 남깁니다.
+    // 삭제 자체는 되돌릴 수 없지만, 무엇이 있었는지는 남습니다.
+    if (attendanceCount > 0) {
+      const { data: doomed } = await supabase
+        .from("attendance_records")
+        .select("id, employee_id, record_type, checked_at")
+        .eq("employee_id", employeeId);
+
+      const rows = (doomed || []) as {
+        id: number;
+        employee_id: number;
+        record_type: string;
+        checked_at: string;
+      }[];
+
+      if (rows.length > 0) {
+        const forwarded = request.headers.get("x-forwarded-for");
+
+        const auditRows = rows.map((row) => ({
+          record_id: row.id,
+          employee_id: row.employee_id,
+          action: "delete",
+          field: "checked_at",
+          old_value: row.checked_at,
+          new_value: null,
+          source: "admin-employee-delete",
+          actor: "admin-ui",
+          request_ip: forwarded
+            ? forwarded.split(",")[0].trim()
+            : request.headers.get("x-real-ip"),
+          user_agent: request.headers.get("user-agent"),
+        }));
+
+        // 감사 기록 실패가 삭제를 막지는 않습니다(테이블 미생성 환경 대비).
+        const { error: auditError } = await supabase
+          .from("attendance_record_audit")
+          .insert(auditRows);
+
+        if (auditError) {
+          console.error(
+            "[employee-delete] 감사 기록 실패(삭제는 계속 진행):",
+            auditError.message
+          );
+        }
+      }
+    }
+
+    // 자식 → 부모 순서로 삭제. FK 동작에 의존하지 않습니다.
+    for (const table of [
+      "attendance_records",
+      "employee_devices",
+      "weekly_schedules",
+    ]) {
+      const { error } = await supabase
+        .from(table)
+        .delete()
+        .eq("employee_id", employeeId);
+
+      if (error) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: `${table} 삭제 실패: ${error.message}`,
+          },
+          { status: 500 }
+        );
+      }
+    }
+
+    const { data: deleted, error: deleteError } = await supabase
+      .from("employees")
+      .delete()
+      .eq("id", employeeId)
+      .select("id, name");
+
+    if (deleteError) {
+      return NextResponse.json(
+        { success: false, message: `직원 삭제 실패: ${deleteError.message}` },
+        { status: 500 }
+      );
+    }
+
+    if (!deleted || deleted.length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "직원이 삭제되지 않았습니다. 목록을 새로고침한 뒤 다시 시도해주세요.",
+        },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: `${employee.name} 직원이 삭제되었습니다.`,
+      deleted: {
+        employeeName: employee.name,
+        attendance: attendanceCount,
+        devices: deviceCount,
+        schedules: scheduleCount,
+      },
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        success: false,
+        message:
+          error instanceof Error ? error.message : "직원 삭제 오류",
+      },
+      { status: 500 }
+    );
+  }
+}

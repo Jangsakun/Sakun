@@ -800,6 +800,84 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
     }
   };
 
+  const [deletingEmployeeId, setDeletingEmployeeId] = useState<number | null>(
+    null
+  );
+
+  // 직원 완전 삭제. 출퇴근 기록까지 함께 지워지며 되돌릴 수 없습니다.
+  // 확인 문구에 실제로 지워질 건수를 띄우기 위해 먼저 dryRun 으로 건수를 받아옵니다.
+  const deleteEmployee = async (employee: Employee) => {
+    try {
+      setDeletingEmployeeId(employee.id);
+
+      const previewResponse = await fetch(
+        `/api/admin/employees/${employee.id}?dryRun=1`,
+        { method: "DELETE" }
+      );
+
+      const preview = await previewResponse.json();
+
+      if (!preview.success) {
+        alert(preview.message || "삭제 대상 확인에 실패했습니다.");
+        return;
+      }
+
+      const { attendance, devices, schedules } = preview.counts;
+
+      const ok = window.confirm(
+        [
+          `${employee.name} 직원을 완전히 삭제합니다.`,
+          ``,
+          `함께 삭제되는 데이터`,
+          `  · 출퇴근 기록 ${attendance.toLocaleString("ko-KR")}건`,
+          `  · 등록 기기 ${devices}건`,
+          `  · 주간 스케줄 ${schedules}건`,
+          ``,
+          attendance > 0
+            ? `⚠ 출퇴근 기록 ${attendance.toLocaleString(
+                "ko-KR"
+              )}건이 사라지며 이 직원의 과거 급여 내역을 다시 조회할 수 없습니다.`
+            : `출퇴근 기록은 없습니다.`,
+          `⚠ 되돌릴 수 없습니다.`,
+          ``,
+          `단순히 목록에서 숨기려면 "비활성화"를 쓰세요.`,
+          ``,
+          `정말 삭제할까요?`,
+        ].join("\n")
+      );
+
+      if (!ok) return;
+
+      const response = await fetch(`/api/admin/employees/${employee.id}`, {
+        method: "DELETE",
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        alert(data.message || "직원 삭제 실패");
+        return;
+      }
+
+      alert(
+        `${data.deleted.employeeName} 직원이 삭제되었습니다.\n` +
+          `출퇴근 기록 ${data.deleted.attendance.toLocaleString(
+            "ko-KR"
+          )}건 / 기기 ${data.deleted.devices}건 / 스케줄 ${
+            data.deleted.schedules
+          }건 함께 삭제됨`
+      );
+
+      fetchEmployees();
+      fetchRecords();
+    } catch (error) {
+      console.error("직원 삭제 실패:", error);
+      alert("직원 삭제 중 오류가 발생했습니다.");
+    } finally {
+      setDeletingEmployeeId(null);
+    }
+  };
+
   const toggleEmployeeActive = async (employee: Employee) => {
     const nextActive = !employee.is_active;
     const actionText = nextActive ? "활성화" : "비활성화";
@@ -2125,6 +2203,23 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                                 }}
                               >
                                 {employee.is_active ? "비활성화" : "활성화"}
+                              </button>
+
+                              <button
+                                onClick={() => deleteEmployee(employee)}
+                                disabled={deletingEmployeeId === employee.id}
+                                style={{
+                                  ...secondarySmallButtonStyle,
+                                  backgroundColor: "#fee2e2",
+                                  color: "#b91c1c",
+                                  borderColor: "#fecaca",
+                                  opacity:
+                                    deletingEmployeeId === employee.id ? 0.6 : 1,
+                                }}
+                              >
+                                {deletingEmployeeId === employee.id
+                                  ? "삭제중..."
+                                  : "삭제"}
                               </button>
                             </div>
                           </td>
