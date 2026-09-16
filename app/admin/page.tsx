@@ -11,6 +11,7 @@ import {
   textCell,
 } from "@/app/lib/excelExport";
 import { summarizePayrollByEmployee } from "@/app/lib/payrollSummary";
+import { getWorkplaceBadgeColor } from "@/app/lib/workplaceBadge";
 import {
   ROWS_PER_FILE,
   buildBankTransferRows,
@@ -1811,10 +1812,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                             <span
                               style={{
                                 ...badgeStyle,
-                                backgroundColor:
-                                  row.workplaceName === "헤모즈" ? "#fce7f3" : "#e0f2fe",
-                                color:
-                                  row.workplaceName === "헤모즈" ? "#be185d" : "#0369a1",
+                                ...getWorkplaceBadgeColor(row.workplaceName),
                               }}
                             >
                               {row.workplaceName}
@@ -2058,14 +2056,9 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                             <span
                               style={{
                                 ...badgeStyle,
-                                backgroundColor:
-                                  employee.workplace_name === "헤모즈"
-                                    ? "#fce7f3"
-                                    : "#e0f2fe",
-                                color:
-                                  employee.workplace_name === "헤모즈"
-                                    ? "#be185d"
-                                    : "#0369a1",
+                                ...getWorkplaceBadgeColor(
+                                  employee.workplace_name || "장사꾼"
+                                ),
                               }}
                             >
                               {employee.workplace_name || "장사꾼"}
@@ -2692,10 +2685,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                             <span
                               style={{
                                 ...badgeStyle,
-                                backgroundColor:
-                                  workplaceName === "헤모즈" ? "#fce7f3" : "#e0f2fe",
-                                color:
-                                  workplaceName === "헤모즈" ? "#be185d" : "#0369a1",
+                                ...getWorkplaceBadgeColor(workplaceName),
                               }}
                             >
                               {workplaceName}
@@ -2823,10 +2813,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                       <span
                         style={{
                           ...badgeStyle,
-                          backgroundColor:
-                            workplaceName === "헤모즈" ? "#fce7f3" : "#e0f2fe",
-                          color:
-                            workplaceName === "헤모즈" ? "#be185d" : "#0369a1",
+                          ...getWorkplaceBadgeColor(workplaceName),
                         }}
                       >
                         {workplaceName}
@@ -2934,10 +2921,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
                       <span
                         style={{
                           ...badgeStyle,
-                          backgroundColor:
-                            workplaceName === "헤모즈" ? "#fce7f3" : "#e0f2fe",
-                          color:
-                            workplaceName === "헤모즈" ? "#be185d" : "#0369a1",
+                          ...getWorkplaceBadgeColor(workplaceName),
                         }}
                       >
                         {workplaceName}

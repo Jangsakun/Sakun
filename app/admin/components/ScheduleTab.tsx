@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { getWorkplaceBadgeColor } from "@/app/lib/workplaceBadge";
+
 type ShiftType = "open" | "day" | "night";
 
 type ScheduleDay = {
@@ -1616,8 +1618,9 @@ export default function ScheduleTab() {
               height: "38px",
               padding: "0 14px",
               borderRadius: "999px",
-              background: selectedWorkplace === "헤모즈" ? "#fce7f3" : "#e0f2fe",
-              color: selectedWorkplace === "헤모즈" ? "#be185d" : "#0369a1",
+              background:
+                getWorkplaceBadgeColor(selectedWorkplace).backgroundColor,
+              color: getWorkplaceBadgeColor(selectedWorkplace).color,
               fontSize: "13px",
               fontWeight: 900,
               whiteSpace: "nowrap",
