@@ -4,7 +4,18 @@ import { CSSProperties, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import ScheduleTab from "./components/ScheduleTab";
 import DbSizeTab from "./components/DbSizeTab";
-import { cell, downloadXlsx, textCell } from "@/app/lib/excelExport";
+import {
+  cell,
+  downloadXlsx,
+  downloadXlsxNoHeader,
+  textCell,
+} from "@/app/lib/excelExport";
+import { summarizePayrollByEmployee } from "@/app/lib/payrollSummary";
+import {
+  ROWS_PER_FILE,
+  buildBankTransferRows,
+  buildTransferFileName,
+} from "@/app/lib/bankTransfer";
 
 type AdminRecord = {
   id: number;
@@ -1099,55 +1110,13 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
       return;
     }
 
-    const grouped = new Map<
-      string,
-      {
-        employeeName: string;
-        workplaceName: string;
-        residentNumber: string;
-        bankName: string;
-        accountNumber: string;
-        period: string;
-        totalHours: number;
-        hourlyWage: number;
-        basePay: number;
-        weeklyAllowance: number;
-        grossPay: number;
-        netPay: number;
-      }
-    >();
-
-    filteredPayrollRows.forEach((row) => {
-      const employee = employeeMap.get(Number(row.employeeId));
-      const workplaceName = row.workplaceName || employee?.workplace_name || "장사꾼";
-      const key = row.employeeId;
-
-      if (!grouped.has(key)) {
-        grouped.set(key, {
-          employeeName: row.employeeName,
-          workplaceName,
-          residentNumber: employee?.resident_number || "-",
-          bankName: employee?.bank_name || "-",
-          accountNumber: employee?.account_number || "-",
-          period: `${startDate} ~ ${endDate}`,
-          totalHours: 0,
-          hourlyWage: row.hourlyWage,
-          basePay: 0,
-          weeklyAllowance: 0,
-          grossPay: 0,
-          netPay: 0,
-        });
-      }
-
-      const target = grouped.get(key);
-
-      if (!target) return;
-
-      target.totalHours += row.totalHours || 0;
-      target.basePay += row.basePay || 0;
-      target.weeklyAllowance += row.weeklyAllowance || 0;
-      target.grossPay += row.grossPay || 0;
-      target.netPay += row.netPay || 0;
+    // 합산 로직은 app/lib/payrollSummary.ts 로 추출했습니다.
+    // 은행제출용 다건이체도 같은 함수를 써서 금액이 갈리지 않게 합니다.
+    const grouped = summarizePayrollByEmployee({
+      rows: filteredPayrollRows,
+      getEmployee: (id) => employeeMap.get(id),
+      startDate,
+      endDate,
     });
 
     const headers = [
@@ -1165,7 +1134,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
       "세후 급여 합계",
     ];
 
-    const rows = Array.from(grouped.values()).map((row) => [
+    const rows = grouped.map((row) => [
       cell(row.employeeName),
       cell(row.workplaceName),
       // \uc8fc\ubbfc\ubc88\ud638\u00b7\uacc4\uc88c\ubc88\ud638\ub294 \uc55e\uc790\ub9ac 0 \uc774 \uc0ac\ub77c\uc9c0\uc9c0 \uc54a\ub3c4\ub85d \ud14d\uc2a4\ud2b8 \uc140\ub85c \uace0\uc815\ud569\ub2c8\ub2e4.
@@ -1189,6 +1158,84 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
       console.error("\uae09\uc5ec \uc694\uc57d \uc5d1\uc140 \ub2e4\uc6b4\ub85c\ub4dc \uc2e4\ud328:", error);
       alert("\uc5d1\uc140 \ud30c\uc77c\uc744 \ub9cc\ub4dc\ub294 \uc911 \uc624\ub958\uac00 \ubc1c\uc0dd\ud588\uc2b5\ub2c8\ub2e4.");
     });
+  };
+
+  // ── 은행제출용(다건이체) ──────────────────────────────────────────
+  // 기존 급여대장 다운로드와 완전히 분리된 경로입니다.
+  // 금액은 새로 계산하지 않고 summarizePayrollByEmployee 의 netPay 를 그대로 씁니다.
+  const bankTransfer = useMemo(() => {
+    const summaries = summarizePayrollByEmployee({
+      rows: filteredPayrollRows,
+      getEmployee: (id) => employeeMap.get(id),
+      startDate,
+      endDate,
+    });
+
+    return buildBankTransferRows({ summaries });
+  }, [filteredPayrollRows, employeeMap, startDate, endDate]);
+
+  const [bankTransferDownloading, setBankTransferDownloading] = useState(false);
+
+  const downloadBankTransferExcel = async () => {
+    const { chunks, rows, excluded } = bankTransfer;
+
+    if (rows.length === 0) {
+      alert(
+        excluded.length > 0
+          ? "이체 가능한 직원이 없습니다. 아래 제외 목록을 확인해주세요."
+          : "다운로드할 급여 데이터가 없습니다."
+      );
+      return;
+    }
+
+    const confirmed = window.confirm(
+      [
+        `은행제출용 다건이체 파일을 받습니다.`,
+        ``,
+        `대상 ${rows.length}건 / 파일 ${chunks.length}개`,
+        excluded.length > 0
+          ? `제외 ${excluded.length}명: ${excluded
+              .map((item) => item.employeeName)
+              .join(", ")}`
+          : `제외 없음`,
+        ``,
+        `진행할까요?`,
+      ].join("\n")
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setBankTransferDownloading(true);
+
+      for (let index = 0; index < chunks.length; index += 1) {
+        // A~E 순서 고정. 헤더 행 없음.
+        // 계좌번호는 텍스트 셀(textCell) — 숫자로 저장되면 앞자리 0 이 잘려 이체 사고가 납니다.
+        const sheetRows = chunks[index].map((row) => [
+          cell(row.bankName),
+          textCell(row.accountNumber),
+          cell(row.amount),
+          cell(row.receiverMemo),
+          cell(row.senderMemo),
+        ]);
+
+        await downloadXlsxNoHeader({
+          fileName: buildTransferFileName(startDate, index),
+          rows: sheetRows,
+          columnWidths: [14, 22, 14, 14, 18],
+        });
+
+        // 브라우저가 연속 다운로드를 팝업으로 보고 막는 경우가 있어 간격을 둡니다.
+        if (index < chunks.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 300));
+        }
+      }
+    } catch (error) {
+      console.error("은행제출용 다운로드 실패:", error);
+      alert("은행제출용 파일을 만드는 중 오류가 발생했습니다.");
+    } finally {
+      setBankTransferDownloading(false);
+    }
   };
 
   return (
@@ -2338,6 +2385,79 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
               </div>
             </div>
 
+            <div style={bankTransferBoxStyle}>
+              <div style={bankTransferHeaderStyle}>
+                <div>
+                  <h3 style={bankTransferTitleStyle}>은행제출용 (다건이체)</h3>
+                  <p style={bankTransferDescStyle}>
+                    선택한 기간의 세후 급여를 은행 대량이체 업로드 양식으로
+                    받습니다. 금액은 위 급여대장과 같은 값을 씁니다.
+                  </p>
+                </div>
+
+                <button
+                  onClick={downloadBankTransferExcel}
+                  disabled={bankTransferDownloading}
+                  style={{
+                    ...primaryButtonStyle,
+                    backgroundColor: "#1d4ed8",
+                    opacity: bankTransferDownloading ? 0.6 : 1,
+                    cursor: bankTransferDownloading ? "default" : "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {bankTransferDownloading
+                    ? "생성 중..."
+                    : "은행제출용 다운로드"}
+                </button>
+              </div>
+
+              <div style={bankTransferStatWrapStyle}>
+                <span style={bankTransferStatStyle}>
+                  이체 대상 <strong>{bankTransfer.rows.length}건</strong>
+                </span>
+                <span style={bankTransferStatStyle}>
+                  파일 <strong>{bankTransfer.chunks.length}개</strong>
+                  {bankTransfer.rows.length > ROWS_PER_FILE &&
+                    ` (${ROWS_PER_FILE}건씩 분할)`}
+                </span>
+                <span style={bankTransferStatStyle}>
+                  이체금액 합계{" "}
+                  <strong>
+                    {formatCurrency(
+                      bankTransfer.rows.reduce((sum, row) => sum + row.amount, 0)
+                    )}
+                  </strong>
+                </span>
+              </div>
+
+              {bankTransfer.excluded.length > 0 && (
+                <div style={bankTransferWarnStyle}>
+                  <strong>
+                    {bankTransfer.excluded.length}명 제외됨 — 이 직원은 급여가
+                    이체되지 않습니다
+                  </strong>
+                  <ul style={bankTransferWarnListStyle}>
+                    {bankTransfer.excluded.map((item, index) => (
+                      <li key={`${item.employeeName}-${index}`}>
+                        {item.employeeName} — {item.reason}
+                        {item.detail ? ` ("${item.detail}")` : ""}
+                      </li>
+                    ))}
+                  </ul>
+                  <div style={bankTransferWarnHelpStyle}>
+                    직원 관리에서 은행명·계좌번호를 채우면 다음 다운로드부터
+                    포함됩니다.
+                  </div>
+                </div>
+              )}
+
+              <div style={bankTransferHintStyle}>
+                파일이 여러 개면 순서대로 자동 다운로드됩니다. 자동으로 안 뜨면
+                브라우저의 팝업·다중 다운로드 차단을 해제한 뒤 다시 눌러주세요.
+              </div>
+            </div>
+
             <div style={paySummaryWrapStyle}>
               <div style={paySummaryCardStyle}>
                 <div style={paySummaryLabelStyle}>총 근무시간 합계</div>
@@ -3149,6 +3269,84 @@ const sectionDescriptionStyle: CSSProperties = {
   margin: "6px 0 0",
   fontSize: "14px",
   color: "#6b7280",
+};
+
+const bankTransferBoxStyle: CSSProperties = {
+  marginTop: "20px",
+  padding: "20px",
+  borderRadius: "18px",
+  border: "1px solid #bfdbfe",
+  background: "linear-gradient(to bottom right, #eff6ff, #ffffff)",
+};
+
+const bankTransferHeaderStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: "16px",
+  flexWrap: "wrap",
+};
+
+const bankTransferTitleStyle: CSSProperties = {
+  margin: 0,
+  fontSize: "18px",
+  fontWeight: 900,
+  color: "#1d4ed8",
+};
+
+const bankTransferDescStyle: CSSProperties = {
+  margin: "6px 0 0 0",
+  fontSize: "13px",
+  color: "#64748b",
+  lineHeight: 1.5,
+};
+
+const bankTransferStatWrapStyle: CSSProperties = {
+  display: "flex",
+  gap: "10px",
+  flexWrap: "wrap",
+  marginTop: "16px",
+};
+
+const bankTransferStatStyle: CSSProperties = {
+  padding: "8px 14px",
+  borderRadius: "999px",
+  background: "#ffffff",
+  border: "1px solid #dbeafe",
+  color: "#1e3a8a",
+  fontSize: "13px",
+  fontWeight: 700,
+};
+
+const bankTransferWarnStyle: CSSProperties = {
+  marginTop: "14px",
+  padding: "14px 16px",
+  borderRadius: "14px",
+  border: "1px solid #fecaca",
+  background: "#fef2f2",
+  color: "#b91c1c",
+  fontSize: "13px",
+  lineHeight: 1.6,
+};
+
+const bankTransferWarnListStyle: CSSProperties = {
+  margin: "8px 0 0 0",
+  paddingLeft: "18px",
+  fontWeight: 700,
+};
+
+const bankTransferWarnHelpStyle: CSSProperties = {
+  marginTop: "8px",
+  color: "#7f1d1d",
+  fontWeight: 600,
+};
+
+const bankTransferHintStyle: CSSProperties = {
+  marginTop: "12px",
+  fontSize: "12px",
+  color: "#64748b",
+  fontWeight: 600,
+  lineHeight: 1.5,
 };
 
 const paySummaryWrapStyle: CSSProperties = {

@@ -103,3 +103,29 @@ export async function downloadXlsx({
 
   await file.toFile(fileName);
 }
+
+/**
+ * 헤더 행 없이 데이터만 있는 xlsx 를 다운로드합니다.
+ *
+ * 은행 다건이체 양식처럼 1행부터 바로 데이터가 시작해야 하는 경우에 씁니다.
+ * downloadXlsx 와 셀 처리 규칙(TEXT_CELL)은 동일합니다.
+ */
+export async function downloadXlsxNoHeader({
+  fileName,
+  rows,
+  columnWidths,
+}: {
+  fileName: string;
+  rows: ExcelCell[][];
+  columnWidths?: number[];
+}) {
+  const { default: writeXlsxFile } = await import("write-excel-file/browser");
+
+  const sheetData = rows.map(toSheetRow);
+
+  const file = await writeXlsxFile(sheetData as never, {
+    columns: (columnWidths ?? []).map((width) => ({ width })),
+  });
+
+  await file.toFile(fileName);
+}
