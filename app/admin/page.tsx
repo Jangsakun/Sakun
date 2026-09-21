@@ -1,6 +1,13 @@
 "use client";
 
-import { CSSProperties, useEffect, useMemo, useState } from "react";
+import {
+  CSSProperties,
+  KeyboardEvent as ReactKeyboardEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 import ScheduleTab from "./components/ScheduleTab";
 import DbSizeTab from "./components/DbSizeTab";
@@ -1799,22 +1806,13 @@ export default function AdminPage() {
                 </td>
 
                 <td style={manualTdStyle}>
-                  <select
+                  <EmployeePicker
+                    options={manualEmployeeOptions}
                     value={row.employeeId}
-                    onChange={(event) =>
-                      updateManualRow(index, {
-                        employeeId: event.target.value,
-                      })
+                    onChange={(employeeId) =>
+                      updateManualRow(index, { employeeId })
                     }
-                    style={manualFieldStyle}
-                  >
-                    <option value="">직원 선택</option>
-                    {manualEmployeeOptions.map((option) => (
-                      <option key={option.id} value={String(option.id)}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </td>
 
                 <td style={manualTdStyle}>
@@ -3862,6 +3860,309 @@ const nameTextStyle: CSSProperties = {
   fontWeight: 700,
   color: "#111827",
 };
+
+type EmployeeOption = {
+  id: number;
+  name: string;
+  workplace: string;
+  label: string;
+};
+
+// 직원이 100명 가까이 되어 목록을 훑는 것보다 이름을 치는 쪽이 빠릅니다.
+// 기본 select 는 한글 검색이 안 돼서 입력칸 + 목록으로 직접 만들었습니다.
+function EmployeePicker({
+  options,
+  value,
+  onChange,
+}: {
+  options: EmployeeOption[];
+  value: string;
+  onChange: (employeeId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [highlight, setHighlight] = useState(0);
+  const [rect, setRect] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    height: number;
+  } | null>(null);
+
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
+
+  // ↓↓Enter 를 빠르게 누르면 세 이벤트가 한 번에 처리돼서
+  // Enter 가 아직 반영 안 된 옛 highlight 를 읽습니다. ref 로 같이 들고 갑니다.
+  const highlightRef = useRef(0);
+
+  const applyHighlight = (next: number) => {
+    highlightRef.current = next;
+    setHighlight(next);
+  };
+
+  const selected =
+    options.find((option) => String(option.id) === value) ?? null;
+
+  // 이름·주민번호 앞자리·근무지 중 아무거나로 찾을 수 있게 합니다.
+  // 공백은 무시해서 "이 은혜" 로 쳐도 걸리게 합니다.
+  const filtered = useMemo(() => {
+    const keyword = query.replace(/\s+/g, "").toLowerCase();
+
+    if (!keyword) return options;
+
+    return options.filter((option) =>
+      option.label.replace(/\s+/g, "").toLowerCase().includes(keyword)
+    );
+  }, [options, query]);
+
+  const place = () => {
+    const box = boxRef.current;
+
+    if (!box) return;
+
+    const bounds = box.getBoundingClientRect();
+    const gap = 4;
+    const margin = 8;
+    const width = Math.max(bounds.width, 220);
+
+    const spaceBelow = window.innerHeight - bounds.bottom - gap - margin;
+    const spaceAbove = bounds.top - gap - margin;
+
+    // 화면 아래쪽 행에서는 목록이 화면 밖으로 밀려 안 보입니다.
+    // 아래가 좁으면 위로 펼칩니다.
+    const openUp = spaceBelow < 160 && spaceAbove > spaceBelow;
+    const height = Math.min(240, Math.max(120, openUp ? spaceAbove : spaceBelow));
+
+    setRect({
+      top: openUp ? Math.max(margin, bounds.top - gap - height) : bounds.bottom + gap,
+      left: Math.min(
+        Math.max(margin, bounds.left),
+        Math.max(margin, window.innerWidth - width - margin)
+      ),
+      width,
+      height,
+    });
+  };
+
+  const openList = () => {
+    place();
+    setQuery("");
+    applyHighlight(0);
+    setOpen(true);
+  };
+
+  const closeList = () => {
+    setOpen(false);
+    setQuery("");
+  };
+
+  const pick = (option: EmployeeOption) => {
+    onChange(String(option.id));
+    closeList();
+  };
+
+  // 목록은 화면 기준(fixed)으로 띄웁니다.
+  // 표가 가로 스크롤되는 상자 안에 있어서 그 안에 그리면 잘립니다.
+  useEffect(() => {
+    if (!open) return;
+
+    const handleScroll = (event: Event) => {
+      // 목록 자체를 스크롤하는 중이면 위치를 다시 잡을 필요가 없습니다.
+      if (listRef.current?.contains(event.target as Node)) return;
+
+      place();
+    };
+
+    const handleDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+
+      if (boxRef.current?.contains(target)) return;
+      if (listRef.current?.contains(target)) return;
+
+      closeList();
+    };
+
+    window.addEventListener("scroll", handleScroll, true);
+    window.addEventListener("resize", place);
+    document.addEventListener("mousedown", handleDown);
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll, true);
+      window.removeEventListener("resize", place);
+      document.removeEventListener("mousedown", handleDown);
+    };
+  }, [open]);
+
+  // 키보드로 내려갈 때 가려진 항목이 보이도록 따라 내립니다.
+  useEffect(() => {
+    if (!open) return;
+
+    const item = listRef.current?.children[highlight] as
+      | HTMLElement
+      | undefined;
+
+    item?.scrollIntoView({ block: "nearest" });
+  }, [highlight, open]);
+
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+
+      if (!open) {
+        openList();
+        return;
+      }
+
+      if (filtered.length === 0) return;
+
+      const step = event.key === "ArrowDown" ? 1 : -1;
+
+      applyHighlight(
+        (highlightRef.current + step + filtered.length) % filtered.length
+      );
+
+      return;
+    }
+
+    if (event.key === "Enter" && open) {
+      event.preventDefault();
+
+      const option = filtered[highlightRef.current];
+
+      if (option) pick(option);
+
+      return;
+    }
+
+    if (event.key === "Escape" && open) {
+      event.preventDefault();
+      closeList();
+    }
+  };
+
+  return (
+    <div ref={boxRef} style={{ position: "relative" }}>
+      <input
+        type="text"
+        data-role="employee-picker-input"
+        value={open ? query : selected?.label ?? ""}
+        autoComplete="off"
+        placeholder={selected ? selected.label : "이름 검색"}
+        onFocus={openList}
+        onClick={() => {
+          if (!open) openList();
+        }}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          applyHighlight(0);
+
+          // 닫힌 상태에서 바로 타이핑하는 경우.
+          // openList() 를 쓰면 방금 친 글자가 지워집니다.
+          if (!open) {
+            place();
+            setOpen(true);
+          }
+        }}
+        onKeyDown={handleKeyDown}
+        style={{
+          ...manualFieldStyle,
+          paddingRight: selected ? "30px" : "10px",
+          color: selected || open ? "#111827" : "#9ca3af",
+        }}
+      />
+
+      {selected && (
+        <button
+          type="button"
+          // 입력칸 포커스를 뺏으면 목록이 닫히면서 버튼도 같이 사라집니다.
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => {
+            onChange("");
+            closeList();
+          }}
+          title="선택 해제"
+          style={{
+            position: "absolute",
+            top: "50%",
+            right: "6px",
+            transform: "translateY(-50%)",
+            width: "20px",
+            height: "20px",
+            padding: 0,
+            border: "none",
+            borderRadius: "999px",
+            background: "#f1f5f9",
+            color: "#64748b",
+            fontSize: "12px",
+            fontWeight: 800,
+            lineHeight: 1,
+            cursor: "pointer",
+          }}
+        >
+          ×
+        </button>
+      )}
+
+      {open && rect && (
+        <div
+          ref={listRef}
+          data-role="employee-picker-list"
+          style={{
+            position: "fixed",
+            top: `${rect.top}px`,
+            left: `${rect.left}px`,
+            width: `${rect.width}px`,
+            maxHeight: `${rect.height}px`,
+            overflowY: "auto",
+            zIndex: 60,
+            borderRadius: "12px",
+            border: "1px solid #d1d5db",
+            background: "#ffffff",
+            boxShadow: "0 12px 28px rgba(15,23,42,0.16)",
+          }}
+        >
+          {filtered.length === 0 ? (
+            <div
+              style={{
+                padding: "12px",
+                fontSize: "13px",
+                color: "#9ca3af",
+                textAlign: "center",
+              }}
+            >
+              일치하는 직원이 없습니다
+            </div>
+          ) : (
+            filtered.map((option, index) => (
+              <div
+                key={option.id}
+                // mousedown 을 막아야 input 의 blur 로 목록이 닫히지 않습니다.
+                onMouseDown={(event) => event.preventDefault()}
+                onMouseEnter={() => applyHighlight(index)}
+                onClick={() => pick(option)}
+                style={{
+                  padding: "9px 12px",
+                  fontSize: "13px",
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  color: "#111827",
+                  fontWeight: String(option.id) === value ? 800 : 600,
+                  backgroundColor:
+                    index === highlight ? "#ecfdf5" : "transparent",
+                }}
+              >
+                {option.label}
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 type ManualRow = {
   key: string;
