@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { logAttendanceChanges } from "@/app/lib/attendanceAudit";
 
 const ALLOWED_WORKPLACES = ["장사꾼", "헤모즈", "깨소금", "로엔티크"];
 
 /** 한 번에 추가할 수 있는 최대 기간(일). 실수로 몇 년치를 넣는 사고를 막습니다. */
 const MAX_BULK_DAYS = 92;
+
+/** 행 단위 입력에서 한 번에 보낼 수 있는 최대 줄 수. */
+const MAX_ENTRY_ROWS = 200;
 
 function getKstDateKey(date = new Date()) {
   return new Intl.DateTimeFormat("en-CA", {
@@ -189,11 +192,270 @@ export async function POST(request: Request) {
   }
 }
 
+/**
+ * 행 단위 수동 추가.
+ *
+ * 직원마다 날짜·출퇴근 시간이 다를 수 있어, 한 줄이 곧 하루치 기록 하나입니다.
+ * 한 줄이 실패해도 나머지는 계속 넣고 결과를 줄 단위로 돌려줍니다.
+ */
+async function handleEntryRows(
+  request: Request,
+  supabase: SupabaseClient,
+  rawEntries: unknown[]
+) {
+  type RowResult = {
+    index: number;
+    employeeId: number;
+    employeeName: string;
+    date: string;
+    success: boolean;
+    message: string;
+    insertedCount: number;
+  };
+
+  if (rawEntries.length > MAX_ENTRY_ROWS) {
+    return NextResponse.json(
+      {
+        success: false,
+        message: `한 번에 추가할 수 있는 줄은 최대 ${MAX_ENTRY_ROWS}개입니다.`,
+      },
+      { status: 400 }
+    );
+  }
+
+  const parsed = rawEntries.map((raw, index) => {
+    const item = (raw ?? {}) as Record<string, unknown>;
+    const employeeId = Number(item.employeeId);
+
+    return {
+      index,
+      employeeId:
+        Number.isInteger(employeeId) && employeeId > 0 ? employeeId : 0,
+      date: String(item.date ?? "").trim(),
+      checkInTime: String(item.checkInTime ?? "").trim(),
+      checkOutTime: String(item.checkOutTime ?? "").trim(),
+    };
+  });
+
+  // 직원 이름을 한 번에 받아둡니다(줄마다 조회하면 왕복이 줄 수만큼 늘어납니다).
+  const ids = Array.from(
+    new Set(parsed.map((item) => item.employeeId).filter((id) => id > 0))
+  );
+
+  const { data: employeeRows } = ids.length
+    ? await supabase
+        .from("employees")
+        .select("id, name, is_active, hourly_wage")
+        .in("id", ids)
+    : { data: [] };
+
+  const employeeMap = new Map(
+    ((employeeRows || []) as {
+      id: number;
+      name: string;
+      is_active: boolean;
+      hourly_wage: number | null;
+    }[]).map((item) => [item.id, item])
+  );
+
+  const results: RowResult[] = [];
+
+  for (const entry of parsed) {
+    const employee = employeeMap.get(entry.employeeId);
+    const label = employee?.name ?? `${entry.index + 1}번째 줄`;
+
+    const push = (message: string, success = false, insertedCount = 0) =>
+      results.push({
+        index: entry.index,
+        employeeId: entry.employeeId,
+        employeeName: label,
+        date: entry.date,
+        success,
+        message,
+        insertedCount,
+      });
+
+    if (!entry.employeeId) {
+      push("직원을 선택해주세요.");
+      continue;
+    }
+
+    if (!employee) {
+      push("직원을 찾을 수 없습니다.");
+      continue;
+    }
+
+    if (!employee.is_active) {
+      push("비활성 직원입니다.");
+      continue;
+    }
+
+    if (!entry.date) {
+      push("날짜를 입력해주세요.");
+      continue;
+    }
+
+    if (!entry.checkInTime) {
+      push("출근시간을 입력해주세요.");
+      continue;
+    }
+
+    const checkInAt = new Date(`${entry.date}T${entry.checkInTime}:00+09:00`);
+
+    if (Number.isNaN(checkInAt.getTime())) {
+      push("날짜 또는 출근시간이 올바르지 않습니다.");
+      continue;
+    }
+
+    let checkOutAt: Date | null = null;
+
+    if (entry.checkOutTime) {
+      checkOutAt = new Date(`${entry.date}T${entry.checkOutTime}:00+09:00`);
+
+      if (Number.isNaN(checkOutAt.getTime())) {
+        push("퇴근시간이 올바르지 않습니다.");
+        continue;
+      }
+
+      if (checkOutAt.getTime() < checkInAt.getTime()) {
+        push("퇴근시간이 출근시간보다 빠릅니다.");
+        continue;
+      }
+    }
+
+    // 같은 날 기록이 이미 있으면 건너뜁니다.
+    // 중복으로 넣으면 그 날 급여가 이중 계산됩니다.
+    const { data: existing } = await supabase
+      .from("attendance_records")
+      .select("id")
+      .eq("employee_id", entry.employeeId)
+      .gte("checked_at", `${entry.date}T00:00:00+09:00`)
+      .lte("checked_at", `${entry.date}T23:59:59.999+09:00`)
+      .limit(1);
+
+    if ((existing || []).length > 0) {
+      push("이미 그 날 기록이 있어 건너뜀");
+      continue;
+    }
+
+    try {
+      const hourlyWageSnapshot = await resolveManualHourlyWageSnapshot(
+        supabase,
+        entry.employeeId,
+        entry.date,
+        Number(employee.hourly_wage || 0)
+      );
+
+      const rows: {
+        employee_id: number;
+        record_type: "check_in" | "check_out";
+        checked_at: string;
+        lat: null;
+        lng: null;
+        hourly_wage_snapshot: number;
+      }[] = [
+        {
+          employee_id: entry.employeeId,
+          record_type: "check_in",
+          checked_at: checkInAt.toISOString(),
+          lat: null,
+          lng: null,
+          hourly_wage_snapshot: hourlyWageSnapshot,
+        },
+      ];
+
+      if (checkOutAt) {
+        rows.push({
+          employee_id: entry.employeeId,
+          record_type: "check_out",
+          checked_at: checkOutAt.toISOString(),
+          lat: null,
+          lng: null,
+          hourly_wage_snapshot: hourlyWageSnapshot,
+        });
+      }
+
+      const { data: insertedRows, error } = await supabase
+        .from("attendance_records")
+        .insert(rows)
+        .select("id, employee_id, record_type, checked_at");
+
+      if (error || !insertedRows || insertedRows.length === 0) {
+        push(error?.message || "기록이 추가되지 않았습니다.");
+        continue;
+      }
+
+      await logAttendanceChanges(
+        supabase,
+        request,
+        (
+          insertedRows as {
+            id: number;
+            employee_id: number;
+            record_type: string;
+            checked_at: string;
+          }[]
+        ).map((row) => ({
+          recordId: row.id,
+          employeeId: row.employee_id,
+          action: "insert" as const,
+          field: "checked_at",
+          oldValue: null,
+          newValue: row.checked_at,
+          source: "admin-manual-add" as const,
+        }))
+      );
+
+      push("추가됨", true, insertedRows.length);
+    } catch (error) {
+      push(error instanceof Error ? error.message : "알 수 없는 오류");
+    }
+  }
+
+  const added = results.filter((item) => item.success);
+  const failed = results.filter((item) => !item.success);
+  const skipped = failed.filter((item) => item.message.includes("건너뜀"));
+
+  const summary = [`${added.length}건 추가`];
+
+  if (skipped.length > 0)
+    summary.push(`${skipped.length}건 건너뜀(이미 기록 있음)`);
+
+  const realFailures = failed.length - skipped.length;
+
+  if (realFailures > 0) summary.push(`${realFailures}건 실패`);
+
+  if (added.length === 0) {
+    return NextResponse.json(
+      {
+        success: false,
+        message:
+          skipped.length === failed.length && skipped.length > 0
+            ? "추가된 기록이 없습니다. 선택한 날짜에 이미 기록이 있습니다."
+            : "출퇴근 기록이 추가되지 않았습니다.",
+        successCount: 0,
+        failCount: failed.length,
+        results,
+      },
+      { status: 400 }
+    );
+  }
+
+  return NextResponse.json({
+    success: true,
+    message: summary.join(", "),
+    successCount: added.length,
+    failCount: failed.length,
+    results,
+  });
+}
+
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
 
     const {
+      entries,
       employeeIds,
       employeeName,
       workplaceName,
@@ -203,6 +465,33 @@ export async function PUT(request: Request) {
       checkInTime,
       checkOutTime,
     } = body;
+
+    // 행 단위 입력이 오면 그쪽으로 처리합니다.
+    // 직원마다 날짜·시간이 다른 경우를 위한 기본 경로입니다.
+    if (Array.isArray(entries)) {
+      const supabaseUrlForEntries = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const serviceRoleKeyForEntries = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+      if (!supabaseUrlForEntries || !serviceRoleKeyForEntries) {
+        return NextResponse.json(
+          { success: false, message: "환경변수 없음" },
+          { status: 500 }
+        );
+      }
+
+      if (entries.length === 0) {
+        return NextResponse.json(
+          { success: false, message: "추가할 줄이 없습니다." },
+          { status: 400 }
+        );
+      }
+
+      return handleEntryRows(
+        request,
+        createClient(supabaseUrlForEntries, serviceRoleKeyForEntries),
+        entries
+      );
+    }
 
     // 여러 명 동시 추가. employeeIds 가 오면 id 로 특정하므로 동명이인도 안전합니다.
     // employeeIds 가 없으면 기존 이름 1명 방식으로 동작합니다(하위 호환).

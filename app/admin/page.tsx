@@ -251,14 +251,12 @@ export default function AdminPage() {
   const [editCheckOutTime, setEditCheckOutTime] = useState("");
   const [attendanceSaving, setAttendanceSaving] = useState(false);
 
-const [manualWorkplace, setManualWorkplace] =
-  useState<WorkplaceName>("장사꾼");
-const [manualEmployeeIds, setManualEmployeeIds] = useState<number[]>([]);
-const [manualDate, setManualDate] = useState("");
-const [manualEndDate, setManualEndDate] = useState("");
-const [manualSkipWeekends, setManualSkipWeekends] = useState(true);
-const [manualCheckInTime, setManualCheckInTime] = useState("");
-const [manualCheckOutTime, setManualCheckOutTime] = useState("");
+  // 수동 출퇴근 추가는 행 단위로 입력합니다.
+  // 직원마다 날짜·출퇴근시간이 다르기 때문에 한 줄에 하나씩 담습니다.
+  const [manualRows, setManualRows] = useState<ManualRow[]>(() => [
+    createManualRow(),
+  ]);
+  const [manualSubmitting, setManualSubmitting] = useState(false);
 
   const [reconnectLoadingId, setReconnectLoadingId] = useState<number | null>(
     null
@@ -401,25 +399,208 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
   }, [tab]);
 
   // 수동 출퇴근 추가용 직원 목록.
-  // 선택한 근무지의 활성 직원만, 동명이인 구분을 위해 주민번호 앞 6자리를 붙입니다.
+  // 줄마다 근무지가 다를 수 있으므로 활성 직원 전체를 담고,
+  // 동명이인 구분을 위해 주민번호 앞 6자리와 근무지를 함께 보여줍니다.
   const manualEmployeeOptions = useMemo(() => {
     return employees
-      .filter((employee) => {
-        const employeeWorkplace = employee.workplace_name || "장사꾼";
-
-        return employee.is_active && employeeWorkplace === manualWorkplace;
-      })
+      .filter((employee) => employee.is_active)
       .map((employee) => {
         const prefix = getResidentPrefix(employee.resident_number_masked);
+        const workplace = employee.workplace_name || "장사꾼";
+        const name = prefix ? `${employee.name} (${prefix})` : employee.name;
 
         return {
           id: employee.id,
           name: employee.name,
-          label: prefix ? `${employee.name} (${prefix})` : employee.name,
+          workplace,
+          label: `${name} · ${workplace}`,
         };
       })
-      .sort((a, b) => a.label.localeCompare(b.label, "ko"));
-  }, [employees, manualWorkplace]);
+      .sort(
+        (a, b) =>
+          a.workplace.localeCompare(b.workplace, "ko") ||
+          a.label.localeCompare(b.label, "ko")
+      );
+  }, [employees]);
+
+  // 저장 가능한(직원·날짜·출근시간이 모두 채워진) 줄 수.
+  const manualReadyRowCount = useMemo(
+    () =>
+      manualRows.filter((row) => row.employeeId && row.date && row.checkInTime)
+        .length,
+    [manualRows]
+  );
+
+  const updateManualRow = (index: number, patch: Partial<ManualRow>) => {
+    setManualRows((prev) =>
+      prev.map((row, i) => (i === index ? { ...row, ...patch } : row))
+    );
+  };
+
+  const addManualRow = () => {
+    // 같은 날 여러 명을 넣는 경우가 많아 직전 줄의 날짜를 물려줍니다.
+    setManualRows((prev) => [
+      ...prev,
+      createManualRow({ date: prev[prev.length - 1]?.date }),
+    ]);
+  };
+
+  const copyLastManualRow = () => {
+    setManualRows((prev) => {
+      const last = prev[prev.length - 1];
+
+      // 직원만 비우고 날짜·시간은 그대로 둡니다.
+      // 같은 직원·같은 날을 두 줄 넣으면 어차피 건너뛰기 때문입니다.
+      return [
+        ...prev,
+        createManualRow({
+          date: last?.date,
+          checkInTime: last?.checkInTime,
+          checkOutTime: last?.checkOutTime,
+        }),
+      ];
+    });
+  };
+
+  const removeManualRow = (index: number) => {
+    setManualRows((prev) =>
+      prev.length <= 1 ? prev : prev.filter((_, i) => i !== index)
+    );
+  };
+
+  const resetManualRows = () => {
+    setManualRows([createManualRow()]);
+  };
+
+  const submitManualRows = async () => {
+    // 아무것도 입력 안 된 빈 줄은 그냥 무시합니다.
+    const filled = manualRows
+      .map((row, index) => ({ row, rowNo: index + 1 }))
+      .filter(
+        ({ row }) =>
+          row.employeeId || row.date || row.checkInTime || row.checkOutTime
+      );
+
+    if (filled.length === 0) {
+      alert("추가할 내용을 입력해주세요.");
+      return;
+    }
+
+    for (const { row, rowNo } of filled) {
+      if (!row.employeeId) {
+        alert(`${rowNo}번째 줄: 직원을 선택해주세요.`);
+        return;
+      }
+
+      if (!row.date) {
+        alert(`${rowNo}번째 줄: 날짜를 입력해주세요.`);
+        return;
+      }
+
+      if (!row.checkInTime) {
+        alert(`${rowNo}번째 줄: 출근시간을 입력해주세요.`);
+        return;
+      }
+
+      if (row.checkOutTime && row.checkOutTime < row.checkInTime) {
+        alert(`${rowNo}번째 줄: 퇴근시간이 출근시간보다 빠릅니다.`);
+        return;
+      }
+    }
+
+    // 같은 직원·같은 날이 두 줄 있으면 뒷줄이 통째로 건너뛰어집니다.
+    // 저장하기 전에 알려주는 편이 낫습니다.
+    const seen = new Map<string, number>();
+
+    for (const { row, rowNo } of filled) {
+      const key = `${row.employeeId}|${row.date}`;
+      const firstRowNo = seen.get(key);
+
+      if (firstRowNo) {
+        alert(
+          `${firstRowNo}번째 줄과 ${rowNo}번째 줄이 같은 직원·같은 날짜입니다. 한 줄로 합쳐주세요.`
+        );
+        return;
+      }
+
+      seen.set(key, rowNo);
+    }
+
+    setManualSubmitting(true);
+
+    try {
+      const response = await fetch("/api/admin/attendance", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          entries: filled.map(({ row }) => ({
+            employeeId: Number(row.employeeId),
+            date: row.date,
+            checkInTime: row.checkInTime,
+            checkOutTime: row.checkOutTime,
+          })),
+        }),
+      });
+
+      const data = await response.json();
+
+      // 처리 안 된 줄은 조용히 넘기지 않고 전부 보여줍니다.
+      const problems: {
+        index: number;
+        employeeName: string;
+        date: string;
+        message: string;
+      }[] = (data.results || []).filter(
+        (item: { success: boolean }) => !item.success
+      );
+
+      const lines: string[] = [
+        data.message || (data.success ? "추가 완료" : "추가 실패"),
+      ];
+
+      if (problems.length > 0) {
+        lines.push("", "처리되지 않은 줄:");
+
+        problems.slice(0, 20).forEach((item) => {
+          const rowNo = filled[item.index]?.rowNo ?? item.index + 1;
+
+          lines.push(
+            `  · ${rowNo}번째 줄 ${item.employeeName} ${item.date}: ${item.message}`
+          );
+        });
+
+        if (problems.length > 20) {
+          lines.push(`  … 외 ${problems.length - 20}줄`);
+        }
+      }
+
+      alert(lines.join("\n"));
+
+      if (data.success) {
+        // 성공한 줄만 치우고, 문제가 있던 줄은 고칠 수 있게 남겨둡니다.
+        const failedKeys = new Set(
+          problems
+            .map((item) => filled[item.index]?.row.key)
+            .filter((key): key is string => Boolean(key))
+        );
+
+        setManualRows((prev) => {
+          const kept = prev.filter((row) => failedKeys.has(row.key));
+
+          return kept.length > 0 ? kept : [createManualRow()];
+        });
+
+        fetchRecords();
+      }
+    } catch (error) {
+      console.error(error);
+      alert("추가 중 오류 발생");
+    } finally {
+      setManualSubmitting(false);
+    }
+  };
 
   const employeeMap = useMemo(() => {
     const map = new Map<number, Employee>();
@@ -1558,19 +1739,146 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
       lineHeight: 1.5,
     }}
   >
-    직원을 여러 명 선택하고 기간을 지정해 한 번에 추가할 수 있습니다.
+    직원마다 날짜와 출퇴근 시간이 달라서 한 줄씩 따로 입력합니다.
+    필요한 만큼 행을 추가하면 한 번에 저장됩니다.
     이미 기록이 있는 날은 중복 방지를 위해 자동으로 건너뜁니다.
   </p>
 
   <div
     style={{
-      marginBottom: "14px",
       padding: "14px",
       borderRadius: "14px",
       border: "1px solid #d1fae5",
       background: "#ffffff",
     }}
   >
+    {manualEmployeeOptions.length === 0 ? (
+      <div
+        style={{
+          padding: "18px",
+          textAlign: "center",
+          color: "#9ca3af",
+          fontSize: "13px",
+          fontWeight: 700,
+        }}
+      >
+        활성 직원이 없습니다.
+      </div>
+    ) : (
+      <div style={{ overflowX: "auto" }}>
+        <table
+          style={{
+            width: "100%",
+            minWidth: "720px",
+            borderCollapse: "collapse",
+          }}
+        >
+          <thead>
+            <tr>
+              <th style={{ ...manualThStyle, width: "36px" }}>#</th>
+              <th style={manualThStyle}>직원</th>
+              <th style={{ ...manualThStyle, width: "150px" }}>날짜</th>
+              <th style={{ ...manualThStyle, width: "120px" }}>출근시간</th>
+              <th style={{ ...manualThStyle, width: "120px" }}>퇴근시간</th>
+              <th style={{ ...manualThStyle, width: "64px" }}>삭제</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {manualRows.map((row, index) => (
+              <tr key={row.key}>
+                <td
+                  style={{
+                    ...manualTdStyle,
+                    textAlign: "center",
+                    color: "#9ca3af",
+                    fontWeight: 800,
+                  }}
+                >
+                  {index + 1}
+                </td>
+
+                <td style={manualTdStyle}>
+                  <select
+                    value={row.employeeId}
+                    onChange={(event) =>
+                      updateManualRow(index, {
+                        employeeId: event.target.value,
+                      })
+                    }
+                    style={manualFieldStyle}
+                  >
+                    <option value="">직원 선택</option>
+                    {manualEmployeeOptions.map((option) => (
+                      <option key={option.id} value={String(option.id)}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+
+                <td style={manualTdStyle}>
+                  <input
+                    type="date"
+                    value={row.date}
+                    onChange={(event) =>
+                      updateManualRow(index, { date: event.target.value })
+                    }
+                    style={manualFieldStyle}
+                  />
+                </td>
+
+                <td style={manualTdStyle}>
+                  <input
+                    type="time"
+                    value={row.checkInTime}
+                    onChange={(event) =>
+                      updateManualRow(index, {
+                        checkInTime: event.target.value,
+                      })
+                    }
+                    style={manualFieldStyle}
+                  />
+                </td>
+
+                <td style={manualTdStyle}>
+                  <input
+                    type="time"
+                    value={row.checkOutTime}
+                    onChange={(event) =>
+                      updateManualRow(index, {
+                        checkOutTime: event.target.value,
+                      })
+                    }
+                    style={manualFieldStyle}
+                  />
+                </td>
+
+                <td style={{ ...manualTdStyle, textAlign: "center" }}>
+                  <button
+                    type="button"
+                    onClick={() => removeManualRow(index)}
+                    disabled={manualRows.length === 1}
+                    style={{
+                      ...manualSelectButtonStyle,
+                      padding: "0 10px",
+                      backgroundColor: "#fef2f2",
+                      borderColor: "#fecaca",
+                      color: "#b91c1c",
+                      cursor: manualRows.length === 1 ? "default" : "pointer",
+                      opacity: manualRows.length === 1 ? 0.4 : 1,
+                    }}
+                  >
+                    삭제
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+
     <div
       style={{
         display: "flex",
@@ -1578,317 +1886,61 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
         justifyContent: "space-between",
         gap: "12px",
         flexWrap: "wrap",
-        marginBottom: "10px",
+        marginTop: "14px",
       }}
     >
-      <label style={{ ...labelStyle, marginBottom: 0 }}>
-        직원 선택 ({manualWorkplace} 활성 {manualEmployeeOptions.length}명)
-        {manualEmployeeIds.length > 0 && (
-          <strong style={{ color: "#059669", marginLeft: "8px" }}>
-            {manualEmployeeIds.length}명 선택됨
-          </strong>
-        )}
-      </label>
-
-      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-        <label
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "6px",
-            fontSize: "12px",
-            fontWeight: 800,
-            color: "#374151",
-            cursor: "pointer",
-            marginRight: "4px",
-          }}
+      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+        <button
+          type="button"
+          onClick={addManualRow}
+          style={manualSelectButtonStyle}
         >
-          <input
-            type="checkbox"
-            checked={manualSkipWeekends}
-            onChange={(e) => setManualSkipWeekends(e.target.checked)}
-            style={{ width: "15px", height: "15px", cursor: "pointer" }}
-          />
-          주말 제외
-        </label>
+          + 행 추가
+        </button>
 
         <button
           type="button"
-          onClick={() =>
-            setManualEmployeeIds(
-              manualEmployeeOptions.map((option) => option.id)
-            )
-          }
+          onClick={copyLastManualRow}
           style={manualSelectButtonStyle}
+          title="마지막 줄의 날짜·출퇴근시간을 그대로 가진 빈 줄을 추가합니다"
         >
-          전체 선택
+          마지막 줄 복사
         </button>
+
         <button
           type="button"
-          onClick={() => setManualEmployeeIds([])}
+          onClick={resetManualRows}
           style={manualSelectButtonStyle}
         >
-          선택 해제
+          전체 비우기
         </button>
       </div>
-    </div>
 
-    {manualEmployeeOptions.length === 0 ? (
-      <div style={{ color: "#9ca3af", fontSize: "13px", fontWeight: 700 }}>
-        {manualWorkplace}에 활성 직원이 없습니다.
-      </div>
-    ) : (
-      <div
+      <button
+        onClick={submitManualRows}
+        disabled={manualSubmitting || manualReadyRowCount === 0}
         style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: "8px",
-          maxHeight: "180px",
-          overflowY: "auto",
+          height: "44px",
+          minWidth: "132px",
+          border: "none",
+          borderRadius: "12px",
+          background: "linear-gradient(to right, #10b981, #22c55e)",
+          color: "#ffffff",
+          fontWeight: 800,
+          fontSize: "14px",
+          cursor:
+            manualSubmitting || manualReadyRowCount === 0
+              ? "default"
+              : "pointer",
+          opacity: manualSubmitting || manualReadyRowCount === 0 ? 0.5 : 1,
+          boxShadow: "0 8px 16px rgba(16,185,129,0.16)",
         }}
       >
-        {manualEmployeeOptions.map((option) => {
-          const checked = manualEmployeeIds.includes(option.id);
-
-          return (
-            <label
-              key={option.id}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                padding: "7px 12px",
-                borderRadius: "999px",
-                border: checked ? "1px solid #10b981" : "1px solid #e5e7eb",
-                background: checked ? "#ecfdf5" : "#ffffff",
-                color: checked ? "#047857" : "#374151",
-                fontSize: "13px",
-                fontWeight: 800,
-                cursor: "pointer",
-                whiteSpace: "nowrap",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={checked}
-                onChange={() =>
-                  setManualEmployeeIds((prev) =>
-                    prev.includes(option.id)
-                      ? prev.filter((id) => id !== option.id)
-                      : [...prev, option.id]
-                  )
-                }
-                style={{ width: "15px", height: "15px", cursor: "pointer" }}
-              />
-              {option.label}
-            </label>
-          );
-        })}
-      </div>
-    )}
-  </div>
-
-  <div
-    style={{
-      display: "grid",
-      gridTemplateColumns: "0.7fr 0.8fr 0.8fr 0.7fr 0.7fr auto",
-      gap: "12px",
-      alignItems: "end",
-    }}
-  >
-    <div>
-      <label style={labelStyle}>근무지</label>
-      <select
-        value={manualWorkplace}
-        onChange={(e) => {
-          setManualWorkplace(e.target.value as WorkplaceName);
-          // 근무지가 바뀌면 직원 목록이 달라지므로 선택을 비웁니다.
-          setManualEmployeeIds([]);
-        }}
-        style={{
-          ...inputStyle,
-          height: "44px",
-          borderRadius: "12px",
-          backgroundColor: "#ffffff",
-          fontSize: "14px",
-        }}
-      >
-        <option value="장사꾼">장사꾼</option>
-        <option value="헤모즈">헤모즈</option>
-        <option value="깨소금">깨소금</option>
-                  <option value="로엔티크">로엔티크</option>
-      </select>
+        {manualSubmitting
+          ? "추가 중..."
+          : `${manualReadyRowCount}줄 기록 추가`}
+      </button>
     </div>
-
-    <div>
-      <label style={labelStyle}>시작일</label>
-      <input
-        type="date"
-        value={manualDate}
-        onChange={(e) => setManualDate(e.target.value)}
-        style={{
-          ...inputStyle,
-          height: "44px",
-          borderRadius: "12px",
-          backgroundColor: "#ffffff",
-          fontSize: "14px",
-        }}
-      />
-    </div>
-
-    <div>
-      <label style={labelStyle}>종료일 (비우면 하루)</label>
-      <input
-        type="date"
-        value={manualEndDate}
-        min={manualDate || undefined}
-        onChange={(e) => setManualEndDate(e.target.value)}
-        style={{
-          ...inputStyle,
-          height: "44px",
-          borderRadius: "12px",
-          backgroundColor: "#ffffff",
-          fontSize: "14px",
-        }}
-      />
-    </div>
-
-    <div>
-      <label style={labelStyle}>출근시간</label>
-      <input
-        type="time"
-        step={60}
-        value={manualCheckInTime}
-        onChange={(e) => setManualCheckInTime(e.target.value)}
-        style={{
-          ...inputStyle,
-          height: "44px",
-          borderRadius: "12px",
-          backgroundColor: "#ffffff",
-          fontSize: "14px",
-        }}
-      />
-    </div>
-
-    <div>
-      <label style={labelStyle}>퇴근시간</label>
-      <input
-        type="time"
-        step={60}
-        value={manualCheckOutTime}
-        onChange={(e) => setManualCheckOutTime(e.target.value)}
-        style={{
-          ...inputStyle,
-          height: "44px",
-          borderRadius: "12px",
-          backgroundColor: "#ffffff",
-          fontSize: "14px",
-        }}
-      />
-    </div>
-
-    <button
-      onClick={async () => {
-        try {
-          if (
-            manualEmployeeIds.length === 0 ||
-            !manualDate ||
-            !manualCheckInTime
-          ) {
-            alert("근무지, 직원, 날짜, 출근시간은 필수입니다.");
-            return;
-          }
-
-          const response = await fetch("/api/admin/attendance", {
-            method: "PUT",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              workplaceName: manualWorkplace,
-              employeeIds: manualEmployeeIds,
-              date: manualDate,
-              endDate: manualEndDate || manualDate,
-              skipWeekends: manualSkipWeekends,
-              checkInTime: manualCheckInTime,
-              checkOutTime: manualCheckOutTime,
-            }),
-          });
-
-          const data = await response.json();
-
-          // 일부만 실패해도 누가 실패했는지 반드시 보여줍니다.
-          const failed = (data.results || []).filter(
-            (item: { success: boolean }) => !item.success
-          );
-
-          const failedLines = failed.map(
-            (item: { employeeName: string; message: string }) =>
-              `  · ${item.employeeName}: ${item.message}`
-          );
-
-          if (!data.success) {
-            alert(
-              [data.message || "추가 실패", ...failedLines].join("\n")
-            );
-            return;
-          }
-
-          // 건너뛴 날짜를 반드시 보여줍니다.
-          // 조용히 빠지면 그날만 기록이 없는 걸 모르고 지나갑니다.
-          const skippedLines = (data.results || [])
-            .filter(
-              (item: { skippedDates?: string[] }) =>
-                (item.skippedDates || []).length > 0
-            )
-            .map(
-              (item: { employeeName: string; skippedDates: string[] }) =>
-                `  · ${item.employeeName}: ${item.skippedDates.join(", ")}`
-            );
-
-          const lines: string[] = [data.message];
-
-          if (data.range) lines.push(`기간: ${data.range}`);
-
-          if (skippedLines.length > 0) {
-            lines.push("", "이미 기록이 있어 건너뛴 날:", ...skippedLines);
-          }
-
-          if (failed.length > 0) {
-            lines.push("", "실패한 직원:", ...failedLines);
-          }
-
-          alert(lines.join("\n"));
-
-          setManualEmployeeIds([]);
-          setManualDate("");
-          setManualEndDate("");
-          setManualCheckInTime("");
-          setManualCheckOutTime("");
-
-          fetchRecords();
-        } catch (error) {
-          console.error(error);
-          alert("추가 중 오류 발생");
-        }
-      }}
-      style={{
-        height: "44px",
-        minWidth: "108px",
-        border: "none",
-        borderRadius: "12px",
-        background: "linear-gradient(to right, #10b981, #22c55e)",
-        color: "#ffffff",
-        fontWeight: 800,
-        fontSize: "14px",
-        cursor: "pointer",
-        boxShadow: "0 8px 16px rgba(16,185,129,0.16)",
-      }}
-    >
-      {manualEmployeeIds.length > 1
-        ? `${manualEmployeeIds.length}명 기록 추가`
-        : "기록 추가"}
-    </button>
   </div>
 </div>
         
@@ -3809,6 +3861,58 @@ const tdStyle: CSSProperties = {
 const nameTextStyle: CSSProperties = {
   fontWeight: 700,
   color: "#111827",
+};
+
+type ManualRow = {
+  key: string;
+  employeeId: string;
+  date: string;
+  checkInTime: string;
+  checkOutTime: string;
+};
+
+// React key 용 일련번호.
+// 배열 index 를 key 로 쓰면 중간 줄을 지울 때 입력값이 옆줄로 딸려갑니다.
+let manualRowSeq = 0;
+
+function createManualRow(base?: Partial<ManualRow>): ManualRow {
+  manualRowSeq += 1;
+
+  return {
+    key: `manual-${manualRowSeq}`,
+    employeeId: base?.employeeId ?? "",
+    date: base?.date ?? "",
+    checkInTime: base?.checkInTime ?? "",
+    checkOutTime: base?.checkOutTime ?? "",
+  };
+}
+
+const manualThStyle: CSSProperties = {
+  padding: "8px 10px",
+  textAlign: "left",
+  fontSize: "12px",
+  fontWeight: 800,
+  color: "#6b7280",
+  borderBottom: "1px solid #e5e7eb",
+  whiteSpace: "nowrap",
+};
+
+const manualTdStyle: CSSProperties = {
+  padding: "6px",
+  borderBottom: "1px solid #f1f5f9",
+  verticalAlign: "middle",
+};
+
+const manualFieldStyle: CSSProperties = {
+  width: "100%",
+  height: "38px",
+  padding: "0 10px",
+  borderRadius: "10px",
+  border: "1px solid #d1d5db",
+  backgroundColor: "#ffffff",
+  fontSize: "13px",
+  color: "#111827",
+  boxSizing: "border-box",
 };
 
 const manualSelectButtonStyle: CSSProperties = {
