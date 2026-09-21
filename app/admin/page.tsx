@@ -253,7 +253,7 @@ export default function AdminPage() {
 
 const [manualWorkplace, setManualWorkplace] =
   useState<WorkplaceName>("장사꾼");
-const [manualEmployeeName, setManualEmployeeName] = useState("");
+const [manualEmployeeIds, setManualEmployeeIds] = useState<number[]>([]);
 const [manualDate, setManualDate] = useState("");
 const [manualCheckInTime, setManualCheckInTime] = useState("");
 const [manualCheckOutTime, setManualCheckOutTime] = useState("");
@@ -397,6 +397,27 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
       fetchPayroll();
     }
   }, [tab]);
+
+  // 수동 출퇴근 추가용 직원 목록.
+  // 선택한 근무지의 활성 직원만, 동명이인 구분을 위해 주민번호 앞 6자리를 붙입니다.
+  const manualEmployeeOptions = useMemo(() => {
+    return employees
+      .filter((employee) => {
+        const employeeWorkplace = employee.workplace_name || "장사꾼";
+
+        return employee.is_active && employeeWorkplace === manualWorkplace;
+      })
+      .map((employee) => {
+        const prefix = getResidentPrefix(employee.resident_number_masked);
+
+        return {
+          id: employee.id,
+          name: employee.name,
+          label: prefix ? `${employee.name} (${prefix})` : employee.name,
+        };
+      })
+      .sort((a, b) => a.label.localeCompare(b.label, "ko"));
+  }, [employees, manualWorkplace]);
 
   const employeeMap = useMemo(() => {
     const map = new Map<number, Employee>();
@@ -1535,13 +1556,118 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
       lineHeight: 1.5,
     }}
   >
-    직원 이름과 시간을 직접 입력하여 출퇴근 기록을 추가할 수 있습니다.
+    직원을 여러 명 선택해서 같은 날짜·시간으로 한 번에 추가할 수 있습니다.
   </p>
 
   <div
     style={{
+      marginBottom: "14px",
+      padding: "14px",
+      borderRadius: "14px",
+      border: "1px solid #d1fae5",
+      background: "#ffffff",
+    }}
+  >
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "12px",
+        flexWrap: "wrap",
+        marginBottom: "10px",
+      }}
+    >
+      <label style={{ ...labelStyle, marginBottom: 0 }}>
+        직원 선택 ({manualWorkplace} 활성 {manualEmployeeOptions.length}명)
+        {manualEmployeeIds.length > 0 && (
+          <strong style={{ color: "#059669", marginLeft: "8px" }}>
+            {manualEmployeeIds.length}명 선택됨
+          </strong>
+        )}
+      </label>
+
+      <div style={{ display: "flex", gap: "8px" }}>
+        <button
+          type="button"
+          onClick={() =>
+            setManualEmployeeIds(
+              manualEmployeeOptions.map((option) => option.id)
+            )
+          }
+          style={manualSelectButtonStyle}
+        >
+          전체 선택
+        </button>
+        <button
+          type="button"
+          onClick={() => setManualEmployeeIds([])}
+          style={manualSelectButtonStyle}
+        >
+          선택 해제
+        </button>
+      </div>
+    </div>
+
+    {manualEmployeeOptions.length === 0 ? (
+      <div style={{ color: "#9ca3af", fontSize: "13px", fontWeight: 700 }}>
+        {manualWorkplace}에 활성 직원이 없습니다.
+      </div>
+    ) : (
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "8px",
+          maxHeight: "180px",
+          overflowY: "auto",
+        }}
+      >
+        {manualEmployeeOptions.map((option) => {
+          const checked = manualEmployeeIds.includes(option.id);
+
+          return (
+            <label
+              key={option.id}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "7px 12px",
+                borderRadius: "999px",
+                border: checked ? "1px solid #10b981" : "1px solid #e5e7eb",
+                background: checked ? "#ecfdf5" : "#ffffff",
+                color: checked ? "#047857" : "#374151",
+                fontSize: "13px",
+                fontWeight: 800,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() =>
+                  setManualEmployeeIds((prev) =>
+                    prev.includes(option.id)
+                      ? prev.filter((id) => id !== option.id)
+                      : [...prev, option.id]
+                  )
+                }
+                style={{ width: "15px", height: "15px", cursor: "pointer" }}
+              />
+              {option.label}
+            </label>
+          );
+        })}
+      </div>
+    )}
+  </div>
+
+  <div
+    style={{
       display: "grid",
-      gridTemplateColumns: "0.8fr 1.1fr 0.8fr 0.75fr 0.75fr auto",
+      gridTemplateColumns: "0.8fr 0.8fr 0.75fr 0.75fr auto",
       gap: "12px",
       alignItems: "end",
     }}
@@ -1550,9 +1676,11 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
       <label style={labelStyle}>근무지</label>
       <select
         value={manualWorkplace}
-        onChange={(e) =>
-          setManualWorkplace(e.target.value as WorkplaceName)
-        }
+        onChange={(e) => {
+          setManualWorkplace(e.target.value as WorkplaceName);
+          // 근무지가 바뀌면 직원 목록이 달라지므로 선택을 비웁니다.
+          setManualEmployeeIds([]);
+        }}
         style={{
           ...inputStyle,
           height: "44px",
@@ -1566,23 +1694,6 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
         <option value="깨소금">깨소금</option>
                   <option value="로엔티크">로엔티크</option>
       </select>
-    </div>
-
-    <div>
-      <label style={labelStyle}>직원 이름</label>
-      <input
-        type="text"
-        value={manualEmployeeName}
-        onChange={(e) => setManualEmployeeName(e.target.value)}
-        placeholder="직원 이름 입력"
-        style={{
-          ...inputStyle,
-          height: "44px",
-          borderRadius: "12px",
-          backgroundColor: "#ffffff",
-          fontSize: "14px",
-        }}
-      />
     </div>
 
     <div>
@@ -1638,8 +1749,12 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
     <button
       onClick={async () => {
         try {
-          if (!manualEmployeeName || !manualDate || !manualCheckInTime) {
-            alert("근무지, 직원 이름, 날짜, 출근시간은 필수입니다.");
+          if (
+            manualEmployeeIds.length === 0 ||
+            !manualDate ||
+            !manualCheckInTime
+          ) {
+            alert("근무지, 직원, 날짜, 출근시간은 필수입니다.");
             return;
           }
 
@@ -1650,7 +1765,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
             },
             body: JSON.stringify({
               workplaceName: manualWorkplace,
-              employeeName: manualEmployeeName,
+              employeeIds: manualEmployeeIds,
               date: manualDate,
               checkInTime: manualCheckInTime,
               checkOutTime: manualCheckOutTime,
@@ -1659,15 +1774,32 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
 
           const data = await response.json();
 
+          // 일부만 실패해도 누가 실패했는지 반드시 보여줍니다.
+          const failed = (data.results || []).filter(
+            (item: { success: boolean }) => !item.success
+          );
+
+          const failedLines = failed.map(
+            (item: { employeeName: string; message: string }) =>
+              `  · ${item.employeeName}: ${item.message}`
+          );
+
           if (!data.success) {
-            alert(data.message || "추가 실패");
+            alert(
+              [data.message || "추가 실패", ...failedLines].join("\n")
+            );
             return;
           }
 
-          alert("출퇴근 기록이 추가되었습니다.");
+          if (failed.length > 0) {
+            alert(
+              [data.message, "", "실패한 직원:", ...failedLines].join("\n")
+            );
+          } else {
+            alert(data.message || "출퇴근 기록이 추가되었습니다.");
+          }
 
-          setManualWorkplace("장사꾼");
-          setManualEmployeeName("");
+          setManualEmployeeIds([]);
           setManualDate("");
           setManualCheckInTime("");
           setManualCheckOutTime("");
@@ -1691,7 +1823,9 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
         boxShadow: "0 8px 16px rgba(16,185,129,0.16)",
       }}
     >
-      기록 추가
+      {manualEmployeeIds.length > 1
+        ? `${manualEmployeeIds.length}명 기록 추가`
+        : "기록 추가"}
     </button>
   </div>
 </div>
@@ -3613,6 +3747,18 @@ const tdStyle: CSSProperties = {
 const nameTextStyle: CSSProperties = {
   fontWeight: 700,
   color: "#111827",
+};
+
+const manualSelectButtonStyle: CSSProperties = {
+  height: "30px",
+  padding: "0 12px",
+  borderRadius: "999px",
+  border: "1px solid #d1d5db",
+  background: "#ffffff",
+  color: "#374151",
+  fontSize: "12px",
+  fontWeight: 800,
+  cursor: "pointer",
 };
 
 const badgeStyle: CSSProperties = {

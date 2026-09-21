@@ -191,12 +191,27 @@ export async function PUT(request: Request) {
     const body = await request.json();
 
     const {
+      employeeIds,
       employeeName,
       workplaceName,
       date,
       checkInTime,
       checkOutTime,
     } = body;
+
+    // 여러 명 동시 추가. employeeIds 가 오면 id 로 특정하므로 동명이인도 안전합니다.
+    // employeeIds 가 없으면 기존 이름 1명 방식으로 동작합니다(하위 호환).
+    const requestedIds = Array.isArray(employeeIds)
+      ? Array.from(
+          new Set(
+            employeeIds
+              .map((value: unknown) => Number(value))
+              .filter((id: number) => Number.isInteger(id) && id > 0)
+          )
+        )
+      : [];
+
+    const isBulkMode = requestedIds.length > 0;
 
     const trimmedEmployeeName = String(
       employeeName || ""
@@ -236,7 +251,7 @@ export async function PUT(request: Request) {
     }
 
     if (
-      !trimmedEmployeeName ||
+      (!isBulkMode && !trimmedEmployeeName) ||
       !date ||
       !checkInTime
     ) {
@@ -298,17 +313,15 @@ export async function PUT(request: Request) {
       serviceRoleKey
     );
 
-    const {
-      data: employees,
-      error: employeeError,
-    } = await supabase
+    const employeeQuery = supabase
       .from("employees")
-      .select(
-        "id, name, is_active, workplace_name, hourly_wage"
-      )
-      .eq("name", trimmedEmployeeName)
+      .select("id, name, is_active, workplace_name, hourly_wage")
       .eq("workplace_name", trimmedWorkplaceName)
       .eq("is_active", true);
+
+    const { data: employees, error: employeeError } = isBulkMode
+      ? await employeeQuery.in("id", requestedIds)
+      : await employeeQuery.eq("name", trimmedEmployeeName);
 
     if (employeeError) {
       return NextResponse.json(
@@ -320,17 +333,60 @@ export async function PUT(request: Request) {
       );
     }
 
+    // 조회에서 빠진 직원의 이름을 찾아둡니다.
+    // "ID 148" 대신 실제 이름을 보여줘야 관리자가 누가 빠졌는지 알 수 있습니다.
+    const resolveMissingNames = async (ids: number[]) => {
+      if (ids.length === 0) return new Map<number, string>();
+
+      const { data } = await supabase
+        .from("employees")
+        .select("id, name, is_active, workplace_name")
+        .in("id", ids);
+
+      return new Map(
+        ((data || []) as {
+          id: number;
+          name: string;
+          is_active: boolean;
+          workplace_name: string | null;
+        }[]).map((item) => [
+          item.id,
+          !item.is_active
+            ? `${item.name} (비활성)`
+            : item.workplace_name !== trimmedWorkplaceName
+            ? `${item.name} (${item.workplace_name || "근무지 없음"})`
+            : item.name,
+        ])
+      );
+    };
+
     if (!employees || employees.length === 0) {
+      const names = await resolveMissingNames(requestedIds);
+
+      const results = requestedIds.map((id) => ({
+        employeeId: id,
+        employeeName: names.get(id) ?? `ID ${id}`,
+        success: false,
+        message: "해당 근무지의 활성 직원이 아닙니다.",
+        insertedCount: 0,
+      }));
+
       return NextResponse.json(
         {
           success: false,
-          message: `${trimmedWorkplaceName} 근무지에서 '${trimmedEmployeeName}' 직원을 찾을 수 없습니다.`,
+          message: isBulkMode
+            ? `${trimmedWorkplaceName} 근무지에서 선택한 직원을 찾을 수 없습니다.`
+            : `${trimmedWorkplaceName} 근무지에서 '${trimmedEmployeeName}' 직원을 찾을 수 없습니다.`,
+          successCount: 0,
+          failCount: results.length,
+          results,
         },
         { status: 404 }
       );
     }
 
-    if (employees.length > 1) {
+    // 이름 방식일 때만 동명이인을 막습니다. id 방식은 애초에 갈릴 일이 없습니다.
+    if (!isBulkMode && employees.length > 1) {
       return NextResponse.json(
         {
           success: false,
@@ -341,102 +397,178 @@ export async function PUT(request: Request) {
       );
     }
 
-    const employee = employees[0];
+    type TargetEmployee = {
+      id: number;
+      name: string;
+      hourly_wage: number | null;
+    };
 
-    const currentHourlyWage = Number(
-      employee.hourly_wage || 0
-    );
+    const targets = employees as TargetEmployee[];
 
-    // 수동으로 과거 날짜를 추가할 때 현재 시급을 무조건 쓰지 않고,
-    // 해당 날짜에 맞는 기존 시급 스냅샷을 찾아 사용합니다.
-    const hourlyWageSnapshot =
-      await resolveManualHourlyWageSnapshot(
-        supabase,
-        employee.id,
-        String(date),
-        currentHourlyWage
-      );
+    // 요청했는데 조회되지 않은 id(비활성이거나 다른 근무지)는 따로 보고합니다.
+    const foundIds = new Set(targets.map((item) => item.id));
+    const missingIds = requestedIds.filter((id) => !foundIds.has(id));
 
-    const rows: {
-      employee_id: number;
-      record_type: "check_in" | "check_out";
-      checked_at: string;
-      lat: null;
-      lng: null;
-      hourly_wage_snapshot: number;
-    }[] = [
-      {
-        employee_id: employee.id,
-        record_type: "check_in",
-        checked_at: checkInDate.toISOString(),
-        lat: null,
-        lng: null,
-        hourly_wage_snapshot: hourlyWageSnapshot,
-      },
-    ];
+    type PerEmployeeResult = {
+      employeeId: number;
+      employeeName: string;
+      success: boolean;
+      message: string;
+      insertedCount: number;
+    };
 
-    if (checkOutDate) {
-      rows.push({
-        employee_id: employee.id,
-        record_type: "check_out",
-        checked_at: checkOutDate.toISOString(),
-        lat: null,
-        lng: null,
-        hourly_wage_snapshot: hourlyWageSnapshot,
-      });
-    }
+    const results: PerEmployeeResult[] = [];
 
-    const { data: insertedRows, error } = await supabase
-      .from("attendance_records")
-      .insert(rows)
-      .select("id, employee_id, record_type, checked_at");
+    // 직원마다 시급 스냅샷이 다를 수 있어 한 명씩 처리합니다.
+    // 한 명이 실패해도 나머지는 계속 진행하고, 결과를 전부 돌려줍니다.
+    for (const employee of targets) {
+      try {
+        const currentHourlyWage = Number(employee.hourly_wage || 0);
 
-    if (error) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: `수동 추가 실패: ${error.message}`,
-        },
-        { status: 500 }
-      );
-    }
+        // 수동으로 과거 날짜를 추가할 때 현재 시급을 무조건 쓰지 않고,
+        // 해당 날짜에 맞는 기존 시급 스냅샷을 찾아 사용합니다.
+        const hourlyWageSnapshot = await resolveManualHourlyWageSnapshot(
+          supabase,
+          employee.id,
+          String(date),
+          currentHourlyWage
+        );
 
-    if (!insertedRows || insertedRows.length === 0) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "출퇴근 기록이 추가되지 않았습니다. 다시 시도해주세요.",
-        },
-        { status: 500 }
-      );
-    }
-
-    // 감사 기록은 실패해도 요청을 실패시키지 않습니다(추가는 이미 성공).
-    await logAttendanceChanges(
-      supabase,
-      request,
-      (
-        insertedRows as {
-          id: number;
+        const rows: {
           employee_id: number;
-          record_type: string;
+          record_type: "check_in" | "check_out";
           checked_at: string;
-        }[]
-      ).map((row) => ({
-        recordId: row.id,
-        employeeId: row.employee_id,
-        action: "insert" as const,
-        field: "checked_at",
-        oldValue: null,
-        newValue: row.checked_at,
-        source: "admin-manual-add" as const,
-      }))
-    );
+          lat: null;
+          lng: null;
+          hourly_wage_snapshot: number;
+        }[] = [
+          {
+            employee_id: employee.id,
+            record_type: "check_in",
+            checked_at: checkInDate.toISOString(),
+            lat: null,
+            lng: null,
+            hourly_wage_snapshot: hourlyWageSnapshot,
+          },
+        ];
+
+        if (checkOutDate) {
+          rows.push({
+            employee_id: employee.id,
+            record_type: "check_out",
+            checked_at: checkOutDate.toISOString(),
+            lat: null,
+            lng: null,
+            hourly_wage_snapshot: hourlyWageSnapshot,
+          });
+        }
+
+        const { data: insertedRows, error } = await supabase
+          .from("attendance_records")
+          .insert(rows)
+          .select("id, employee_id, record_type, checked_at");
+
+        if (error) {
+          results.push({
+            employeeId: employee.id,
+            employeeName: employee.name,
+            success: false,
+            message: error.message,
+            insertedCount: 0,
+          });
+          continue;
+        }
+
+        if (!insertedRows || insertedRows.length === 0) {
+          results.push({
+            employeeId: employee.id,
+            employeeName: employee.name,
+            success: false,
+            message: "기록이 추가되지 않았습니다.",
+            insertedCount: 0,
+          });
+          continue;
+        }
+
+        // 감사 기록은 실패해도 추가를 되돌리지 않습니다(이미 성공).
+        await logAttendanceChanges(
+          supabase,
+          request,
+          (
+            insertedRows as {
+              id: number;
+              employee_id: number;
+              record_type: string;
+              checked_at: string;
+            }[]
+          ).map((row) => ({
+            recordId: row.id,
+            employeeId: row.employee_id,
+            action: "insert" as const,
+            field: "checked_at",
+            oldValue: null,
+            newValue: row.checked_at,
+            source: "admin-manual-add" as const,
+          }))
+        );
+
+        results.push({
+          employeeId: employee.id,
+          employeeName: employee.name,
+          success: true,
+          message: "추가됨",
+          insertedCount: insertedRows.length,
+        });
+      } catch (error) {
+        results.push({
+          employeeId: employee.id,
+          employeeName: employee.name,
+          success: false,
+          message:
+            error instanceof Error ? error.message : "알 수 없는 오류",
+          insertedCount: 0,
+        });
+      }
+    }
+
+    const missingNames = await resolveMissingNames(missingIds);
+
+    missingIds.forEach((id) => {
+      results.push({
+        employeeId: id,
+        employeeName: missingNames.get(id) ?? `ID ${id}`,
+        success: false,
+        message: "해당 근무지의 활성 직원이 아닙니다.",
+        insertedCount: 0,
+      });
+    });
+
+    const successResults = results.filter((item) => item.success);
+    const failedResults = results.filter((item) => !item.success);
+
+    // 전부 실패면 요청 자체를 실패로 돌려 화면이 성공으로 오해하지 않게 합니다.
+    if (successResults.length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "출퇴근 기록이 추가되지 않았습니다.",
+          successCount: 0,
+          failCount: failedResults.length,
+          results,
+        },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       success: true,
-      message: "출퇴근 기록이 추가되었습니다.",
-      hourlyWageSnapshot,
+      message:
+        failedResults.length === 0
+          ? `${successResults.length}명의 출퇴근 기록이 추가되었습니다.`
+          : `${successResults.length}명 추가 완료, ${failedResults.length}명 실패했습니다.`,
+      successCount: successResults.length,
+      failCount: failedResults.length,
+      results,
     });
   } catch (error) {
     return NextResponse.json(
