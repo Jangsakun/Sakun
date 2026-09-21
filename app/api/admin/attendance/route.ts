@@ -4,6 +4,9 @@ import { logAttendanceChanges } from "@/app/lib/attendanceAudit";
 
 const ALLOWED_WORKPLACES = ["장사꾼", "헤모즈", "깨소금", "로엔티크"];
 
+/** 한 번에 추가할 수 있는 최대 기간(일). 실수로 몇 년치를 넣는 사고를 막습니다. */
+const MAX_BULK_DAYS = 92;
+
 function getKstDateKey(date = new Date()) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Seoul",
@@ -195,6 +198,8 @@ export async function PUT(request: Request) {
       employeeName,
       workplaceName,
       date,
+      endDate,
+      skipWeekends,
       checkInTime,
       checkOutTime,
     } = body;
@@ -265,11 +270,84 @@ export async function PUT(request: Request) {
       );
     }
 
-    const checkInDate = new Date(
-      `${date}T${checkInTime}:00+09:00`
+    // 기간 추가. endDate 를 안 주면 하루만 처리합니다(기존 동작).
+    const startDateKey = String(date);
+    const endDateKey = String(endDate || date);
+
+    if (endDateKey < startDateKey) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "종료일은 시작일보다 빠를 수 없습니다.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const targetDates: string[] = [];
+    const skippedWeekendDates: string[] = [];
+
+    {
+      const cursor = new Date(`${startDateKey}T00:00:00+09:00`);
+      const last = new Date(`${endDateKey}T00:00:00+09:00`);
+
+      if (Number.isNaN(cursor.getTime()) || Number.isNaN(last.getTime())) {
+        return NextResponse.json(
+          { success: false, message: "날짜가 올바르지 않습니다." },
+          { status: 400 }
+        );
+      }
+
+      while (cursor.getTime() <= last.getTime()) {
+        const key = getKstDateKey(cursor);
+
+        // 요일 판정은 KST 기준으로 합니다.
+        const weekday = new Intl.DateTimeFormat("en-US", {
+          timeZone: "Asia/Seoul",
+          weekday: "short",
+        }).format(cursor);
+
+        const isWeekend = weekday === "Sat" || weekday === "Sun";
+
+        if (skipWeekends && isWeekend) {
+          skippedWeekendDates.push(key);
+        } else {
+          targetDates.push(key);
+        }
+
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+
+        // 실수로 몇 년치를 넣는 사고를 막습니다.
+        if (targetDates.length + skippedWeekendDates.length > MAX_BULK_DAYS) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: `한 번에 추가할 수 있는 기간은 최대 ${MAX_BULK_DAYS}일입니다.`,
+            },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
+    if (targetDates.length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: skipWeekends
+            ? "선택한 기간이 전부 주말이라 추가할 날짜가 없습니다."
+            : "추가할 날짜가 없습니다.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // 시간 형식은 첫 날짜로 한 번만 검증합니다(모든 날짜에 같은 시간을 씁니다).
+    const sampleCheckIn = new Date(
+      `${targetDates[0]}T${checkInTime}:00+09:00`
     );
 
-    if (Number.isNaN(checkInDate.getTime())) {
+    if (Number.isNaN(sampleCheckIn.getTime())) {
       return NextResponse.json(
         {
           success: false,
@@ -279,14 +357,12 @@ export async function PUT(request: Request) {
       );
     }
 
-    let checkOutDate: Date | null = null;
-
     if (checkOutTime) {
-      checkOutDate = new Date(
-        `${date}T${checkOutTime}:00+09:00`
+      const sampleCheckOut = new Date(
+        `${targetDates[0]}T${checkOutTime}:00+09:00`
       );
 
-      if (Number.isNaN(checkOutDate.getTime())) {
+      if (Number.isNaN(sampleCheckOut.getTime())) {
         return NextResponse.json(
           {
             success: false,
@@ -296,7 +372,7 @@ export async function PUT(request: Request) {
         );
       }
 
-      if (checkOutDate.getTime() < checkInDate.getTime()) {
+      if (sampleCheckOut.getTime() < sampleCheckIn.getTime()) {
         return NextResponse.json(
           {
             success: false,
@@ -415,109 +491,150 @@ export async function PUT(request: Request) {
       success: boolean;
       message: string;
       insertedCount: number;
+      addedDates: string[];
+      /** 이미 기록이 있어 건너뛴 날. 중복 추가는 급여 이중 계산으로 이어집니다. */
+      skippedDates: string[];
+      failedDates: string[];
     };
 
     const results: PerEmployeeResult[] = [];
 
-    // 직원마다 시급 스냅샷이 다를 수 있어 한 명씩 처리합니다.
-    // 한 명이 실패해도 나머지는 계속 진행하고, 결과를 전부 돌려줍니다.
+    const rangeStartUtc = `${targetDates[0]}T00:00:00+09:00`;
+    const rangeEndUtc = `${targetDates[targetDates.length - 1]}T23:59:59.999+09:00`;
+
+    // 직원마다 시급 스냅샷이 다를 수 있어 한 명씩, 날짜별로 처리합니다.
+    // 한 건이 실패해도 나머지는 계속 진행하고 결과를 전부 돌려줍니다.
     for (const employee of targets) {
+      const addedDates: string[] = [];
+      const skippedDates: string[] = [];
+      const failedDates: string[] = [];
+      let insertedCount = 0;
+
       try {
+        // 이미 기록이 있는 날을 미리 한 번에 조회합니다.
+        // 날짜마다 조회하면 왕복이 날짜 수만큼 늘어납니다.
+        const { data: existing } = await supabase
+          .from("attendance_records")
+          .select("checked_at")
+          .eq("employee_id", employee.id)
+          .gte("checked_at", rangeStartUtc)
+          .lte("checked_at", rangeEndUtc);
+
+        const existingDates = new Set(
+          ((existing || []) as { checked_at: string }[]).map((row) =>
+            getKstDateKey(new Date(row.checked_at))
+          )
+        );
+
         const currentHourlyWage = Number(employee.hourly_wage || 0);
 
-        // 수동으로 과거 날짜를 추가할 때 현재 시급을 무조건 쓰지 않고,
-        // 해당 날짜에 맞는 기존 시급 스냅샷을 찾아 사용합니다.
-        const hourlyWageSnapshot = await resolveManualHourlyWageSnapshot(
-          supabase,
-          employee.id,
-          String(date),
-          currentHourlyWage
-        );
+        for (const targetDate of targetDates) {
+          // 그 날 이미 기록이 있으면 건너뜁니다.
+          // 덮어쓰지 않는 이유: 기존 기록이 실제 출퇴근일 수 있고,
+          // 중복으로 넣으면 급여가 이중 계산됩니다.
+          if (existingDates.has(targetDate)) {
+            skippedDates.push(targetDate);
+            continue;
+          }
 
-        const rows: {
-          employee_id: number;
-          record_type: "check_in" | "check_out";
-          checked_at: string;
-          lat: null;
-          lng: null;
-          hourly_wage_snapshot: number;
-        }[] = [
-          {
-            employee_id: employee.id,
-            record_type: "check_in",
-            checked_at: checkInDate.toISOString(),
-            lat: null,
-            lng: null,
-            hourly_wage_snapshot: hourlyWageSnapshot,
-          },
-        ];
+          const checkInAt = new Date(
+            `${targetDate}T${checkInTime}:00+09:00`
+          );
 
-        if (checkOutDate) {
-          rows.push({
-            employee_id: employee.id,
-            record_type: "check_out",
-            checked_at: checkOutDate.toISOString(),
-            lat: null,
-            lng: null,
-            hourly_wage_snapshot: hourlyWageSnapshot,
-          });
+          const checkOutAt = checkOutTime
+            ? new Date(`${targetDate}T${checkOutTime}:00+09:00`)
+            : null;
+
+          // 수동으로 과거 날짜를 추가할 때 현재 시급을 무조건 쓰지 않고,
+          // 해당 날짜에 맞는 기존 시급 스냅샷을 찾아 사용합니다.
+          const hourlyWageSnapshot = await resolveManualHourlyWageSnapshot(
+            supabase,
+            employee.id,
+            targetDate,
+            currentHourlyWage
+          );
+
+          const rows: {
+            employee_id: number;
+            record_type: "check_in" | "check_out";
+            checked_at: string;
+            lat: null;
+            lng: null;
+            hourly_wage_snapshot: number;
+          }[] = [
+            {
+              employee_id: employee.id,
+              record_type: "check_in",
+              checked_at: checkInAt.toISOString(),
+              lat: null,
+              lng: null,
+              hourly_wage_snapshot: hourlyWageSnapshot,
+            },
+          ];
+
+          if (checkOutAt) {
+            rows.push({
+              employee_id: employee.id,
+              record_type: "check_out",
+              checked_at: checkOutAt.toISOString(),
+              lat: null,
+              lng: null,
+              hourly_wage_snapshot: hourlyWageSnapshot,
+            });
+          }
+
+          const { data: insertedRows, error } = await supabase
+            .from("attendance_records")
+            .insert(rows)
+            .select("id, employee_id, record_type, checked_at");
+
+          if (error || !insertedRows || insertedRows.length === 0) {
+            failedDates.push(targetDate);
+            continue;
+          }
+
+          insertedCount += insertedRows.length;
+          addedDates.push(targetDate);
+
+          // 감사 기록은 실패해도 추가를 되돌리지 않습니다(이미 성공).
+          await logAttendanceChanges(
+            supabase,
+            request,
+            (
+              insertedRows as {
+                id: number;
+                employee_id: number;
+                record_type: string;
+                checked_at: string;
+              }[]
+            ).map((row) => ({
+              recordId: row.id,
+              employeeId: row.employee_id,
+              action: "insert" as const,
+              field: "checked_at",
+              oldValue: null,
+              newValue: row.checked_at,
+              source: "admin-manual-add" as const,
+            }))
+          );
         }
 
-        const { data: insertedRows, error } = await supabase
-          .from("attendance_records")
-          .insert(rows)
-          .select("id, employee_id, record_type, checked_at");
+        const parts: string[] = [];
 
-        if (error) {
-          results.push({
-            employeeId: employee.id,
-            employeeName: employee.name,
-            success: false,
-            message: error.message,
-            insertedCount: 0,
-          });
-          continue;
-        }
-
-        if (!insertedRows || insertedRows.length === 0) {
-          results.push({
-            employeeId: employee.id,
-            employeeName: employee.name,
-            success: false,
-            message: "기록이 추가되지 않았습니다.",
-            insertedCount: 0,
-          });
-          continue;
-        }
-
-        // 감사 기록은 실패해도 추가를 되돌리지 않습니다(이미 성공).
-        await logAttendanceChanges(
-          supabase,
-          request,
-          (
-            insertedRows as {
-              id: number;
-              employee_id: number;
-              record_type: string;
-              checked_at: string;
-            }[]
-          ).map((row) => ({
-            recordId: row.id,
-            employeeId: row.employee_id,
-            action: "insert" as const,
-            field: "checked_at",
-            oldValue: null,
-            newValue: row.checked_at,
-            source: "admin-manual-add" as const,
-          }))
-        );
+        if (addedDates.length > 0) parts.push(`${addedDates.length}일 추가`);
+        if (skippedDates.length > 0)
+          parts.push(`${skippedDates.length}일 건너뜀(이미 기록 있음)`);
+        if (failedDates.length > 0) parts.push(`${failedDates.length}일 실패`);
 
         results.push({
           employeeId: employee.id,
           employeeName: employee.name,
-          success: true,
-          message: "추가됨",
-          insertedCount: insertedRows.length,
+          success: addedDates.length > 0,
+          message: parts.join(", ") || "추가된 날짜 없음",
+          insertedCount,
+          addedDates,
+          skippedDates,
+          failedDates,
         });
       } catch (error) {
         results.push({
@@ -526,7 +643,10 @@ export async function PUT(request: Request) {
           success: false,
           message:
             error instanceof Error ? error.message : "알 수 없는 오류",
-          insertedCount: 0,
+          insertedCount,
+          addedDates,
+          skippedDates,
+          failedDates,
         });
       }
     }
@@ -540,34 +660,71 @@ export async function PUT(request: Request) {
         success: false,
         message: "해당 근무지의 활성 직원이 아닙니다.",
         insertedCount: 0,
+        addedDates: [],
+        skippedDates: [],
+        failedDates: [],
       });
     });
 
     const successResults = results.filter((item) => item.success);
     const failedResults = results.filter((item) => !item.success);
+    const totalAddedDays = results.reduce(
+      (sum, item) => sum + item.addedDates.length,
+      0
+    );
+    const totalSkippedDays = results.reduce(
+      (sum, item) => sum + item.skippedDates.length,
+      0
+    );
+
+    const rangeText =
+      targetDates.length > 1
+        ? `${targetDates[0]} ~ ${targetDates[targetDates.length - 1]} (${
+            targetDates.length
+          }일)`
+        : targetDates[0];
 
     // 전부 실패면 요청 자체를 실패로 돌려 화면이 성공으로 오해하지 않게 합니다.
     if (successResults.length === 0) {
       return NextResponse.json(
         {
           success: false,
-          message: "출퇴근 기록이 추가되지 않았습니다.",
+          message:
+            totalSkippedDays > 0
+              ? "추가된 기록이 없습니다. 선택한 날짜에 이미 기록이 있습니다."
+              : "출퇴근 기록이 추가되지 않았습니다.",
+          range: rangeText,
           successCount: 0,
           failCount: failedResults.length,
+          totalAddedDays: 0,
+          totalSkippedDays,
+          skippedWeekendCount: skippedWeekendDates.length,
           results,
         },
         { status: 500 }
       );
     }
 
+    const summaryParts = [
+      `${successResults.length}명 / 총 ${totalAddedDays}일치 추가`,
+    ];
+
+    if (totalSkippedDays > 0)
+      summaryParts.push(`${totalSkippedDays}일 건너뜀(이미 기록 있음)`);
+    if (skippedWeekendDates.length > 0)
+      summaryParts.push(`주말 ${skippedWeekendDates.length}일 제외`);
+    if (failedResults.length > 0)
+      summaryParts.push(`${failedResults.length}명 실패`);
+
     return NextResponse.json({
       success: true,
-      message:
-        failedResults.length === 0
-          ? `${successResults.length}명의 출퇴근 기록이 추가되었습니다.`
-          : `${successResults.length}명 추가 완료, ${failedResults.length}명 실패했습니다.`,
+      message: summaryParts.join(", "),
+      range: rangeText,
       successCount: successResults.length,
       failCount: failedResults.length,
+      totalAddedDays,
+      totalSkippedDays,
+      skippedWeekendCount: skippedWeekendDates.length,
       results,
     });
   } catch (error) {

@@ -255,6 +255,8 @@ const [manualWorkplace, setManualWorkplace] =
   useState<WorkplaceName>("장사꾼");
 const [manualEmployeeIds, setManualEmployeeIds] = useState<number[]>([]);
 const [manualDate, setManualDate] = useState("");
+const [manualEndDate, setManualEndDate] = useState("");
+const [manualSkipWeekends, setManualSkipWeekends] = useState(true);
 const [manualCheckInTime, setManualCheckInTime] = useState("");
 const [manualCheckOutTime, setManualCheckOutTime] = useState("");
 
@@ -1556,7 +1558,8 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
       lineHeight: 1.5,
     }}
   >
-    직원을 여러 명 선택해서 같은 날짜·시간으로 한 번에 추가할 수 있습니다.
+    직원을 여러 명 선택하고 기간을 지정해 한 번에 추가할 수 있습니다.
+    이미 기록이 있는 날은 중복 방지를 위해 자동으로 건너뜁니다.
   </p>
 
   <div
@@ -1587,7 +1590,28 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
         )}
       </label>
 
-      <div style={{ display: "flex", gap: "8px" }}>
+      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+        <label
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
+            fontSize: "12px",
+            fontWeight: 800,
+            color: "#374151",
+            cursor: "pointer",
+            marginRight: "4px",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={manualSkipWeekends}
+            onChange={(e) => setManualSkipWeekends(e.target.checked)}
+            style={{ width: "15px", height: "15px", cursor: "pointer" }}
+          />
+          주말 제외
+        </label>
+
         <button
           type="button"
           onClick={() =>
@@ -1667,7 +1691,7 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
   <div
     style={{
       display: "grid",
-      gridTemplateColumns: "0.8fr 0.8fr 0.75fr 0.75fr auto",
+      gridTemplateColumns: "0.7fr 0.8fr 0.8fr 0.7fr 0.7fr auto",
       gap: "12px",
       alignItems: "end",
     }}
@@ -1697,11 +1721,28 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
     </div>
 
     <div>
-      <label style={labelStyle}>날짜</label>
+      <label style={labelStyle}>시작일</label>
       <input
         type="date"
         value={manualDate}
         onChange={(e) => setManualDate(e.target.value)}
+        style={{
+          ...inputStyle,
+          height: "44px",
+          borderRadius: "12px",
+          backgroundColor: "#ffffff",
+          fontSize: "14px",
+        }}
+      />
+    </div>
+
+    <div>
+      <label style={labelStyle}>종료일 (비우면 하루)</label>
+      <input
+        type="date"
+        value={manualEndDate}
+        min={manualDate || undefined}
+        onChange={(e) => setManualEndDate(e.target.value)}
         style={{
           ...inputStyle,
           height: "44px",
@@ -1767,6 +1808,8 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
               workplaceName: manualWorkplace,
               employeeIds: manualEmployeeIds,
               date: manualDate,
+              endDate: manualEndDate || manualDate,
+              skipWeekends: manualSkipWeekends,
               checkInTime: manualCheckInTime,
               checkOutTime: manualCheckOutTime,
             }),
@@ -1791,16 +1834,35 @@ const [manualCheckOutTime, setManualCheckOutTime] = useState("");
             return;
           }
 
-          if (failed.length > 0) {
-            alert(
-              [data.message, "", "실패한 직원:", ...failedLines].join("\n")
+          // 건너뛴 날짜를 반드시 보여줍니다.
+          // 조용히 빠지면 그날만 기록이 없는 걸 모르고 지나갑니다.
+          const skippedLines = (data.results || [])
+            .filter(
+              (item: { skippedDates?: string[] }) =>
+                (item.skippedDates || []).length > 0
+            )
+            .map(
+              (item: { employeeName: string; skippedDates: string[] }) =>
+                `  · ${item.employeeName}: ${item.skippedDates.join(", ")}`
             );
-          } else {
-            alert(data.message || "출퇴근 기록이 추가되었습니다.");
+
+          const lines: string[] = [data.message];
+
+          if (data.range) lines.push(`기간: ${data.range}`);
+
+          if (skippedLines.length > 0) {
+            lines.push("", "이미 기록이 있어 건너뛴 날:", ...skippedLines);
           }
+
+          if (failed.length > 0) {
+            lines.push("", "실패한 직원:", ...failedLines);
+          }
+
+          alert(lines.join("\n"));
 
           setManualEmployeeIds([]);
           setManualDate("");
+          setManualEndDate("");
           setManualCheckInTime("");
           setManualCheckOutTime("");
 
