@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { logAttendanceChanges } from "@/app/lib/attendanceAudit";
+import { loadPayOverrides } from "@/app/lib/payOverride";
 
 const ALLOWED_WORKPLACES = ["장사꾼", "헤모즈", "깨소금", "로엔티크"];
 
@@ -174,9 +175,45 @@ export async function POST(request: Request) {
       );
     }
 
+    // 세전급여 수정값은 금액이라 브라우저용 anon 키로는 읽지 못하게 막아뒀습니다.
+    // 화면에서 "수정됨"을 표시하려면 같이 실어 보내야 합니다.
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    let payOverrides: {
+      employeeId: number;
+      date: string;
+      grossPay: number;
+      memo: string | null;
+    }[] = [];
+
+    let payOverrideWarning: string | null = null;
+
+    if (serviceRoleKey) {
+      const loaded = await loadPayOverrides(
+        createClient(supabaseUrl, serviceRoleKey),
+        startDate,
+        endDate
+      );
+
+      if (loaded.error) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: `세전급여 수정값 조회 실패: ${loaded.error}`,
+          },
+          { status: 500 }
+        );
+      }
+
+      payOverrideWarning = loaded.warning;
+      payOverrides = [...loaded.overrides.values()];
+    }
+
     return NextResponse.json({
       success: true,
       records: data ?? [],
+      payOverrides,
+      payOverrideWarning,
     });
   } catch (error) {
     return NextResponse.json(

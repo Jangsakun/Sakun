@@ -4,6 +4,7 @@ import {
   logAttendanceChanges,
   readRecordsForDelete,
 } from "@/app/lib/attendanceAudit";
+import { clearOrphanPayOverrides } from "@/app/lib/payOverride";
 
 export async function DELETE(request: Request) {
   try {
@@ -91,6 +92,21 @@ export async function DELETE(request: Request) {
           source: "admin-delete" as const,
         };
       })
+    );
+
+    // 그 날 기록이 전부 사라졌는데 수정해둔 세전급여만 남으면,
+    // 나중에 같은 날을 다시 입력했을 때 옛 금액이 되살아납니다.
+    await clearOrphanPayOverrides(
+      supabase,
+      deleted.map((row) => ({
+        employeeId: row.employee_id,
+        date: new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Asia/Seoul",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).format(new Date(row.checked_at)),
+      }))
     );
 
     return NextResponse.json({

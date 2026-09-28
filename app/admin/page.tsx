@@ -52,9 +52,25 @@ type AdminRecord = {
   } | null;
 };
 
+/** 관리자가 직접 지정한 하루치 세전급여. */
+type PayOverrideItem = {
+  employeeId: number;
+  date: string;
+  grossPay: number;
+  memo: string | null;
+};
+
 type AdminAttendanceResponse = {
   success: boolean;
   records?: AdminRecord[];
+  payOverrides?: PayOverrideItem[];
+  payOverrideWarning?: string | null;
+  message?: string;
+};
+
+type PayOverrideResponse = {
+  success: boolean;
+  changed?: boolean;
   message?: string;
 };
 
@@ -95,8 +111,13 @@ type GroupedAttendanceRow = {
   checkOutRecordId: number | null;
   workMinutes: number | null;
   hourlyWage: number;
+  /** 실제로 쓰이는 금액. 수정값이 있으면 수정값, 없으면 자동 계산값. */
   grossPay: number | null;
   netPay: number | null;
+  /** 근무시간 × 시급으로 계산한 원래 금액. 수정값과 비교해 보여주기 위한 값. */
+  autoGrossPay: number | null;
+  /** 관리자가 직접 지정한 금액. 자동 계산이면 null. */
+  payOverride: number | null;
   statusText: string;
   statusColor: string;
   statusBg: string;
@@ -256,7 +277,13 @@ export default function AdminPage() {
   >(null);
   const [editCheckInTime, setEditCheckInTime] = useState("");
   const [editCheckOutTime, setEditCheckOutTime] = useState("");
+  // 빈 문자열 = 자동 계산. 숫자를 넣으면 그 날 세전급여가 그 금액으로 고정됩니다.
+  const [editGrossPay, setEditGrossPay] = useState("");
   const [attendanceSaving, setAttendanceSaving] = useState(false);
+
+  const [payOverrideItems, setPayOverrideItems] = useState<PayOverrideItem[]>(
+    []
+  );
 
   // 수동 출퇴근 추가는 행 단위로 입력합니다.
   // 직원마다 날짜·출퇴근시간이 다르기 때문에 한 줄에 하나씩 담습니다.
@@ -300,14 +327,19 @@ export default function AdminPage() {
 
       if (data.success && data.records) {
         setRecords(data.records);
-        setAttendanceMessage("");
+        setPayOverrideItems(data.payOverrides || []);
+        // 마이그레이션 전이라 금액 수정 기능이 아직 꺼져 있는 경우입니다.
+        // 조용히 넘어가면 수정이 안 되는 이유를 알 수 없습니다.
+        setAttendanceMessage(data.payOverrideWarning || "");
       } else {
         setRecords([]);
+        setPayOverrideItems([]);
         setAttendanceMessage(data.message || "기록 조회 실패");
       }
     } catch (error) {
       console.error(error);
       setRecords([]);
+      setPayOverrideItems([]);
       setAttendanceMessage("서버 요청 중 오류 발생");
     } finally {
       setAttendanceLoading(false);
@@ -657,6 +689,18 @@ export default function AdminPage() {
     });
   }, [employees, employeeSearch, selectedWorkplace, selectedStatus]);
 
+  // (직원, 날짜) → 직접 지정한 세전급여.
+  // 서버(app/lib/payOverride.ts)와 같은 키 규칙을 씁니다.
+  const payOverrideMap = useMemo(() => {
+    const map = new Map<string, number>();
+
+    for (const item of payOverrideItems) {
+      map.set(`${item.employeeId}_${item.date}`, item.grossPay);
+    }
+
+    return map;
+  }, [payOverrideItems]);
+
   const groupedAttendanceRows = useMemo(() => {
     const grouped = new Map<string, AdminRecord[]>();
 
@@ -741,6 +785,18 @@ export default function AdminPage() {
         netPay = Math.round(grossPay * 0.967);
       }
 
+      const autoGrossPay = grossPay;
+
+      // 관리자가 금액을 직접 지정한 날은 계산값 대신 그 금액을 씁니다.
+      // 근무시간이 0이라 계산값이 없던 날도 지정 금액은 그대로 표시합니다.
+      const overrideValue =
+        payOverrideMap.get(`${employeeId}_${date}`) ?? null;
+
+      if (overrideValue !== null) {
+        grossPay = overrideValue;
+        netPay = Math.round(overrideValue * 0.967);
+      }
+
       let statusText = "기록 확인 필요";
       let statusColor = "#92400e";
       let statusBg = "#fef3c7";
@@ -774,6 +830,8 @@ export default function AdminPage() {
         hourlyWage,
         grossPay,
         netPay,
+        autoGrossPay,
+        payOverride: overrideValue,
         statusText,
         statusColor,
         statusBg,
@@ -786,7 +844,7 @@ export default function AdminPage() {
       }
       return b.date.localeCompare(a.date);
     });
-  }, [filteredRecords, employeeMap]);
+  }, [filteredRecords, employeeMap, payOverrideMap]);
 
   const summaryCheckInCount = groupedAttendanceRows.filter(
     (row) => row.checkIn !== null
@@ -1192,12 +1250,16 @@ export default function AdminPage() {
     setEditingAttendanceKey(row.key);
     setEditCheckInTime(toDateTimeLocalValue(row.checkIn));
     setEditCheckOutTime(toDateTimeLocalValue(row.checkOut));
+    // 고정해둔 금액이 없으면 비워둡니다.
+    // 비어 있는 상태 = 근무시간 × 시급 자동 계산.
+    setEditGrossPay(row.payOverride !== null ? String(row.payOverride) : "");
   };
 
   const cancelAttendanceEdit = () => {
     setEditingAttendanceKey(null);
     setEditCheckInTime("");
     setEditCheckOutTime("");
+    setEditGrossPay("");
   };
 
   const saveAttendanceEdit = async (row: GroupedAttendanceRow) => {
@@ -1216,33 +1278,98 @@ export default function AdminPage() {
       }
     }
 
-    try {
-      setAttendanceSaving(true);
+    // 쉼표를 넣어 입력하는 경우가 많아 떼고 읽습니다.
+    const typedGrossPay = editGrossPay.replace(/[,\s원]/g, "").trim();
+    const nextOverride = typedGrossPay === "" ? null : Number(typedGrossPay);
 
-      const response = await fetch("/api/admin/attendance/update", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          checkInRecordId: row.checkInRecordId,
-          checkOutRecordId: row.checkOutRecordId,
-          employeeId: row.employeeId,
-          employeeName: row.employeeName,
-          date: row.date,
-          checkInTime: editCheckInTime || null,
-          checkOutTime: editCheckOutTime || null,
-        }),
-      });
-
-      const data: AttendanceUpdateResponse = await response.json();
-
-      if (!data.success) {
-        alert(data.message || "출퇴근 수정 실패");
+    if (nextOverride !== null) {
+      if (!Number.isFinite(nextOverride) || !Number.isInteger(nextOverride)) {
+        alert("세전급여는 숫자만, 원 단위로 입력해주세요.");
         return;
       }
 
-      alert("출퇴근 시간이 수정되었습니다.");
+      if (nextOverride < 0) {
+        alert("세전급여는 0원 이상이어야 합니다.");
+        return;
+      }
+    }
+
+    const timesChanged =
+      editCheckInTime !== toDateTimeLocalValue(row.checkIn) ||
+      editCheckOutTime !== toDateTimeLocalValue(row.checkOut);
+
+    const grossChanged = nextOverride !== row.payOverride;
+
+    if (!timesChanged && !grossChanged) {
+      alert("변경된 내용이 없습니다.");
+      return;
+    }
+
+    try {
+      setAttendanceSaving(true);
+
+      const messages: string[] = [];
+
+      // 시간을 먼저 저장합니다. 금액 고정은 그 날 기록이 있어야 걸 수 있는데,
+      // 시간 저장이 실패한 상태에서 금액만 바꿔두면 앞뒤가 안 맞습니다.
+      if (timesChanged) {
+        const response = await fetch("/api/admin/attendance/update", {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            checkInRecordId: row.checkInRecordId,
+            checkOutRecordId: row.checkOutRecordId,
+            employeeId: row.employeeId,
+            employeeName: row.employeeName,
+            date: row.date,
+            checkInTime: editCheckInTime || null,
+            checkOutTime: editCheckOutTime || null,
+          }),
+        });
+
+        const data: AttendanceUpdateResponse = await response.json();
+
+        if (!data.success) {
+          alert(data.message || "출퇴근 수정 실패");
+          return;
+        }
+
+        messages.push("출퇴근 시간이 수정되었습니다.");
+      }
+
+      if (grossChanged) {
+        const response = await fetch("/api/admin/attendance/pay-override", {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            employeeId: row.employeeId,
+            date: row.date,
+            grossPay: nextOverride,
+          }),
+        });
+
+        const data: PayOverrideResponse = await response.json();
+
+        if (!data.success) {
+          // 시간 저장까지는 됐을 수 있으므로 어디까지 됐는지 같이 알려줍니다.
+          alert(
+            [
+              ...messages,
+              data.message || "세전급여 수정 실패",
+            ].join("\n")
+          );
+          fetchRecords();
+          return;
+        }
+
+        messages.push(data.message || "세전급여가 수정되었습니다.");
+      }
+
+      alert(messages.join("\n"));
       cancelAttendanceEdit();
       fetchRecords();
     } catch (error) {
@@ -2110,9 +2237,51 @@ export default function AdminPage() {
                           </td>
 
                           <td style={tdStyle}>
-                            {row.grossPay !== null
-                              ? formatCurrency(row.grossPay)
-                              : "-"}
+                            {isEditingAttendance ? (
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                value={editGrossPay}
+                                onChange={(e) =>
+                                  setEditGrossPay(e.target.value)
+                                }
+                                placeholder={
+                                  row.autoGrossPay !== null
+                                    ? `자동 ${row.autoGrossPay.toLocaleString()}`
+                                    : "자동"
+                                }
+                                title="비워두면 근무시간 × 시급으로 자동 계산합니다"
+                                style={{
+                                  ...dateTimeInputStyle,
+                                  width: "112px",
+                                  textAlign: "right",
+                                }}
+                              />
+                            ) : (
+                              <div>
+                                {row.grossPay !== null
+                                  ? formatCurrency(row.grossPay)
+                                  : "-"}
+
+                                {row.payOverride !== null && (
+                                  <div
+                                    style={{
+                                      marginTop: "3px",
+                                      fontSize: "10px",
+                                      fontWeight: 800,
+                                      color: "#b45309",
+                                    }}
+                                    title={
+                                      row.autoGrossPay !== null
+                                        ? `자동 계산은 ${row.autoGrossPay.toLocaleString()}원입니다`
+                                        : "자동 계산값이 없는 날입니다"
+                                    }
+                                  >
+                                    직접 지정
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </td>
 
                           <td style={tdStyle}>
@@ -2158,7 +2327,7 @@ export default function AdminPage() {
                                     onClick={() => startAttendanceEdit(row)}
                                     style={primarySmallButtonStyle}
                                   >
-                                    시간수정
+                                    수정
                                   </button>
                                   <button
                                     onClick={() => deleteAttendanceRow(row)}

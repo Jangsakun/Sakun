@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { loadPayOverrides, payOverrideKey } from "@/app/lib/payOverride";
 
 /** PostgREST 한 번에 받을 수 있는 최대 행 수. */
 const PAGE_SIZE = 1000;
@@ -57,6 +58,8 @@ type DailyWorkRow = {
   workedMinutes: number;
   wage: number;
   basePay: number;
+  /** 관리자가 직접 지정한 금액. 자동 계산이면 null. */
+  payOverride: number | null;
   weeklyAllowanceStatus: string;
 };
 
@@ -383,6 +386,26 @@ export async function POST(request: Request) {
       );
     }
 
+    // 관리자가 직접 지정한 하루치 세전급여.
+    // 있으면 근무시간 × 시급 대신 이 금액이 그 날 기본급이 됩니다.
+    const loadedOverrides = await loadPayOverrides(
+      supabase,
+      startDate,
+      endDate
+    );
+
+    if (loadedOverrides.error) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: `세전급여 수정값 조회 실패: ${loadedOverrides.error}`,
+        },
+        { status: 500 }
+      );
+    }
+
+    const payOverrides = loadedOverrides.overrides;
+
     const grouped: Record<string, AttendanceRecord[]> = {};
 
     for (const record of filtered) {
@@ -417,7 +440,12 @@ export async function POST(request: Request) {
       const sessions = pairSessions(items);
       const workedMinutes = calculateDailyWorkedMinutes(date, sessions);
       const hours = workedMinutes / 60;
-      const basePay = Math.floor((workedMinutes / 60) * wage);
+
+      const override = payOverrides.get(payOverrideKey(employeeId, date));
+      const basePay =
+        override !== undefined
+          ? override.grossPay
+          : Math.floor((workedMinutes / 60) * wage);
 
       dailyWorks.push({
         employeeId,
@@ -428,6 +456,7 @@ export async function POST(request: Request) {
         workedMinutes,
         wage,
         basePay,
+        payOverride: override !== undefined ? override.grossPay : null,
         weeklyAllowanceStatus,
       });
     }

@@ -16,7 +16,9 @@ export type AuditAction = "update" | "insert" | "delete";
 export type AuditSource =
   | "admin-time-edit"
   | "admin-manual-add"
-  | "admin-delete";
+  | "admin-delete"
+  | "admin-employee-delete"
+  | "admin-pay-override";
 
 export type AuditEntry = {
   recordId: number | null;
@@ -26,6 +28,11 @@ export type AuditEntry = {
   oldValue?: string | null;
   newValue?: string | null;
   source: AuditSource;
+  /**
+   * 대상 근무일. 세전급여 수정에서만 채웁니다.
+   * 금액 이력은 "언제 고쳤나"보다 "어느 날 금액인가"가 핵심이라 따로 남깁니다.
+   */
+  workDate?: string | null;
 };
 
 type RequestMeta = {
@@ -117,6 +124,7 @@ export async function logAttendanceChanges(
     old_value: entry.oldValue ?? null,
     new_value: entry.newValue ?? null,
     source: entry.source,
+    work_date: entry.workDate ?? null,
     actor: "admin-ui",
     request_ip: requestIp,
     user_agent: userAgent,

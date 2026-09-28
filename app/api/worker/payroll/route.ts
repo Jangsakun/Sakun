@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { loadPayOverrides, payOverrideKey } from "@/app/lib/payOverride";
 
 function createSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -300,6 +301,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 관리자가 직접 지정한 하루치 세전급여.
+    // 관리자 화면과 본인 화면 금액이 다르면 바로 항의가 들어오므로
+    // 같은 값을 같은 규칙으로 읽습니다.
+    const loadedOverrides = await loadPayOverrides(
+      supabase,
+      startDate,
+      endDate
+    );
+
+    if (loadedOverrides.error) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "급여 조회 실패",
+          debug: loadedOverrides.error,
+        },
+        { status: 500 }
+      );
+    }
+
+    const payOverrides = loadedOverrides.overrides;
+
     const hourlyWage = Number(employee.hourly_wage || 10320);
 
     const actualWorkplace = String(
@@ -402,7 +425,13 @@ export async function POST(request: NextRequest) {
           paidMinutes = Math.max(0, paidMinutes - 60);
         }
 
-        const grossPay = Math.floor((paidMinutes / 60) * dayWage);
+        const override = payOverrides.get(payOverrideKey(employee.id, date));
+
+        const grossPay =
+          override !== undefined
+            ? override.grossPay
+            : Math.floor((paidMinutes / 60) * dayWage);
+
         const netPay = calcNetPay(grossPay);
 
         totalMinutes += paidMinutes;
