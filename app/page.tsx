@@ -494,8 +494,11 @@ function formatWeekRangeLabel(startDate: Date, endDate: Date) {
   )}) ~ ${endMonth}.${endDay} (${getKoreanDayLabel(endDate)})`;
 }
 
+// 공휴일이지만 정상 근무하는 날. 여기 넣으면 스케줄에서 선택할 수 있게 열립니다.
+// 공휴일 목록은 date.nager.at 에서 받아오므로 대체공휴일도 자동으로 잡힙니다.
 const WORKABLE_HOLIDAYS = new Set([
-  "2026-08-17",
+  "2026-08-17", // 광복절 대체공휴일(8/15 토)
+  "2026-10-05", // 개천절 대체공휴일(10/3 토) — 정상 근무
 ]);
 
 function createWeekdaysWithHolidayInfo(holidays: HolidayItem[]) {
