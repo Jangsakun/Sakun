@@ -11,7 +11,7 @@
 |---|---|
 | `20260828100000_db_size_monitor.sql` | ✅ 2026-09-15 실행 완료 |
 | `20260909100000_attendance_record_audit.sql` | ✅ 2026-09-09 실행 완료 |
-| `20260929100000_employee_contract_type.sql` | ⏳ **미실행 (2026-09-29)** — 계약형태(시급/도급). **배포 전에 먼저 실행해야 함.** 안 하면 직원·급여 화면이 `column employees.contract_type does not exist` 로 깨진다 |
+| `20260929100000_employee_contract_type.sql` | ✅ 2026-09-29 실행 완료 (직원 98명 전원 hourly 확인) |
 
 둘 다 반영돼 관리자 화면 "DB 용량" 탭과 출퇴근 수정 이력이 정상 동작한다(실측 확인).
 
