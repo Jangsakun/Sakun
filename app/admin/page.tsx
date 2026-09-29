@@ -162,7 +162,59 @@ type ReconnectCodeInfo = {
 };
 
 type WorkplaceName = "장사꾼" | "헤모즈" | "깨소금" | "로엔티크";
-type WorkplaceFilter = "전체" | WorkplaceName;
+const WORKPLACE_NAMES: WorkplaceName[] = ["장사꾼", "헤모즈", "깨소금", "로엔티크"];
+
+/** 선택된 근무지가 없으면 "전체"로 봅니다. */
+function matchesWorkplaceFilter(selected: WorkplaceName[], workplaceName: string) {
+  return selected.length === 0 || selected.includes(workplaceName as WorkplaceName);
+}
+
+/** 근무지 다중선택 필터. 칩을 눌러 켜고 끄며, "전체"는 선택을 모두 해제합니다. */
+function WorkplaceMultiFilter({
+  selected,
+  onChange,
+}: {
+  selected: WorkplaceName[];
+  onChange: (next: WorkplaceName[]) => void;
+}) {
+  const toggle = (name: WorkplaceName) => {
+    const next = selected.includes(name)
+      ? selected.filter((item) => item !== name)
+      : WORKPLACE_NAMES.filter((item) => item === name || selected.includes(item));
+
+    onChange(next.length === WORKPLACE_NAMES.length ? [] : next);
+  };
+
+  const chipStyle = (active: boolean): CSSProperties => ({
+    padding: "8px 12px",
+    borderRadius: 999,
+    border: active ? "1px solid #111827" : "1px solid #d1d5db",
+    background: active ? "#111827" : "#fff",
+    color: active ? "#fff" : "#374151",
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  });
+
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+      <button type="button" onClick={() => onChange([])} style={chipStyle(selected.length === 0)}>
+        전체
+      </button>
+      {WORKPLACE_NAMES.map((name) => (
+        <button
+          key={name}
+          type="button"
+          onClick={() => toggle(name)}
+          style={chipStyle(selected.includes(name))}
+        >
+          {name}
+        </button>
+      ))}
+    </div>
+  );
+}
 type StatusFilter = "전체" | "활성" | "비활성";
 
 const JANGSAGGUN_SCHEDULE_GROUP_OPTIONS = [
@@ -226,8 +278,9 @@ export default function AdminPage() {
     "attendance" | "employees" | "payroll" | "contracts" | "schedule" | "dbSize"
   >("attendance");
 
-  const [selectedWorkplace, setSelectedWorkplace] =
-    useState<WorkplaceFilter>("전체");
+  const [selectedWorkplaces, setSelectedWorkplaces] = useState<WorkplaceName[]>(
+    []
+  );
 
   const [selectedStatus, setSelectedStatus] = useState<StatusFilter>("전체");
 
@@ -660,7 +713,7 @@ export default function AdminPage() {
         const employeeWorkplace = record.employees?.workplace_name || "장사꾼";
 
         const matchesWorkplace =
-          selectedWorkplace === "전체" || employeeWorkplace === selectedWorkplace;
+          matchesWorkplaceFilter(selectedWorkplaces, employeeWorkplace);
 
         return matchesName && matchesWorkplace;
       })
@@ -668,7 +721,7 @@ export default function AdminPage() {
         (a, b) =>
           new Date(b.checked_at).getTime() - new Date(a.checked_at).getTime()
       );
-  }, [records, attendanceSearch, selectedWorkplace]);
+  }, [records, attendanceSearch, selectedWorkplaces]);
 
   const filteredEmployees = useMemo(() => {
     return employees.filter((employee) => {
@@ -678,7 +731,7 @@ export default function AdminPage() {
 
       const employeeWorkplace = employee.workplace_name || "장사꾼";
       const matchesWorkplace =
-        selectedWorkplace === "전체" || employeeWorkplace === selectedWorkplace;
+        matchesWorkplaceFilter(selectedWorkplaces, employeeWorkplace);
 
       const matchesStatus = matchesStatusFilter(
         employee.is_active,
@@ -687,7 +740,7 @@ export default function AdminPage() {
 
       return matchesName && matchesWorkplace && matchesStatus;
     });
-  }, [employees, employeeSearch, selectedWorkplace, selectedStatus]);
+  }, [employees, employeeSearch, selectedWorkplaces, selectedStatus]);
 
   // (직원, 날짜) → 직접 지정한 세전급여.
   // 서버(app/lib/payOverride.ts)와 같은 키 규칙을 씁니다.
@@ -858,7 +911,7 @@ export default function AdminPage() {
     const employeeWorkplace = employee.workplace_name || "장사꾼";
 
     const matchesWorkplace =
-      selectedWorkplace === "전체" || employeeWorkplace === selectedWorkplace;
+      matchesWorkplaceFilter(selectedWorkplaces, employeeWorkplace);
 
     const matchesStatus = matchesStatusFilter(
       employee.is_active,
@@ -885,9 +938,9 @@ export default function AdminPage() {
       const employee = employeeMap.get(Number(row.employeeId));
       const workplaceName = row.workplaceName || employee?.workplace_name || "장사꾼";
 
-      return selectedWorkplace === "전체" || workplaceName === selectedWorkplace;
+      return matchesWorkplaceFilter(selectedWorkplaces, workplaceName);
     });
-  }, [payrollRows, employeeMap, selectedWorkplace]);
+  }, [payrollRows, employeeMap, selectedWorkplaces]);
 
   const monthlyPayrollRows = useMemo(() => {
     const grouped = new Map<string, PayrollRow>();
@@ -932,12 +985,11 @@ export default function AdminPage() {
         keyword === "" || employee.name.toLowerCase().includes(keyword);
 
       const matchesWorkplace =
-        selectedWorkplace === "전체" ||
-        employeeWorkplace === selectedWorkplace;
+        matchesWorkplaceFilter(selectedWorkplaces, employeeWorkplace);
 
       return matchesName && matchesWorkplace;
     });
-  }, [employees, selectedWorkplace, contractSearch]);
+  }, [employees, selectedWorkplaces, contractSearch]);
 
   const payrollSummary = useMemo(() => {
     return filteredPayrollRows.reduce(
@@ -1588,8 +1640,18 @@ export default function AdminPage() {
       endDate,
     });
 
+    // 화면 급여 표(monthlyPayrollRows)와 같은 순서로 내려받도록 맞춥니다.
+    const screenOrder = new Map(
+      monthlyPayrollRows.map((row, index) => [row.employeeId, index])
+    );
+    summaries.sort(
+      (a, b) =>
+        (screenOrder.get(a.employeeId) ?? Infinity) -
+        (screenOrder.get(b.employeeId) ?? Infinity)
+    );
+
     return buildBankTransferRows({ summaries });
-  }, [filteredPayrollRows, employeeMap, startDate, endDate]);
+  }, [filteredPayrollRows, monthlyPayrollRows, employeeMap, startDate, endDate]);
 
   const [bankTransferDownloading, setBankTransferDownloading] = useState(false);
 
@@ -2119,21 +2181,10 @@ export default function AdminPage() {
 
               <div style={fieldGroupStyle}>
                 <label style={labelStyle}>근무지 필터</label>
-                <select
-                  value={selectedWorkplace}
-                  onChange={(e) =>
-                    setSelectedWorkplace(
-                      e.target.value as WorkplaceFilter
-                    )
-                  }
-                  style={inputStyle}
-                >
-                  <option value="전체">전체</option>
-                  <option value="장사꾼">장사꾼</option>
-                  <option value="헤모즈">헤모즈</option>
-                  <option value="깨소금">깨소금</option>
-                  <option value="로엔티크">로엔티크</option>
-                </select>
+                <WorkplaceMultiFilter
+                  selected={selectedWorkplaces}
+                  onChange={setSelectedWorkplaces}
+                />
               </div>
 
               <div style={fieldButtonGroupStyle}>
@@ -2385,21 +2436,10 @@ export default function AdminPage() {
 
               <div style={fieldGroupStyle}>
                 <label style={labelStyle}>근무지 필터</label>
-                <select
-                  value={selectedWorkplace}
-                  onChange={(e) =>
-                    setSelectedWorkplace(
-                      e.target.value as WorkplaceFilter
-                    )
-                  }
-                  style={inputStyle}
-                >
-                  <option value="전체">전체</option>
-                  <option value="장사꾼">장사꾼</option>
-                  <option value="헤모즈">헤모즈</option>
-                  <option value="깨소금">깨소금</option>
-                  <option value="로엔티크">로엔티크</option>
-                </select>
+                <WorkplaceMultiFilter
+                  selected={selectedWorkplaces}
+                  onChange={setSelectedWorkplaces}
+                />
               </div>
 
               <div style={fieldGroupStyle}>
@@ -3032,21 +3072,10 @@ export default function AdminPage() {
 
               <div style={fieldGroupStyle}>
                 <label style={labelStyle}>근무지 필터</label>
-                <select
-                  value={selectedWorkplace}
-                  onChange={(e) =>
-                    setSelectedWorkplace(
-                      e.target.value as WorkplaceFilter
-                    )
-                  }
-                  style={inputStyle}
-                >
-                  <option value="전체">전체</option>
-                  <option value="장사꾼">장사꾼</option>
-                  <option value="헤모즈">헤모즈</option>
-                  <option value="깨소금">깨소금</option>
-                  <option value="로엔티크">로엔티크</option>
-                </select>
+                <WorkplaceMultiFilter
+                  selected={selectedWorkplaces}
+                  onChange={setSelectedWorkplaces}
+                />
               </div>
 
               <div style={fieldButtonGroupStyle}>
@@ -3286,19 +3315,10 @@ export default function AdminPage() {
 
         <div style={fieldGroupStyle}>
           <label style={labelStyle}>근무지 필터</label>
-          <select
-            value={selectedWorkplace}
-            onChange={(e) =>
-              setSelectedWorkplace(e.target.value as WorkplaceFilter)
-            }
-            style={inputStyle}
-          >
-            <option value="전체">전체</option>
-            <option value="장사꾼">장사꾼</option>
-            <option value="헤모즈">헤모즈</option>
-            <option value="깨소금">깨소금</option>
-            <option value="로엔티크">로엔티크</option>
-          </select>
+          <WorkplaceMultiFilter
+            selected={selectedWorkplaces}
+            onChange={setSelectedWorkplaces}
+          />
         </div>
 
         <div style={fieldButtonGroupStyle}>
