@@ -186,7 +186,8 @@ function WorkplaceMultiFilter({
   };
 
   const chipStyle = (active: boolean): CSSProperties => ({
-    padding: "8px 12px",
+    // 옆 입력칸과 높이를 맞춥니다.
+    padding: "13px 12px",
     borderRadius: 999,
     border: active ? "1px solid #111827" : "1px solid #d1d5db",
     background: active ? "#111827" : "#fff",
@@ -198,7 +199,7 @@ function WorkplaceMultiFilter({
   });
 
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+    <div style={{ display: "flex", flexWrap: "nowrap", gap: 6 }}>
       <button type="button" onClick={() => onChange([])} style={chipStyle(selected.length === 0)}>
         전체
       </button>
@@ -2148,7 +2149,7 @@ export default function AdminPage() {
             </div>
 
             <div style={filterRowStyle}>
-              <div style={fieldGroupStyle}>
+              <div style={dateFieldGroupStyle}>
                 <label style={labelStyle}>시작일</label>
                 <input
                   type="date"
@@ -2158,7 +2159,7 @@ export default function AdminPage() {
                 />
               </div>
 
-              <div style={fieldGroupStyle}>
+              <div style={dateFieldGroupStyle}>
                 <label style={labelStyle}>종료일</label>
                 <input
                   type="date"
@@ -2179,7 +2180,7 @@ export default function AdminPage() {
                 />
               </div>
 
-              <div style={fieldGroupStyle}>
+              <div style={workplaceFieldGroupStyle}>
                 <label style={labelStyle}>근무지 필터</label>
                 <WorkplaceMultiFilter
                   selected={selectedWorkplaces}
@@ -2434,7 +2435,7 @@ export default function AdminPage() {
                 />
               </div>
 
-              <div style={fieldGroupStyle}>
+              <div style={workplaceFieldGroupStyle}>
                 <label style={labelStyle}>근무지 필터</label>
                 <WorkplaceMultiFilter
                   selected={selectedWorkplaces}
@@ -3039,7 +3040,7 @@ export default function AdminPage() {
             </div>
 
             <div style={filterRowStyle}>
-              <div style={fieldGroupStyle}>
+              <div style={dateFieldGroupStyle}>
                 <label style={labelStyle}>시작일</label>
                 <input
                   type="date"
@@ -3049,7 +3050,7 @@ export default function AdminPage() {
                 />
               </div>
 
-              <div style={fieldGroupStyle}>
+              <div style={dateFieldGroupStyle}>
                 <label style={labelStyle}>종료일</label>
                 <input
                   type="date"
@@ -3070,7 +3071,7 @@ export default function AdminPage() {
                 />
               </div>
 
-              <div style={fieldGroupStyle}>
+              <div style={workplaceFieldGroupStyle}>
                 <label style={labelStyle}>근무지 필터</label>
                 <WorkplaceMultiFilter
                   selected={selectedWorkplaces}
@@ -3313,7 +3314,7 @@ export default function AdminPage() {
           />
         </div>
 
-        <div style={fieldGroupStyle}>
+        <div style={workplaceFieldGroupStyle}>
           <label style={labelStyle}>근무지 필터</label>
           <WorkplaceMultiFilter
             selected={selectedWorkplaces}
@@ -3904,6 +3905,20 @@ const fieldGroupStyle: CSSProperties = {
   gap: "8px",
   minWidth: "220px",
   flex: "1 1 220px",
+};
+
+// 날짜 칸은 내용 폭이 고정이라 넓힐 필요가 없습니다.
+const dateFieldGroupStyle: CSSProperties = {
+  ...fieldGroupStyle,
+  minWidth: "160px",
+  flex: "0 0 160px",
+};
+
+// 근무지 칩 5개가 한 줄에 들어가도록 내용 폭만큼 차지합니다.
+const workplaceFieldGroupStyle: CSSProperties = {
+  ...fieldGroupStyle,
+  minWidth: 0,
+  flex: "0 0 auto",
 };
 
 const fieldButtonGroupStyle: CSSProperties = {
