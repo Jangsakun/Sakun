@@ -20,6 +20,13 @@ import {
 import { summarizePayrollByEmployee } from "@/app/lib/payrollSummary";
 import { getWorkplaceBadgeColor } from "@/app/lib/workplaceBadge";
 import {
+  CONTRACT_TYPE_LABEL,
+  getDailyWage,
+  isPieceContract,
+  toContractType,
+  type ContractType,
+} from "@/app/lib/contractType";
+import {
   ROWS_PER_FILE,
   buildBankTransferRows,
   buildTransferFileName,
@@ -88,6 +95,8 @@ type Employee = {
   is_active: boolean;
   created_at?: string;
   hourly_wage?: number;
+  contract_type?: string | null;
+  daily_wage?: number | null;
   contract_start_date?: string | null;
   contract_end_date?: string | null;
 };
@@ -325,6 +334,10 @@ export default function AdminPage() {
     "fixed"
   );
   const [editScheduleGroup, setEditScheduleGroup] = useState("");
+  const [editContractType, setEditContractType] =
+    useState<ContractType>("hourly");
+  // 도급일 때만 쓰는 일당(원). 빈 문자열 = 미입력.
+  const [editDailyWage, setEditDailyWage] = useState("");
 
   const [editingAttendanceKey, setEditingAttendanceKey] = useState<
     string | null
@@ -834,7 +847,14 @@ export default function AdminPage() {
       let grossPay: number | null = null;
       let netPay: number | null = null;
 
-      if (workMinutes !== null && hourlyWage > 0) {
+      if (isPieceContract(employee)) {
+        // 도급은 출근 기록만 있으면 그 날 일당입니다(퇴근 기록 불필요).
+        // 서버 급여 계산(app/lib/contractType.ts)과 같은 규칙입니다.
+        if (checkInRecord) {
+          grossPay = getDailyWage(employee);
+          netPay = Math.round(grossPay * 0.967);
+        }
+      } else if (workMinutes !== null && hourlyWage > 0) {
         grossPay = Math.round((workMinutes / 60) * hourlyWage);
         netPay = Math.round(grossPay * 0.967);
       }
@@ -1030,6 +1050,8 @@ export default function AdminPage() {
     setEditAccountNumber(employee.account_number || "");
     setEditWorkplaceName(workplaceName);
     setEditEmploymentType(employee.employment_type === "carrot" ? "carrot" : "fixed");
+    setEditContractType(toContractType(employee.contract_type));
+    setEditDailyWage(employee.daily_wage ? String(employee.daily_wage) : "");
     setEditScheduleGroup(
       isValidScheduleGroupForWorkplace(workplaceName, scheduleGroup)
         ? scheduleGroup
@@ -1046,10 +1068,22 @@ export default function AdminPage() {
     setEditAccountNumber("");
     setEditWorkplaceName("장사꾼");
     setEditEmploymentType("fixed");
+    setEditContractType("hourly");
+    setEditDailyWage("");
     setEditScheduleGroup("");
   };
 
   const updateEmployee = async (employeeId: number) => {
+    const dailyWageNumber = Number(editDailyWage);
+
+    if (
+      editContractType === "piece" &&
+      !(Number.isInteger(dailyWageNumber) && dailyWageNumber > 0)
+    ) {
+      alert("도급은 일당을 입력해야 합니다.");
+      return;
+    }
+
     try {
       const response = await fetch(`/api/admin/employees/${employeeId}`, {
         method: "PATCH",
@@ -1067,6 +1101,9 @@ export default function AdminPage() {
           employment_type: editEmploymentType,
           scheduleGroup: editScheduleGroup || null,
           schedule_group: editScheduleGroup || null,
+          contractType: editContractType,
+          // 시급으로 바꿀 때는 예전 일당을 건드리지 않습니다(다시 도급으로 돌릴 때 참고용).
+          ...(editContractType === "piece" ? { dailyWage: dailyWageNumber } : {}),
         }),
       });
 
@@ -2483,6 +2520,7 @@ export default function AdminPage() {
                       <th style={thStyle}>계좌번호</th>
                       <th style={thStyle}>근무지</th>
                       <th style={thStyle}>고용형태</th>
+                      <th style={thStyle}>계약형태</th>
                       <th style={thStyle}>역할그룹</th>
                       <th style={thStyle}>시급</th>
                       <th style={thStyle}>상태</th>
@@ -2537,6 +2575,31 @@ export default function AdminPage() {
                             >
                               {employee.employment_type === "carrot" ? "당근" : "고정"}
                             </span>
+                          </td>
+
+                          <td style={tdStyle}>
+                            {isPieceContract(employee) ? (
+                              <span
+                                style={{
+                                  ...badgeStyle,
+                                  backgroundColor: "#fef3c7",
+                                  color: "#92400e",
+                                }}
+                              >
+                                {CONTRACT_TYPE_LABEL.piece} ·{" "}
+                                {getDailyWage(employee).toLocaleString("ko-KR")}원
+                              </span>
+                            ) : (
+                              <span
+                                style={{
+                                  ...badgeStyle,
+                                  backgroundColor: "#f3f4f6",
+                                  color: "#374151",
+                                }}
+                              >
+                                {CONTRACT_TYPE_LABEL.hourly}
+                              </span>
+                            )}
                           </td>
 
                           <td style={tdStyle}>
@@ -2734,7 +2797,7 @@ export default function AdminPage() {
                       fontWeight: 600,
                     }}
                   >
-                    기본 정보와 근무지, 고용형태, 역할그룹을 한 번에 수정합니다.
+                    기본 정보와 근무지, 고용형태, 계약형태, 역할그룹을 한 번에 수정합니다.
                   </div>
                 </div>
 
@@ -2856,6 +2919,42 @@ export default function AdminPage() {
                       <option value="carrot">당근</option>
                     </select>
                   </div>
+
+                  <div>
+                    <label style={labelStyle}>계약형태</label>
+                    <select
+                      value={editContractType}
+                      onChange={(e) =>
+                        setEditContractType(e.target.value as ContractType)
+                      }
+                      style={inputStyle}
+                    >
+                      <option value="hourly">{CONTRACT_TYPE_LABEL.hourly}</option>
+                      <option value="piece">{CONTRACT_TYPE_LABEL.piece}</option>
+                    </select>
+                  </div>
+
+                  {editContractType === "piece" ? (
+                    <div>
+                      <label style={labelStyle}>일당 (세전, 원)</label>
+                      <input
+                        type="number"
+                        min={0}
+                        inputMode="numeric"
+                        placeholder="예: 100000"
+                        value={editDailyWage}
+                        onChange={(e) =>
+                          setEditDailyWage(e.target.value.replace(/[^0-9]/g, ""))
+                        }
+                        style={inputStyle}
+                      />
+                      <div style={{ marginTop: "6px", fontSize: "12px", color: "#6b7280" }}>
+                        출근만 찍으면 그 날 이 금액이 지급됩니다. 주휴수당 없음.
+                      </div>
+                    </div>
+                  ) : (
+                    <div />
+                  )}
 
                   {editWorkplaceName !== "로엔티크" && (
                     <div style={{ gridColumn: "1 / -1" }}>

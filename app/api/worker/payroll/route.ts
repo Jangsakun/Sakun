@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { loadPayOverrides, payOverrideKey } from "@/app/lib/payOverride";
+import { getDailyWage, isPieceContract } from "@/app/lib/contractType";
 
 function createSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -325,6 +326,10 @@ export async function POST(request: NextRequest) {
 
     const hourlyWage = Number(employee.hourly_wage || 10320);
 
+    // 도급은 출근한 날마다 일당, 주휴수당 없음. 관리자 급여와 같은 규칙입니다.
+    const isPiece = isPieceContract(employee);
+    const dailyWage = getDailyWage(employee);
+
     const actualWorkplace = String(
       employee.workplace_name ||
         employee.workplace ||
@@ -427,10 +432,12 @@ export async function POST(request: NextRequest) {
 
         const override = payOverrides.get(payOverrideKey(employee.id, date));
 
+        const autoPay = isPiece
+          ? dailyWage
+          : Math.floor((paidMinutes / 60) * dayWage);
+
         const grossPay =
-          override !== undefined
-            ? override.grossPay
-            : Math.floor((paidMinutes / 60) * dayWage);
+          override !== undefined ? override.grossPay : autoPay;
 
         const netPay = calcNetPay(grossPay);
 
@@ -466,7 +473,7 @@ export async function POST(request: NextRequest) {
       totalHours > 0 ? totalGrossPay / totalHours : hourlyWage;
 
     const weeklyAllowanceAmount =
-      weeklyAllowanceStatus === "대상" && totalHours >= 15
+      !isPiece && weeklyAllowanceStatus === "대상" && totalHours >= 15
         ? Math.floor((totalHours / 5) * averageHourlyWage)
         : 0;
 
@@ -482,6 +489,8 @@ export async function POST(request: NextRequest) {
         name: employee.name,
         residentNumber: employee.resident_number,
         hourlyWage,
+        contractType: isPiece ? "piece" : "hourly",
+        dailyWage,
         averageHourlyWage: Math.round(averageHourlyWage),
         workplace: payrollWorkplace,
         actualWorkplace,

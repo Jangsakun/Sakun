@@ -30,6 +30,8 @@ export async function GET() {
         schedule_group,
         is_active,
         hourly_wage,
+        contract_type,
+        daily_wage,
         weekly_allowance_status,
         weekly_allowance_reason,
         weekly_allowance_note,
@@ -75,6 +77,7 @@ export async function GET() {
         employment_type: employmentType,
         schedule_group: emp.schedule_group || "",
         weekly_allowance_status: weeklyAllowanceStatus,
+        contract_type: emp.contract_type === "piece" ? "piece" : "hourly",
         resident_number_masked,
       };
     });

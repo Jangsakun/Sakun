@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { loadPayOverrides, payOverrideKey } from "@/app/lib/payOverride";
+import { getDailyWage, isPieceContract } from "@/app/lib/contractType";
 
 /** PostgREST 한 번에 받을 수 있는 최대 행 수. */
 const PAGE_SIZE = 1000;
@@ -19,7 +20,9 @@ const ATTENDANCE_SELECT = `
     name,
     hourly_wage,
     weekly_allowance_status,
-    workplace_name
+    workplace_name,
+    contract_type,
+    daily_wage
   )
 `;
 
@@ -30,6 +33,8 @@ type EmployeeNested =
       hourly_wage?: number | null;
       weekly_allowance_status?: string | null;
       workplace_name?: string | null;
+      contract_type?: string | null;
+      daily_wage?: number | null;
     }
   | {
       id: number;
@@ -37,6 +42,8 @@ type EmployeeNested =
       hourly_wage?: number | null;
       weekly_allowance_status?: string | null;
       workplace_name?: string | null;
+      contract_type?: string | null;
+      daily_wage?: number | null;
     }[]
   | null;
 
@@ -61,6 +68,8 @@ type DailyWorkRow = {
   /** 관리자가 직접 지정한 금액. 자동 계산이면 null. */
   payOverride: number | null;
   weeklyAllowanceStatus: string;
+  /** 도급 계약이면 true. 주휴수당을 주지 않습니다. */
+  isPiece: boolean;
 };
 
 type WeeklyPayrollRow = {
@@ -74,6 +83,7 @@ type WeeklyPayrollRow = {
   totalBasePay: number;
   hourlyWage: number;
   weeklyAllowanceStatus: string;
+  isPiece: boolean;
 };
 
 type WorkSession = {
@@ -442,10 +452,17 @@ export async function POST(request: Request) {
       const hours = workedMinutes / 60;
 
       const override = payOverrides.get(payOverrideKey(employeeId, date));
-      const basePay =
-        override !== undefined
-          ? override.grossPay
-          : Math.floor((workedMinutes / 60) * wage);
+
+      // 도급은 출근 기록만 있으면 그 날 일당을 줍니다(퇴근 기록 불필요).
+      const isPiece = isPieceContract(employee);
+      const hasCheckIn = items.some((item) => isCheckInType(item.record_type));
+      const autoPay = isPiece
+        ? hasCheckIn
+          ? getDailyWage(employee)
+          : 0
+        : Math.floor((workedMinutes / 60) * wage);
+
+      const basePay = override !== undefined ? override.grossPay : autoPay;
 
       dailyWorks.push({
         employeeId,
@@ -458,6 +475,7 @@ export async function POST(request: Request) {
         basePay,
         payOverride: override !== undefined ? override.grossPay : null,
         weeklyAllowanceStatus,
+        isPiece,
       });
     }
 
@@ -506,6 +524,7 @@ export async function POST(request: Request) {
           totalBasePay: 0,
           hourlyWage: row.wage,
           weeklyAllowanceStatus: row.weeklyAllowanceStatus || "검토필요",
+          isPiece: row.isPiece,
         };
       }
 
@@ -524,7 +543,12 @@ export async function POST(request: Request) {
 
       let weeklyAllowance = 0;
 
-      if (w.weeklyAllowanceStatus === "대상" && w.totalMinutes >= 15 * 60) {
+      // 도급은 주휴수당 대상이 아닙니다.
+      if (
+        !w.isPiece &&
+        w.weeklyAllowanceStatus === "대상" &&
+        w.totalMinutes >= 15 * 60
+      ) {
         weeklyAllowance = Math.floor((w.totalMinutes / 60 / 5) * averageHourlyWage);
       } else {
         weeklyAllowance = 0;
@@ -542,6 +566,7 @@ export async function POST(request: Request) {
         totalHours,
         hourlyWage: Math.round(averageHourlyWage),
         weeklyAllowanceStatus: w.weeklyAllowanceStatus,
+        contractType: w.isPiece ? "piece" : "hourly",
         basePay,
         weeklyAllowance,
         grossPay,
