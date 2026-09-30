@@ -10,6 +10,10 @@ const MAX_BULK_DAYS = 92;
 
 /** 행 단위 입력에서 한 번에 보낼 수 있는 최대 줄 수. */
 const MAX_ENTRY_ROWS = 200;
+/** 출퇴근 기록 조회 최대 기간(일). 응답 크기가 Vercel 한도를 넘지 않게 막습니다. */
+const MAX_QUERY_DAYS = 92;
+/** Supabase 가 한 번에 돌려주는 최대 행 수. */
+const QUERY_PAGE_SIZE = 1000;
 
 function getKstDateKey(date = new Date()) {
   return new Intl.DateTimeFormat("en-CA", {
@@ -130,6 +134,36 @@ export async function POST(request: Request) {
       );
     }
 
+    // 기록을 통째로 내려보내므로 기간이 길면 응답이 Vercel 한도(4.5MB)를 넘습니다.
+    // 1건 약 326바이트 → 3개월 약 2.0MB, 1년 약 8.2MB(조회 실패).
+    // 몰래 잘라서 보내면 안 되므로 기간을 넘기면 이유를 알려주고 막습니다.
+    const rangeDays =
+      Math.round(
+        (new Date(`${endDate}T00:00:00+09:00`).getTime() -
+          new Date(`${startDate}T00:00:00+09:00`).getTime()) /
+          86400000
+      ) + 1;
+
+    if (!Number.isFinite(rangeDays)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "날짜가 올바르지 않습니다.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (rangeDays > MAX_QUERY_DAYS) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: `조회 기간은 최대 3개월(${MAX_QUERY_DAYS}일)입니다. 지금 ${rangeDays}일이 선택되어 있습니다. 긴 기간 합계는 급여 탭에서 확인해주세요.`,
+        },
+        { status: 400 }
+      );
+    }
+
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
     const startUtc = new Date(
@@ -140,38 +174,85 @@ export async function POST(request: Request) {
       `${endDate}T23:59:59.999+09:00`
     ).toISOString();
 
-    const { data, error } = await supabase
+    // Supabase 는 한 번에 최대 1000건만 돌려줍니다.
+    // 나눠 받지 않으면 한 달 조회 시 앞 2주(약 1000건)만 오고,
+    // 경계 날은 출근만 있고 퇴근이 없는 반쪽 기록으로 보입니다.
+    // 급여 API(app/api/admin/payroll/route.ts)와 같은 방식: 건수 → 페이지 동시 요청.
+    const { count, error: countError } = await supabase
       .from("attendance_records")
-      .select(
-        `
-        id,
-        record_type,
-        lat,
-        lng,
-        checked_at,
-        created_at,
-        employee_id,
-        hourly_wage_snapshot,
-        employees (
-          id,
-          name,
-          birth_date,
-          phone_last4,
-          workplace_name
-        )
-      `
-      )
+      .select("id", { count: "exact", head: true })
       .gte("checked_at", startUtc)
-      .lte("checked_at", endUtc)
-      .order("checked_at", { ascending: true });
+      .lte("checked_at", endUtc);
 
-    if (error) {
+    if (countError) {
       return NextResponse.json(
         {
           success: false,
-          message: `조회 실패: ${error.message}`,
+          message: `조회 실패: ${countError.message}`,
         },
         { status: 500 }
+      );
+    }
+
+    const totalCount = count ?? 0;
+    const pageCount = Math.ceil(totalCount / QUERY_PAGE_SIZE);
+
+    const pages = await Promise.all(
+      Array.from({ length: pageCount }, (_, index) =>
+        supabase
+          .from("attendance_records")
+          .select(
+            `
+            id,
+            record_type,
+            lat,
+            lng,
+            checked_at,
+            created_at,
+            employee_id,
+            hourly_wage_snapshot,
+            employees (
+              id,
+              name,
+              birth_date,
+              phone_last4,
+              workplace_name
+            )
+          `
+          )
+          .gte("checked_at", startUtc)
+          .lte("checked_at", endUtc)
+          .order("checked_at", { ascending: true })
+          // ★ id 타이브레이커 필수.
+          //   같은 시각 기록이 많아(한 시각에 39건까지 실측) checked_at 만으로 정렬하면
+          //   페이지마다 순서가 달라져 경계에서 기록이 중복되거나 빠집니다.
+          .order("id", { ascending: true })
+          .range(
+            index * QUERY_PAGE_SIZE,
+            index * QUERY_PAGE_SIZE + QUERY_PAGE_SIZE - 1
+          )
+      )
+    );
+
+    const pageError = pages.find((page) => page.error)?.error;
+
+    if (pageError) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: `조회 실패: ${pageError.message}`,
+        },
+        { status: 500 }
+      );
+    }
+
+    const data = pages.flatMap((page) => page.data || []);
+
+    // 받는 사이에 기록이 추가·삭제되면 건수가 어긋날 수 있습니다.
+    // 모자라게 받았는데 정상처럼 보여주는 것이 제일 위험하므로 로그를 남깁니다.
+    if (data.length < totalCount) {
+      console.error(
+        `[admin-attendance] 받은 기록(${data.length})이 전체 건수(${totalCount})보다 적습니다: ${startDate}~${endDate}`
       );
     }
 
