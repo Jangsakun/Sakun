@@ -37,6 +37,7 @@ export async function GET() {
         weekly_allowance_note,
         contract_start_date,
         contract_end_date,
+        first_hire_date,
         created_at
         `
       )

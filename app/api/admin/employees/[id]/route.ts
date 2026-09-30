@@ -27,6 +27,7 @@ export async function PATCH(
       weeklyAllowanceNote,
       contract_start_date,
       contract_end_date,
+      first_hire_date,
       contractType,
       dailyWage,
     } = body;
@@ -351,6 +352,20 @@ export async function PATCH(
     if (typeof contract_end_date === "string") {
       updatePayload.contract_end_date =
         contract_end_date.trim() || null;
+    }
+
+    // 첫입사일. 관리자가 직접 입력하며, 비우면 null 로 되돌립니다.
+    if (typeof first_hire_date === "string") {
+      const value = first_hire_date.trim();
+
+      if (value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return NextResponse.json(
+          { success: false, message: "첫입사일 형식이 올바르지 않습니다." },
+          { status: 400 }
+        );
+      }
+
+      updatePayload.first_hire_date = value || null;
     }
 
     if (Object.keys(updatePayload).length === 0) {

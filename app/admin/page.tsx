@@ -20,6 +20,10 @@ import {
 import { summarizePayrollByEmployee } from "@/app/lib/payrollSummary";
 import { getWorkplaceBadgeColor } from "@/app/lib/workplaceBadge";
 import {
+  calcRenewalDates,
+  renewalConfirmText,
+} from "@/app/lib/contractRenewal";
+import {
   CONTRACT_TYPE_LABEL,
   getDailyWage,
   isPieceContract,
@@ -99,6 +103,7 @@ type Employee = {
   daily_wage?: number | null;
   contract_start_date?: string | null;
   contract_end_date?: string | null;
+  first_hire_date?: string | null;
 };
 
 type EmployeeListResponse = {
@@ -352,6 +357,11 @@ export default function AdminPage() {
     []
   );
 
+  // 갱신 요청이 가는 동안 같은 버튼을 다시 못 누르게 합니다.
+  const [renewingContractId, setRenewingContractId] = useState<number | null>(
+    null
+  );
+
   // 수동 출퇴근 추가는 행 단위로 입력합니다.
   // 직원마다 날짜·출퇴근시간이 다르기 때문에 한 줄에 하나씩 담습니다.
   const [manualRows, setManualRows] = useState<ManualRow[]>(() => [
@@ -410,6 +420,100 @@ export default function AdminPage() {
       setAttendanceMessage("서버 요청 중 오류 발생");
     } finally {
       setAttendanceLoading(false);
+    }
+  };
+
+  // 근로계약 11개월 갱신.
+  // 확인창과 서버가 같은 계산 함수(app/lib/contractRenewal.ts)를 씁니다.
+  const renewContract = async (emp: Employee) => {
+    const currentEnd = emp.contract_end_date || "";
+
+    if (!currentEnd) {
+      alert("만료일이 없어 갱신할 수 없습니다(무기계약 또는 미입력).");
+      return;
+    }
+
+    const dates = calcRenewalDates(currentEnd);
+
+    if (!dates) {
+      alert("계약 만료일이 올바른 날짜가 아닙니다.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `${emp.name} 님 근로계약을 11개월 갱신합니다.\n\n${renewalConfirmText(currentEnd, dates)}`
+    );
+
+    if (!confirmed) return;
+
+    setRenewingContractId(emp.id);
+
+    try {
+      const response = await fetch(
+        `/api/admin/employees/${emp.id}/renew-contract`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          // 화면에서 본 만료일을 같이 보냅니다.
+          // 그 사이 바뀌었으면 서버가 아무것도 바꾸지 않고 거부합니다.
+          body: JSON.stringify({ expectedEnd: currentEnd }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!data.success) {
+        alert(data.message || "갱신 실패");
+
+        // 이미 바뀐 경우 이 행만 실제 값으로 맞춥니다.
+        // 전체를 다시 불러오면 다른 행에 입력 중이던 값이 날아갑니다.
+        if (data.code === "stale") {
+          setEmployees((prev) =>
+            prev.map((p) =>
+              p.id === emp.id
+                ? {
+                    ...p,
+                    contract_start_date: data.currentStart ?? null,
+                    contract_end_date: data.currentEnd ?? null,
+                  }
+                : p
+            )
+          );
+        }
+
+        return;
+      }
+
+      setEmployees((prev) =>
+        prev.map((p) =>
+          p.id === emp.id
+            ? {
+                ...p,
+                contract_start_date: data.newStart,
+                contract_end_date: data.newEnd,
+                first_hire_date: data.firstHireDate ?? p.first_hire_date ?? null,
+              }
+            : p
+        )
+      );
+
+      alert(
+        [
+          data.message,
+          data.firstHireFilled
+            ? `첫입사일이 비어 있어 직전 계약 시작일 ${data.firstHireDate} 로 채웠습니다.`
+            : "",
+        ]
+          .filter(Boolean)
+          .join("\n")
+      );
+    } catch (error) {
+      console.error(error);
+      alert("갱신 중 오류 발생");
+    } finally {
+      setRenewingContractId(null);
     }
   };
 
@@ -3439,6 +3543,7 @@ export default function AdminPage() {
                 <th style={thStyle}>근무지</th>
                 <th style={thStyle}>휴대폰번호</th>
                 <th style={thStyle}>주민번호</th>
+                <th style={thStyle}>첫입사일</th>
                 <th style={thStyle}>계약 시작일</th>
                 <th style={thStyle}>계약 종료일</th>
                 <th style={thStyle}>관리</th>
@@ -3464,6 +3569,25 @@ export default function AdminPage() {
                     </td>
                     <td style={tdStyle}>{formatPhone(emp.phone)}</td>
                     <td style={tdStyle}>{getMaskedResidentNumber(emp)}</td>
+
+                    <td style={tdStyle}>
+                      <input
+                        type="date"
+                        value={emp.first_hire_date || ""}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setEmployees((prev) =>
+                            prev.map((p) =>
+                              p.id === emp.id
+                                ? { ...p, first_hire_date: value }
+                                : p
+                            )
+                          );
+                        }}
+                        title="처음 입사한 날. 11개월 갱신할 때 비어 있으면 직전 계약 시작일로 자동으로 채워집니다."
+                        style={smallInputStyle}
+                      />
+                    </td>
 
                     <td style={tdStyle}>
                       <input
@@ -3502,24 +3626,76 @@ export default function AdminPage() {
                     </td>
 
                     <td style={tdStyle}>
-                      <button
-                        onClick={async () => {
-                          await fetch(`/api/admin/employees/${emp.id}`, {
-                            method: "PATCH",
-                            headers: {
-                              "Content-Type": "application/json",
-                            },
-                            body: JSON.stringify({
-                              contract_start_date: emp.contract_start_date,
-                              contract_end_date: emp.contract_end_date,
-                            }),
-                          });
-                          alert("저장 완료");
-                        }}
-                        style={primarySmallButtonStyle}
-                      >
-                        저장
-                      </button>
+                      <div style={actionWrapStyle}>
+                        <button
+                          onClick={async () => {
+                            try {
+                              const response = await fetch(
+                                `/api/admin/employees/${emp.id}`,
+                                {
+                                  method: "PATCH",
+                                  headers: {
+                                    "Content-Type": "application/json",
+                                  },
+                                  body: JSON.stringify({
+                                    contract_start_date: emp.contract_start_date,
+                                    contract_end_date: emp.contract_end_date,
+                                    first_hire_date: emp.first_hire_date,
+                                  }),
+                                }
+                              );
+
+                              const data = await response.json();
+
+                              // 예전에는 응답을 보지 않고 무조건 "저장 완료"를 띄웠습니다.
+                              // 실패했는데 저장된 줄 알고 넘어가면 날짜가 조용히 틀어집니다.
+                              if (!data.success) {
+                                alert(data.message || "저장 실패");
+                                return;
+                              }
+
+                              alert("저장 완료");
+                            } catch (error) {
+                              console.error(error);
+                              alert("저장 중 오류 발생");
+                            }
+                          }}
+                          style={primarySmallButtonStyle}
+                        >
+                          저장
+                        </button>
+
+                        <button
+                          onClick={() => renewContract(emp)}
+                          disabled={
+                            !emp.contract_end_date ||
+                            renewingContractId === emp.id
+                          }
+                          title={
+                            emp.contract_end_date
+                              ? "기존 만료일 다음 날부터 11개월 새 계약"
+                              : "만료일이 없어 갱신할 수 없습니다(무기계약 또는 미입력)"
+                          }
+                          style={{
+                            ...secondarySmallButtonStyle,
+                            whiteSpace: "nowrap",
+                            opacity:
+                              !emp.contract_end_date ||
+                              renewingContractId === emp.id
+                                ? 0.4
+                                : 1,
+                            cursor:
+                              !emp.contract_end_date ||
+                              renewingContractId === emp.id
+                                ? "default"
+                                : "pointer",
+                          }}
+                        >
+                          {renewingContractId === emp.id
+                            ? "갱신 중..."
+                            : "11개월 갱신"}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
