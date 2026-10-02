@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server";
+import { checkAttendanceAction } from "@/app/lib/attendanceFlow";
+import { loadDayRecords, resolveRequestedSegment } from "@/app/lib/attendanceServer";
+import { toContractType } from "@/app/lib/contractType";
 import { createClient } from "@supabase/supabase-js";
 import { getDistanceInMeters } from "@/app/lib/geo";
 
@@ -150,21 +153,6 @@ function normalizeCheckOutTime(checkedAt: string, workplaceName: string): Date {
   return toKstDateFromParts(year, month, day, hour + 1, 0);
 }
 
-function getKstDayRangeFromIso(isoString: string) {
-  const date = new Date(isoString);
-  const { year, month, day } = getKstDateParts(date);
-
-  const d = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(
-    2,
-    "0"
-  )}`;
-
-  return {
-    startUtc: `${d}T00:00:00+09:00`,
-    endUtc: `${d}T23:59:59.999+09:00`,
-  };
-}
-
 function getNearestWorkplaceDistance(parsedLat: number, parsedLng: number) {
   const distances = WORKPLACES.map((workplace) => {
     const distance = getDistanceInMeters(
@@ -304,39 +292,64 @@ export async function POST(request: Request) {
 
     const workplaceName = getEmployeeWorkplaceName(employee);
 
-    const checkoutRule = isCheckoutAllowedAtKst(checkedDate, workplaceName);
-    if (!checkoutRule.allowed) {
+    // 시급 구간 / 도급 구간 중 어느 퇴근인지. 값이 없으면 직원 근로형태의 기본 구간.
+    const requested = resolveRequestedSegment(body.segment, employee.contract_type);
+    if ("error" in requested) {
       return NextResponse.json(
-        { success: false, message: checkoutRule.message },
+        { success: false, message: requested.error },
         { status: 400 }
       );
     }
+    const segment = requested.segment;
 
-    const { startUtc, endUtc } = getKstDayRangeFromIso(checkedAt);
+    // 도급 퇴근은 시간 제한이 없습니다(10분만 일해도 찍을 수 있어야 함).
+    if (segment === "hourly") {
+      const checkoutRule = isCheckoutAllowedAtKst(checkedDate, workplaceName);
+      if (!checkoutRule.allowed) {
+        return NextResponse.json(
+          { success: false, message: checkoutRule.message },
+          { status: 400 }
+        );
+      }
+    }
 
-    // 같은 날 출근 기록의 시급 스냅샷을 우선 사용합니다.
-    // 이렇게 하면 출근/퇴근 사이에 현재 시급이 바뀌어도 하루의 시급이 서로 달라지지 않습니다.
-    const { data: checkInRecords, error: checkInError } = await supabase
-      .from("attendance_records")
-      .select("id, hourly_wage_snapshot, checked_at")
-      .eq("employee_id", employee.id)
-      .eq("record_type", "check_in")
-      .gte("checked_at", startUtc)
-      .lte("checked_at", endUtc)
-      .order("checked_at", { ascending: true })
-      .limit(1);
+    const { records: dayRecords, error: dayError } = await loadDayRecords(
+      supabase,
+      employee.id,
+      checkedAt
+    );
 
-    if (checkInError) {
+    if (dayError) {
       return NextResponse.json(
-        { success: false, message: `출근 기록 조회 실패: ${checkInError.message}` },
+        { success: false, message: `오늘 기록 조회 실패: ${dayError.message}` },
         { status: 500 }
       );
     }
 
-    const currentHourlyWage = Number(employee.hourly_wage || 0);
-    const checkInSnapshot = Number(
-      checkInRecords?.[0]?.hourly_wage_snapshot || 0
+    // 화면과 같은 규칙으로 다시 검사합니다(출근 없는 퇴근, 두 번째 퇴근 등).
+    const flow = checkAttendanceAction(
+      employee.contract_type,
+      segment,
+      "check-out",
+      dayRecords
     );
+    if (!flow.allowed) {
+      return NextResponse.json(
+        { success: false, message: flow.message },
+        { status: 409 }
+      );
+    }
+
+    // 같은 구간 출근 기록의 스냅샷을 그대로 이어 씁니다.
+    // 출근/퇴근 사이에 시급·일급이 바뀌어도 하루 금액이 서로 달라지지 않습니다.
+    const segmentCheckIn = dayRecords.find(
+      (record) =>
+        (record.segment_type || "hourly") === segment &&
+        record.record_type === "check_in"
+    );
+
+    const currentHourlyWage = Number(employee.hourly_wage || 0);
+    const checkInSnapshot = Number(segmentCheckIn?.hourly_wage_snapshot || 0);
 
     const hourlyWageSnapshot =
       checkInSnapshot > 0
@@ -345,36 +358,26 @@ export async function POST(request: Request) {
         ? currentHourlyWage
         : 10320;
 
-    const { data: existing } = await supabase
-      .from("attendance_records")
-      .select("*")
-      .eq("employee_id", employee.id)
-      .eq("record_type", "check_out")
-      .gte("checked_at", startUtc)
-      .lte("checked_at", endUtc)
-      .limit(1);
-
-    if (existing && existing.length > 0) {
-      return NextResponse.json(
-        { success: false, message: "이미 퇴근됨" },
-        { status: 400 }
-      );
-    }
-
-    const normalizedCheckedAt = normalizeCheckOutTime(
-      checkedAt,
-      workplaceName
-    ).toISOString();
+    // 도급 퇴근은 시각을 보정하지 않습니다(보정하면 도급 출근보다 앞설 수 있음).
+    const normalizedCheckedAt =
+      segment === "hourly"
+        ? normalizeCheckOutTime(checkedAt, workplaceName).toISOString()
+        : checkedDate.toISOString();
 
     const payload: any = {
       employee_id: employee.id,
       record_type: "check_out",
+      segment_type: segment,
       lat: parsedLat,
       lng: parsedLng,
       checked_at: normalizedCheckedAt,
       accuracy: parsedAccuracy,
       distance: Math.round(distance),
       hourly_wage_snapshot: hourlyWageSnapshot,
+      piece_daily_wage_snapshot:
+        segment === "piece"
+          ? segmentCheckIn?.piece_daily_wage_snapshot ?? null
+          : null,
     };
 
     const { error } = await supabase
@@ -390,7 +393,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: `퇴근 완료 (${nearestWorkplace.name} 기준 ${Math.round(
+      message: `${segment === "piece" && toContractType(employee.contract_type) === "hybrid" ? "도급 " : ""}퇴근 완료 (${nearestWorkplace.name} 기준 ${Math.round(
         distance
       )}m)`,
       distance: Math.round(distance),

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { toContractType } from "@/app/lib/contractType";
 
 export async function POST(request: Request) {
   try {
@@ -64,11 +65,18 @@ export async function POST(request: Request) {
       );
     }
 
-    const checkIn = records.find((r) => r.record_type === "check_in");
-    const checkOut = records.find((r) => r.record_type === "check_out");
+    // checkIn / checkOut 은 시급 구간 기준(기존 응답 형식 유지).
+    // 도급 구간은 records 의 segment_type 으로 화면에서 구분합니다.
+    const hourlyRecords = records.filter(
+      (r) => (r.segment_type || "hourly") === "hourly"
+    );
+    const checkIn = hourlyRecords.find((r) => r.record_type === "check_in");
+    const checkOut = hourlyRecords.find((r) => r.record_type === "check_out");
 
     return NextResponse.json({
       success: true,
+      // 근로자 화면이 도급 버튼을 보여줄지 정하는 값입니다(시급+도급만 표시).
+      contractType: toContractType(employee.contract_type),
       today: {
         checkIn: checkIn ? checkIn.checked_at : null,
         checkOut: checkOut ? checkOut.checked_at : null,

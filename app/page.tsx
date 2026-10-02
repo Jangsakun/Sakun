@@ -5,6 +5,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { calcDayWork, toKstDateKey } from "@/app/lib/workTime";
+import {
+  checkAttendanceAction,
+  defaultSegmentFor,
+  PIECE_ONLY_CONFIRM_MESSAGE,
+  type AttendanceAction,
+} from "@/app/lib/attendanceFlow";
+import {
+  toContractType,
+  toSegmentType,
+  type ContractType,
+  type SegmentType,
+} from "@/app/lib/contractType";
 
 const notoSansKr = Noto_Sans_KR({
   subsets: ["latin"],
@@ -38,6 +50,7 @@ type AttendanceResponse = {
 
 type TodayAttendanceResponse = {
   success: boolean;
+  contractType?: string;
   today?: {
     checkIn: string | null;
     checkOut: string | null;
@@ -85,6 +98,8 @@ type CheckoutAvailability = {
 type TodayRecord = {
   id: number;
   record_type: string;
+  /** hourly=시급 구간, piece=도급 구간. 구버전 응답에는 없을 수 있음(=hourly). */
+  segment_type?: string | null;
   checked_at: string;
   lat: number;
   lng: number;
@@ -368,6 +383,23 @@ function formatDisplayAttendanceTime(
   });
 }
 
+/** 보정 없이 찍힌 시각 그대로 (도급 구간 표시용) */
+function formatKstClock(value: string) {
+  return new Date(value).toLocaleTimeString("ko-KR", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function getElapsedMinutes(from: string, to: string) {
+  return Math.max(
+    0,
+    Math.floor((new Date(to).getTime() - new Date(from).getTime()) / 60000)
+  );
+}
+
 function formatOnlyTime(value: string, recordType: string) {
   const normalizedDate = isCheckInType(recordType)
     ? normalizeDisplayCheckIn(value)
@@ -563,6 +595,8 @@ export default function Home() {
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  // 근로형태. 오늘 기록 API 가 알려줍니다. 시급+도급이면 도급 버튼을 추가로 보여줍니다.
+  const [contractType, setContractType] = useState<ContractType>("hourly");
   const [todayRecords, setTodayRecords] = useState<TodayRecord[]>([]);
   const [now, setNow] = useState(new Date());
 
@@ -820,6 +854,7 @@ export default function Home() {
 
       if (data.success && data.today) {
         setTodayRecords(data.today.records || []);
+        setContractType(toContractType(data.contractType));
       }
     } catch (error) {
       console.error("오늘 기록 불러오기 실패:", error);
@@ -1102,45 +1137,73 @@ export default function Home() {
     return getCheckoutAvailability(now);
   }, [now]);
 
-  const todaySummary = useMemo(() => {
-    if (todayRecords.length === 0) {
-      return {
-        checkIn: "",
-        checkOut: "",
-        totalWorkMinutes: 0,
-      };
-    }
+  // [출근]/[퇴근] 버튼이 기록하는 구간. 도급 직원은 도급, 그 외는 시급.
+  const mainSegment: SegmentType = defaultSegmentFor(contractType);
+  const isHybrid = contractType === "hybrid";
 
+  const todaySummary = useMemo(() => {
     const sortedRecords = [...todayRecords].sort(
       (a, b) =>
         new Date(a.checked_at).getTime() - new Date(b.checked_at).getTime()
     );
 
-    const firstCheckIn = sortedRecords.find((record) =>
-      isCheckInType(record.record_type)
-    );
-    const lastCheckOut = [...sortedRecords]
-      .reverse()
-      .find((record) => isCheckOutType(record.record_type));
+    const recordsOf = (segment: SegmentType) =>
+      sortedRecords.filter(
+        (record) => toSegmentType(record.segment_type) === segment
+      );
 
-    // 근무시간은 급여 계산과 같은 모듈(app/lib/workTime.ts)로 계산합니다.
-    // 퇴근 전에는 0 → 화면에 "-" 로 표시됩니다.
-    const totalWorkMinutes =
-      firstCheckIn && lastCheckOut
-        ? calcDayWork(toKstDateKey(firstCheckIn.checked_at), sortedRecords)
-            .workedMinutes
-        : 0;
+    const firstOf = (records: TodayRecord[], test: (v: string) => boolean) =>
+      records.find((record) => test(record.record_type)) || null;
+    const lastOf = (records: TodayRecord[], test: (v: string) => boolean) =>
+      [...records].reverse().find((record) => test(record.record_type)) || null;
+
+    const mainRecords = recordsOf(mainSegment);
+    const firstCheckIn = firstOf(mainRecords, isCheckInType);
+    const lastCheckOut = lastOf(mainRecords, isCheckOutType);
+
+    // 시급 구간은 급여 계산과 같은 모듈(app/lib/workTime.ts)로 계산합니다.
+    // 도급 구간은 급여와 무관하므로 실제 경과 시간만 보여줍니다.
+    let totalWorkMinutes = 0;
+
+    if (firstCheckIn && lastCheckOut) {
+      totalWorkMinutes =
+        mainSegment === "hourly"
+          ? calcDayWork(toKstDateKey(firstCheckIn.checked_at), mainRecords)
+              .workedMinutes
+          : getElapsedMinutes(firstCheckIn.checked_at, lastCheckOut.checked_at);
+    }
+
+    // 도급 구간 시각은 보정하지 않고 찍힌 그대로 보여줍니다.
+    const formatSegmentTime = (record: TodayRecord | null) =>
+      record
+        ? mainSegment === "hourly" && toSegmentType(record.segment_type) === "hourly"
+          ? formatOnlyTime(record.checked_at, record.record_type)
+          : formatKstClock(record.checked_at)
+        : "";
+
+    const pieceRecords = recordsOf("piece");
+    const pieceCheckIn = firstOf(pieceRecords, isCheckInType);
+    const pieceCheckOut = lastOf(pieceRecords, isCheckOutType);
 
     return {
-      checkIn: firstCheckIn
-        ? formatOnlyTime(firstCheckIn.checked_at, firstCheckIn.record_type)
-        : "",
-      checkOut: lastCheckOut
-        ? formatOnlyTime(lastCheckOut.checked_at, lastCheckOut.record_type)
-        : "",
+      checkIn: formatSegmentTime(firstCheckIn),
+      checkOut: formatSegmentTime(lastCheckOut),
       totalWorkMinutes,
+      pieceCheckIn: pieceCheckIn ? formatKstClock(pieceCheckIn.checked_at) : "",
+      pieceCheckOut: pieceCheckOut ? formatKstClock(pieceCheckOut.checked_at) : "",
     };
-  }, [todayRecords]);
+  }, [todayRecords, mainSegment]);
+
+  // 버튼 활성 여부. 서버(출퇴근 API)도 같은 규칙으로 다시 검사합니다.
+  const flowOf = (segment: SegmentType, action: AttendanceAction) =>
+    checkAttendanceAction(contractType, segment, action, todayRecords);
+  const canMainCheckIn = flowOf(mainSegment, "check-in").allowed;
+  const canMainCheckOut =
+    flowOf(mainSegment, "check-out").allowed &&
+    // 퇴근 시간대 제한은 시급 구간만. 도급 퇴근은 언제든 가능합니다.
+    (mainSegment === "piece" || checkoutAvailability.enabled);
+  const canPieceCheckIn = isHybrid && flowOf("piece", "check-in").allowed;
+  const canPieceCheckOut = isHybrid && flowOf("piece", "check-out").allowed;
 
   const selectedScheduleCount = useMemo(() => {
     return weeklySchedule.filter((day) => !day.isHoliday && day.available).length;
@@ -1152,7 +1215,10 @@ export default function Home() {
     ).length;
   }, [weeklySchedule]);
 
-  const sendAttendance = async (type: "check-in" | "check-out") => {
+  const sendAttendance = async (
+    type: AttendanceAction,
+    segment: SegmentType = mainSegment
+  ) => {
     if (!employee) {
       alert("직원 정보가 없습니다. 다시 등록해주세요.");
       clearEmployeeStorage();
@@ -1167,7 +1233,25 @@ export default function Home() {
       return;
     }
 
-    if (type === "check-out" && !checkoutAvailability.enabled) {
+    // 버튼이 비활성이어도 오래 열어둔 화면 등에서 눌릴 수 있으므로 한 번 더 확인합니다.
+    const flow = flowOf(segment, type);
+
+    if (!flow.allowed) {
+      alert(flow.message);
+      setMessage(flow.message);
+      return;
+    }
+
+    // 시급+도급 직원이 시급 출근 없이 도급 출근하는 날
+    if (flow.confirmPieceOnly && !window.confirm(PIECE_ONLY_CONFIRM_MESSAGE)) {
+      return;
+    }
+
+    if (
+      type === "check-out" &&
+      segment === "hourly" &&
+      !checkoutAvailability.enabled
+    ) {
       const blockedMessage = checkoutAvailability.nextAvailableLabel
         ? `지금은 퇴근 가능한 시간이 아닙니다. 다음 퇴근 가능 시간: ${checkoutAvailability.nextAvailableLabel}`
         : "지금은 퇴근 가능한 시간이 아닙니다.";
@@ -1183,7 +1267,10 @@ export default function Home() {
     }
 
     setIsLoading(true);
-    setMessage(type === "check-in" ? "출근 처리 중..." : "퇴근 처리 중...");
+    const actionLabel = `${isHybrid && segment === "piece" ? "도급 " : ""}${
+      type === "check-in" ? "출근" : "퇴근"
+    }`;
+    setMessage(`${actionLabel} 처리 중...`);
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
@@ -1231,22 +1318,20 @@ export default function Home() {
               lng,
               accuracy,
               checkedAt,
+              segment,
             }),
           });
 
           const data: AttendanceResponse = await response.json();
 
           if (data.success) {
-            if (type === "check-in") {
-              setMessage(data.message || "출근이 정상 처리되었습니다.");
-            } else {
-              setMessage(data.message || "퇴근이 정상 처리되었습니다.");
-            }
-
-            fetchTodayAttendance(employee);
+            setMessage(data.message || `${actionLabel}이 정상 처리되었습니다.`);
           } else {
             setMessage(data.message || "기록 전송에 실패했습니다.");
           }
+
+          // 실패해도 다시 불러옵니다(다른 기기에서 이미 찍은 경우 버튼 상태를 맞추기 위해).
+          fetchTodayAttendance(employee);
         } catch (error) {
           console.error(error);
           setMessage("서버 요청 중 오류가 발생했습니다.");
@@ -1403,18 +1488,43 @@ export default function Home() {
 
   const isSchedulePending = scheduleStatus === "pending";
   const todayDateLabel = formatKstHeaderDate(now);
-  const todayWorkStatus = todaySummary.checkOut
+  const isPieceWorking =
+    isHybrid && !!todaySummary.pieceCheckIn && !todaySummary.pieceCheckOut;
+  const isPieceDone = isHybrid && !!todaySummary.pieceCheckOut;
+
+  const todayWorkStatus = isPieceWorking
+    ? "도급 근무 중"
+    : isPieceDone
+    ? "근무 완료"
+    : todaySummary.checkOut
     ? "퇴근 완료"
     : todaySummary.checkIn
     ? "근무 중"
     : "대기 중";
   const todayWorkDescription =
     message ||
-    (todaySummary.checkOut
+    (isPieceWorking
+      ? "도급 근무 중입니다. 끝나면 [도급 퇴근]을 눌러주세요."
+      : isPieceDone
       ? "오늘 근무가 완료되었습니다."
+      : todaySummary.checkOut
+      ? isHybrid
+        ? "시급 근무가 끝났습니다. 도급 근무가 있으면 [도급 출근]을 눌러주세요."
+        : "오늘 근무가 완료되었습니다."
       : todaySummary.checkIn
       ? "현재 근무 중입니다."
       : "아직 출근 기록이 없습니다.");
+
+  // 누를 수 없는 버튼은 회색으로 표시합니다.
+  const attendanceButtonStyle = (
+    base: React.CSSProperties,
+    enabled: boolean
+  ): React.CSSProperties =>
+    isLoading
+      ? { ...base, opacity: 0.6, cursor: "not-allowed" }
+      : enabled
+      ? { ...base, cursor: "pointer" }
+      : { ...base, ...disabledAttendanceButtonStyle };
 
   return (
     <main style={pageStyle} className={notoSansKr.className}>
@@ -1611,37 +1721,66 @@ export default function Home() {
                     : "-"}
                 </strong>
               </div>
+              {isHybrid && (
+                <>
+                  <div style={todayInfoRowStyle}>
+                    <span style={todayInfoLabelStyle}>도급 출근</span>
+                    <strong style={todayInfoValueStyle}>
+                      {todaySummary.pieceCheckIn || "-"}
+                    </strong>
+                  </div>
+                  <div style={todayInfoRowStyle}>
+                    <span style={todayInfoLabelStyle}>도급 퇴근</span>
+                    <strong style={todayInfoValueStyle}>
+                      {todaySummary.pieceCheckOut || "-"}
+                    </strong>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
           <div style={buttonRowStyle}>
             <button
               onClick={() => sendAttendance("check-in")}
-              disabled={isLoading}
-              style={{
-                ...primaryButtonStyle,
-                opacity: isLoading ? 0.6 : 1,
-                cursor: isLoading ? "not-allowed" : "pointer",
-              }}
+              disabled={isLoading || !canMainCheckIn}
+              style={attendanceButtonStyle(primaryButtonStyle, canMainCheckIn)}
             >
               {isLoading ? "처리 중..." : "출근하기"}
             </button>
 
             <button
               onClick={() => sendAttendance("check-out")}
-              disabled={isLoading || !checkoutAvailability.enabled}
-              style={{
-                ...secondaryButtonStyle,
-                opacity: isLoading || !checkoutAvailability.enabled ? 0.6 : 1,
-                cursor:
-                  isLoading || !checkoutAvailability.enabled
-                    ? "not-allowed"
-                    : "pointer",
-              }}
+              disabled={isLoading || !canMainCheckOut}
+              style={attendanceButtonStyle(secondaryButtonStyle, canMainCheckOut)}
             >
               {isLoading ? "처리 중..." : "퇴근하기"}
             </button>
           </div>
+
+          {/* 시급+도급 직원만: 시급 근무 뒤 이어서(또는 도급만 하는 날) 도급 구간 기록 */}
+          {isHybrid && (
+            <div style={buttonRowStyle}>
+              <button
+                onClick={() => sendAttendance("check-in", "piece")}
+                disabled={isLoading || !canPieceCheckIn}
+                style={attendanceButtonStyle(pieceButtonStyle, canPieceCheckIn)}
+              >
+                {isLoading ? "처리 중..." : "도급 출근"}
+              </button>
+
+              <button
+                onClick={() => sendAttendance("check-out", "piece")}
+                disabled={isLoading || !canPieceCheckOut}
+                style={attendanceButtonStyle(
+                  pieceOutlineButtonStyle,
+                  canPieceCheckOut
+                )}
+              >
+                {isLoading ? "처리 중..." : "도급 퇴근"}
+              </button>
+            </div>
+          )}
 
           <div style={noticeInlineStyle}>
             <div style={noticeIconStyle}>i</div>
@@ -2215,6 +2354,26 @@ const secondaryButtonStyle: React.CSSProperties = {
   color: "#08224a",
   fontSize: "15px",
   fontWeight: 700,
+};
+
+const pieceButtonStyle: React.CSSProperties = {
+  ...primaryButtonStyle,
+  background: "linear-gradient(135deg, #78350f 0%, #b45309 100%)",
+  boxShadow: "0 10px 18px rgba(120, 53, 15, 0.15)",
+};
+
+const pieceOutlineButtonStyle: React.CSSProperties = {
+  ...secondaryButtonStyle,
+  border: "1.5px solid #b45309",
+  color: "#78350f",
+};
+
+const disabledAttendanceButtonStyle: React.CSSProperties = {
+  background: "#e5e7eb",
+  border: "1.5px solid #e5e7eb",
+  color: "#9ca3af",
+  boxShadow: "none",
+  cursor: "not-allowed",
 };
 
 const noticeBoxStyle: React.CSSProperties = {

@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server";
+import { checkAttendanceAction } from "@/app/lib/attendanceFlow";
+import { loadDayRecords, resolveRequestedSegment } from "@/app/lib/attendanceServer";
+import { getDailyWage, toContractType } from "@/app/lib/contractType";
 import { createClient } from "@supabase/supabase-js";
 import { getDistanceInMeters } from "@/app/lib/geo";
 
@@ -49,20 +52,6 @@ function getKstDateParts(date: Date) {
     hour: Number(getPart("hour")),
     minute: Number(getPart("minute")),
     second: Number(getPart("second")),
-  };
-}
-
-function getKstDayRangeFromIso(isoString: string) {
-  const date = new Date(isoString);
-  const { year, month, day } = getKstDateParts(date);
-
-  const monthText = String(month).padStart(2, "0");
-  const dayText = String(day).padStart(2, "0");
-  const kstDateOnly = `${year}-${monthText}-${dayText}`;
-
-  return {
-    startUtc: `${kstDateOnly}T00:00:00+09:00`,
-    endUtc: `${kstDateOnly}T23:59:59.999+09:00`,
   };
 }
 
@@ -282,41 +271,69 @@ export async function POST(request: Request) {
         "장사꾼"
     ).trim();
 
-    const normalizedCheckedAt = normalizeCheckInTime(
-      checkedAt,
-      employeeWorkplace
-    ).toISOString();
+    // 시급 구간 / 도급 구간 중 어느 출근인지. 값이 없으면 직원 근로형태의 기본 구간.
+    const requested = resolveRequestedSegment(body.segment, employee.contract_type);
+    if ("error" in requested) {
+      return NextResponse.json(
+        { success: false, message: requested.error },
+        { status: 400 }
+      );
+    }
+    const segment = requested.segment;
+
+    const { records: dayRecords, error: dayError } = await loadDayRecords(
+      supabase,
+      employee.id,
+      checkedAt
+    );
+
+    if (dayError) {
+      return NextResponse.json(
+        { success: false, message: `오늘 기록 조회 실패: ${dayError.message}` },
+        { status: 500 }
+      );
+    }
+
+    // 화면과 같은 규칙으로 다시 검사합니다.
+    // (시급+도급이 아닌 직원의 도급 출근, 시급 근무 중 도급 출근, 도급 후 시급 출근, 두 번째 출근)
+    const flow = checkAttendanceAction(
+      employee.contract_type,
+      segment,
+      "check-in",
+      dayRecords
+    );
+    if (!flow.allowed) {
+      return NextResponse.json(
+        { success: false, message: flow.message },
+        { status: 409 }
+      );
+    }
+
+    // 도급 출근은 시각을 보정하지 않습니다(보정하면 시급 퇴근보다 앞설 수 있음).
+    const normalizedCheckedAt =
+      segment === "hourly"
+        ? normalizeCheckInTime(checkedAt, employeeWorkplace).toISOString()
+        : checkedDate.toISOString();
 
     const hourlyWage = Number(employee.hourly_wage || 0);
     const hourlyWageSnapshot = hourlyWage > 0 ? hourlyWage : 10320;
 
-    const { startUtc, endUtc } = getKstDayRangeFromIso(checkedAt);
-
-    const { data: existing } = await supabase
-      .from("attendance_records")
-      .select("*")
-      .eq("employee_id", employee.id)
-      .eq("record_type", "check_in")
-      .gte("checked_at", startUtc)
-      .lte("checked_at", endUtc)
-      .limit(1);
-
-    if (existing && existing.length > 0) {
-      return NextResponse.json(
-        { success: false, message: "오늘은 이미 출근 처리되었습니다." },
-        { status: 400 }
-      );
-    }
+    // 도급 기록에는 그 날 기준 일급을 저장합니다. 나중에 일급을 바꿔도 과거 급여는 그대로입니다.
+    // 일급이 설정돼 있지 않으면 비워 둡니다(관리자 화면에서 확인).
+    const dailyWage = getDailyWage(employee);
 
     const payload: any = {
       employee_id: employee.id,
       record_type: "check_in",
+      segment_type: segment,
       lat: parsedLat,
       lng: parsedLng,
       checked_at: normalizedCheckedAt,
       accuracy: parsedAccuracy,
       distance: Math.round(distance),
       hourly_wage_snapshot: hourlyWageSnapshot,
+      piece_daily_wage_snapshot:
+        segment === "piece" && dailyWage > 0 ? dailyWage : null,
     };
 
     const { error } = await supabase
@@ -332,7 +349,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: `출근 완료 (${nearestWorkplace.name} 기준 ${Math.round(
+      message: `${segment === "piece" && toContractType(employee.contract_type) === "hybrid" ? "도급 " : ""}출근 완료 (${nearestWorkplace.name} 기준 ${Math.round(
         distance
       )}m)`,
       distance: Math.round(distance),
