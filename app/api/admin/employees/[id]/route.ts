@@ -289,10 +289,14 @@ export async function PATCH(
       updatePayload.hourly_wage = wageNumber;
     }
 
-    // 계약형태는 이 관리자 경로에서만 바꿀 수 있습니다.
-    // 도급은 일당이 없으면 급여가 0원이 되므로 일당 없이 도급으로 바꾸는 것을 막습니다.
+    // 근로형태는 이 관리자 경로에서만 바꿀 수 있습니다.
+    // 도급 / 시급+도급은 일급이 없으면 도급분이 0원이 되므로 일급 없이 바꾸는 것을 막습니다.
     if (contractType !== undefined) {
-      if (contractType !== "hourly" && contractType !== "piece") {
+      if (
+        contractType !== "hourly" &&
+        contractType !== "piece" &&
+        contractType !== "hybrid"
+      ) {
         return NextResponse.json(
           { success: false, message: "계약형태 값이 올바르지 않습니다." },
           { status: 400 }
@@ -313,7 +317,7 @@ export async function PATCH(
           dailyWageNumber > 10000000)
       ) {
         return NextResponse.json(
-          { success: false, message: "일당은 0원 이상 정수로 입력해주세요." },
+          { success: false, message: "도급 일급은 0원 이상 정수로 입력해주세요." },
           { status: 400 }
         );
       }
@@ -322,11 +326,14 @@ export async function PATCH(
     }
 
     if (
-      contractType === "piece" &&
+      (contractType === "piece" || contractType === "hybrid") &&
       !(Number(updatePayload.daily_wage) > 0)
     ) {
       return NextResponse.json(
-        { success: false, message: "도급은 일당을 함께 입력해야 합니다." },
+        {
+          success: false,
+          message: "도급 / 시급+도급은 도급 일급을 함께 입력해야 합니다.",
+        },
         { status: 400 }
       );
     }

@@ -26,8 +26,10 @@ import {
 import {
   CONTRACT_TYPE_LABEL,
   getDailyWage,
+  isHybridContract,
   isPieceContract,
   toContractType,
+  usesDailyWage,
   type ContractType,
 } from "@/app/lib/contractType";
 import { calcDayWork, calcHourlyPay } from "@/app/lib/workTime";
@@ -1156,10 +1158,10 @@ export default function AdminPage() {
     const dailyWageNumber = Number(editDailyWage);
 
     if (
-      editContractType === "piece" &&
+      editContractType !== "hourly" &&
       !(Number.isInteger(dailyWageNumber) && dailyWageNumber > 0)
     ) {
-      alert("도급은 일당을 입력해야 합니다.");
+      alert("도급 / 시급+도급은 도급 일급을 입력해야 합니다.");
       return;
     }
 
@@ -1181,8 +1183,8 @@ export default function AdminPage() {
           scheduleGroup: editScheduleGroup || null,
           schedule_group: editScheduleGroup || null,
           contractType: editContractType,
-          // 시급으로 바꿀 때는 예전 일당을 건드리지 않습니다(다시 도급으로 돌릴 때 참고용).
-          ...(editContractType === "piece" ? { dailyWage: dailyWageNumber } : {}),
+          // 시급으로 바꿀 때는 예전 일급을 건드리지 않습니다(다시 도급으로 돌릴 때 참고용).
+          ...(editContractType !== "hourly" ? { dailyWage: dailyWageNumber } : {}),
         }),
       });
 
@@ -2663,15 +2665,19 @@ export default function AdminPage() {
                           </td>
 
                           <td style={tdStyle}>
-                            {isPieceContract(employee) ? (
+                            {usesDailyWage(employee) ? (
                               <span
                                 style={{
                                   ...badgeStyle,
-                                  backgroundColor: "#fef3c7",
-                                  color: "#92400e",
+                                  backgroundColor: isHybridContract(employee)
+                                    ? "#e0e7ff"
+                                    : "#fef3c7",
+                                  color: isHybridContract(employee)
+                                    ? "#3730a3"
+                                    : "#92400e",
                                 }}
                               >
-                                {CONTRACT_TYPE_LABEL.piece} ·{" "}
+                                {CONTRACT_TYPE_LABEL[toContractType(employee.contract_type)]} · 일급{" "}
                                 {getDailyWage(employee).toLocaleString("ko-KR")}원
                               </span>
                             ) : (
@@ -3006,7 +3012,7 @@ export default function AdminPage() {
                   </div>
 
                   <div>
-                    <label style={labelStyle}>계약형태</label>
+                    <label style={labelStyle}>근로형태</label>
                     <select
                       value={editContractType}
                       onChange={(e) =>
@@ -3016,12 +3022,13 @@ export default function AdminPage() {
                     >
                       <option value="hourly">{CONTRACT_TYPE_LABEL.hourly}</option>
                       <option value="piece">{CONTRACT_TYPE_LABEL.piece}</option>
+                      <option value="hybrid">{CONTRACT_TYPE_LABEL.hybrid}</option>
                     </select>
                   </div>
 
-                  {editContractType === "piece" ? (
+                  {editContractType !== "hourly" ? (
                     <div>
-                      <label style={labelStyle}>일당 (세전, 원)</label>
+                      <label style={labelStyle}>도급 일급 (세전, 원)</label>
                       <input
                         type="number"
                         min={0}
@@ -3034,7 +3041,11 @@ export default function AdminPage() {
                         style={inputStyle}
                       />
                       <div style={{ marginTop: "6px", fontSize: "12px", color: "#6b7280" }}>
-                        출근만 찍으면 그 날 이 금액이 지급됩니다. 주휴수당 없음.
+                        {editContractType === "piece"
+                          ? "출퇴근을 모두 찍은 날 근무시간과 무관하게 이 금액이 지급됩니다. 주휴수당 없음."
+                          : "시급 근무와 별도로, 도급 출퇴근을 모두 찍은 날 이 금액이 더해집니다(10분만 찍어도 전액)."}
+                        <br />
+                        바꾼 금액은 이후 새로 찍는 도급 기록부터 적용됩니다(과거 기록 금액은 그대로).
                       </div>
                     </div>
                   ) : (

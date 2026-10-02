@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { toContractType } from "@/app/lib/contractType";
 
 export async function GET() {
   try {
@@ -78,7 +79,7 @@ export async function GET() {
         employment_type: employmentType,
         schedule_group: emp.schedule_group || "",
         weekly_allowance_status: weeklyAllowanceStatus,
-        contract_type: emp.contract_type === "piece" ? "piece" : "hourly",
+        contract_type: toContractType(emp.contract_type),
         resident_number_masked,
       };
     });
