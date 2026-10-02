@@ -25,11 +25,13 @@ import {
 } from "@/app/lib/contractRenewal";
 import {
   CONTRACT_TYPE_LABEL,
+  SEGMENT_TYPE_LABEL,
   getDailyWage,
   isHybridContract,
   toContractType,
   usesDailyWage,
   type ContractType,
+  type SegmentType,
 } from "@/app/lib/contractType";
 import { calcDayPay } from "@/app/lib/dayPay";
 import {
@@ -372,7 +374,11 @@ export default function AdminPage() {
   >(null);
   const [editCheckInTime, setEditCheckInTime] = useState("");
   const [editCheckOutTime, setEditCheckOutTime] = useState("");
-  // 빈 문자열 = 자동 계산. 숫자를 넣으면 그 날 세전급여가 그 금액으로 고정됩니다.
+  // 도급 구간 수정값 (시급+도급 / 도급 직원)
+  const [editPieceCheckInTime, setEditPieceCheckInTime] = useState("");
+  const [editPieceCheckOutTime, setEditPieceCheckOutTime] = useState("");
+  // 빈 문자열 = 자동 계산. 숫자를 넣으면 그 날 "시급분"이 그 금액으로 고정됩니다.
+  // 도급 일급은 직접지정과 무관하게 따로 더해집니다(app/lib/dayPay.ts).
   const [editGrossPay, setEditGrossPay] = useState("");
   const [attendanceSaving, setAttendanceSaving] = useState(false);
 
@@ -741,12 +747,12 @@ export default function AdminPage() {
       }
     }
 
-    // 같은 직원·같은 날이 두 줄 있으면 뒷줄이 통째로 건너뛰어집니다.
-    // 저장하기 전에 알려주는 편이 낫습니다.
+    // 같은 직원·같은 날·같은 구간이 두 줄 있으면 뒷줄이 통째로 건너뛰어집니다.
+    // 저장하기 전에 알려주는 편이 낫습니다. (시급 줄 + 도급 줄은 같은 날이어도 됩니다)
     const seen = new Map<string, number>();
 
     for (const { row, rowNo } of filled) {
-      const key = `${row.employeeId}|${row.date}`;
+      const key = `${row.employeeId}|${row.date}|${row.segmentType}`;
       const firstRowNo = seen.get(key);
 
       if (firstRowNo) {
@@ -773,6 +779,7 @@ export default function AdminPage() {
             date: row.date,
             checkInTime: row.checkInTime,
             checkOutTime: row.checkOutTime,
+            segmentType: row.segmentType,
           })),
         }),
       });
@@ -926,9 +933,11 @@ export default function AdminPage() {
       const employee = employeeMap.get(employeeId);
 
       // 시급분 + 도급분은 급여 API 와 같은 모듈(app/lib/dayPay.ts)로 계산합니다.
+      // now 를 넘겨야 "오늘 아직 퇴근 전"이 "퇴근 누락"으로 잘못 표시되지 않습니다.
       const dayPay = calcDayPay(date, sorted, {
         fallbackHourlyWage: employee?.hourly_wage,
         fallbackDailyWage: getDailyWage(employee),
+        now: new Date(),
       });
       const dayWork = dayPay.hourly;
       const checkInRecord = dayWork.checkIn;
@@ -950,21 +959,37 @@ export default function AdminPage() {
 
       const autoGrossPay = grossPay;
 
-      // 관리자가 금액을 직접 지정한 날은 계산값 대신 그 금액을 씁니다.
+      // 관리자가 금액을 직접 지정한 날은 시급분만 그 금액으로 대체하고,
+      // 도급 일급은 따로 더합니다(급여 API 와 같은 규칙, app/lib/dayPay.ts).
       // 근무시간이 0이라 계산값이 없던 날도 지정 금액은 그대로 표시합니다.
       const overrideValue =
         payOverrideMap.get(`${employeeId}_${date}`) ?? null;
 
       if (overrideValue !== null) {
-        grossPay = overrideValue;
-        netPay = Math.floor(overrideValue * 0.967);
+        grossPay = overrideValue + dayPay.piece.amount;
+        netPay = Math.floor(grossPay * 0.967);
       }
 
       let statusText = "기록 확인 필요";
       let statusColor = "#92400e";
       let statusBg = "#fef3c7";
 
-      if (checkInRecord && checkOutRecord) {
+      if (!dayWork.hasHourly && dayPay.piece.hasPiece) {
+        // 시급 기록 없이 도급만 한 날
+        if (dayPay.piece.missingCheckOut) {
+          statusText = "도급 퇴근 누락";
+          statusColor = "#b91c1c";
+          statusBg = "#fee2e2";
+        } else {
+          statusText = "도급만";
+          statusColor = "#6b21a8";
+          statusBg = "#f3e8ff";
+        }
+      } else if (dayPay.piece.missingCheckOut) {
+        statusText = "도급 퇴근 누락";
+        statusColor = "#b91c1c";
+        statusBg = "#fee2e2";
+      } else if (checkInRecord && checkOutRecord) {
         statusText = "완료";
         statusColor = "#166534";
         statusBg = "#dcfce7";
@@ -1440,6 +1465,8 @@ export default function AdminPage() {
     setEditingAttendanceKey(row.key);
     setEditCheckInTime(toDateTimeLocalValue(row.checkIn));
     setEditCheckOutTime(toDateTimeLocalValue(row.checkOut));
+    setEditPieceCheckInTime(toDateTimeLocalValue(row.pieceCheckIn));
+    setEditPieceCheckOutTime(toDateTimeLocalValue(row.pieceCheckOut));
     // 고정해둔 금액이 없으면 비워둡니다.
     // 비어 있는 상태 = 근무시간 × 시급 자동 계산.
     setEditGrossPay(row.payOverride !== null ? String(row.payOverride) : "");
@@ -1449,13 +1476,30 @@ export default function AdminPage() {
     setEditingAttendanceKey(null);
     setEditCheckInTime("");
     setEditCheckOutTime("");
+    setEditPieceCheckInTime("");
+    setEditPieceCheckOutTime("");
     setEditGrossPay("");
   };
 
   const saveAttendanceEdit = async (row: GroupedAttendanceRow) => {
-    if (!editCheckInTime && !editCheckOutTime) {
+    if (
+      !editCheckInTime &&
+      !editCheckOutTime &&
+      !editPieceCheckInTime &&
+      !editPieceCheckOutTime
+    ) {
       alert("출근 또는 퇴근 시간 중 하나는 입력해야 합니다.");
       return;
+    }
+
+    if (editPieceCheckInTime && editPieceCheckOutTime) {
+      const pieceIn = new Date(editPieceCheckInTime).getTime();
+      const pieceOut = new Date(editPieceCheckOutTime).getTime();
+
+      if (pieceOut < pieceIn) {
+        alert("도급 퇴근 시간은 도급 출근 시간보다 빠를 수 없습니다.");
+        return;
+      }
     }
 
     if (editCheckInTime && editCheckOutTime) {
@@ -1484,13 +1528,20 @@ export default function AdminPage() {
       }
     }
 
+    // 빈 칸으로 둔 쪽은 "그대로"입니다(지우려면 삭제 버튼).
     const timesChanged =
-      editCheckInTime !== toDateTimeLocalValue(row.checkIn) ||
-      editCheckOutTime !== toDateTimeLocalValue(row.checkOut);
+      (!!editCheckInTime || !!editCheckOutTime) &&
+      (editCheckInTime !== toDateTimeLocalValue(row.checkIn) ||
+        editCheckOutTime !== toDateTimeLocalValue(row.checkOut));
+
+    const pieceTimesChanged =
+      (!!editPieceCheckInTime || !!editPieceCheckOutTime) &&
+      (editPieceCheckInTime !== toDateTimeLocalValue(row.pieceCheckIn) ||
+        editPieceCheckOutTime !== toDateTimeLocalValue(row.pieceCheckOut));
 
     const grossChanged = nextOverride !== row.payOverride;
 
-    if (!timesChanged && !grossChanged) {
+    if (!timesChanged && !pieceTimesChanged && !grossChanged) {
       alert("변경된 내용이 없습니다.");
       return;
     }
@@ -1516,6 +1567,7 @@ export default function AdminPage() {
             date: row.date,
             checkInTime: editCheckInTime || null,
             checkOutTime: editCheckOutTime || null,
+            segment: "hourly",
           }),
         });
 
@@ -1526,7 +1578,38 @@ export default function AdminPage() {
           return;
         }
 
-        messages.push("출퇴근 시간이 수정되었습니다.");
+        messages.push("시급 출퇴근 시간이 수정되었습니다.");
+      }
+
+      if (pieceTimesChanged) {
+        const response = await fetch("/api/admin/attendance/update", {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            checkInRecordId: row.pieceCheckInRecordId,
+            checkOutRecordId: row.pieceCheckOutRecordId,
+            employeeId: row.employeeId,
+            employeeName: row.employeeName,
+            date: row.date,
+            checkInTime: editPieceCheckInTime || null,
+            checkOutTime: editPieceCheckOutTime || null,
+            segment: "piece",
+          }),
+        });
+
+        const data: AttendanceUpdateResponse = await response.json();
+
+        if (!data.success) {
+          alert(
+            [...messages, data.message || "도급 출퇴근 수정 실패"].join("\n")
+          );
+          fetchRecords();
+          return;
+        }
+
+        messages.push("도급 출퇴근 시간이 수정되었습니다.");
       }
 
       if (grossChanged) {
@@ -1572,9 +1655,12 @@ export default function AdminPage() {
 
 
   const deleteAttendanceRow = async (row: GroupedAttendanceRow) => {
-    const recordIds = [row.checkInRecordId, row.checkOutRecordId].filter(
-      (id): id is number => typeof id === "number"
-    );
+    const recordIds = [
+      row.checkInRecordId,
+      row.checkOutRecordId,
+      row.pieceCheckInRecordId,
+      row.pieceCheckOutRecordId,
+    ].filter((id): id is number => typeof id === "number");
 
     if (recordIds.length === 0) {
       alert("삭제할 출퇴근 기록이 없습니다.");
@@ -1582,7 +1668,7 @@ export default function AdminPage() {
     }
 
     const ok = window.confirm(
-      `${row.employeeName} / ${formatDate(row.date)} 출퇴근 기록을 삭제할까요?\n\n출근 기록과 퇴근 기록이 함께 삭제됩니다.`
+      `${row.employeeName} / ${formatDate(row.date)} 출퇴근 기록을 삭제할까요?\n\n출근 기록과 퇴근 기록이 함께 삭제됩니다.${row.pieceCheckIn || row.pieceCheckOut ? "\n(그 날 도급 출퇴근 기록도 함께 삭제됩니다)" : ""}`
     );
 
     if (!ok) return;
@@ -2114,6 +2200,7 @@ export default function AdminPage() {
               <th style={{ ...manualThStyle, width: "150px" }}>날짜</th>
               <th style={{ ...manualThStyle, width: "120px" }}>출근시간</th>
               <th style={{ ...manualThStyle, width: "120px" }}>퇴근시간</th>
+              <th style={{ ...manualThStyle, width: "96px" }}>구간</th>
               <th style={{ ...manualThStyle, width: "64px" }}>삭제</th>
             </tr>
           </thead>
@@ -2177,6 +2264,22 @@ export default function AdminPage() {
                     }
                     style={manualFieldStyle}
                   />
+                </td>
+
+                <td style={manualTdStyle}>
+                  <select
+                    value={row.segmentType}
+                    onChange={(event) =>
+                      updateManualRow(index, {
+                        segmentType: event.target.value as SegmentType,
+                      })
+                    }
+                    style={manualFieldStyle}
+                    title="도급은 시급+도급 / 도급 직원만 넣을 수 있습니다"
+                  >
+                    <option value="hourly">{SEGMENT_TYPE_LABEL.hourly}</option>
+                    <option value="piece">{SEGMENT_TYPE_LABEL.piece}</option>
+                  </select>
                 </td>
 
                 <td style={{ ...manualTdStyle, textAlign: "center" }}>
@@ -2347,9 +2450,10 @@ export default function AdminPage() {
                       <th style={thStyle}>주민번호</th>
                       <th style={thStyle}>근무지</th>
                       <th style={thStyle}>날짜</th>
-                      <th style={thStyle}>출근</th>
-                      <th style={thStyle}>퇴근</th>
-                      <th style={thStyle}>총 근무시간</th>
+                      <th style={thStyle}>시급 출근</th>
+                      <th style={thStyle}>시급 퇴근</th>
+                      <th style={thStyle}>시급 근무시간</th>
+                      <th style={thStyle}>도급 구간</th>
                       <th style={thStyle}>시급</th>
                       <th style={thStyle}>세전 급여</th>
                       <th style={thStyle}>세후 급여</th>
@@ -2394,6 +2498,18 @@ export default function AdminPage() {
                                 }
                                 style={dateTimeInputStyle}
                               />
+                            ) : !row.hasHourly &&
+                              (row.pieceCheckIn || row.pieceCheckOut) ? (
+                              <span
+                                style={{
+                                  ...badgeStyle,
+                                  backgroundColor: "#f3e8ff",
+                                  color: "#6b21a8",
+                                }}
+                                title="이 날은 시급 근무 없이 도급만 했습니다"
+                              >
+                                도급만
+                              </span>
                             ) : (
                               formatCheckInTime(row.checkIn)
                             )}
@@ -2426,6 +2542,45 @@ export default function AdminPage() {
                           </td>
 
                           <td style={tdStyle}>
+                            {isEditingAttendance ? (
+                              <div
+                                style={{
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: "4px",
+                                }}
+                              >
+                                <label style={pieceEditLabelStyle}>
+                                  도급 출근
+                                  <input
+                                    type="datetime-local"
+                                    step={60}
+                                    value={editPieceCheckInTime}
+                                    onChange={(e) =>
+                                      setEditPieceCheckInTime(e.target.value)
+                                    }
+                                    style={dateTimeInputStyle}
+                                  />
+                                </label>
+                                <label style={pieceEditLabelStyle}>
+                                  도급 퇴근
+                                  <input
+                                    type="datetime-local"
+                                    step={60}
+                                    value={editPieceCheckOutTime}
+                                    onChange={(e) =>
+                                      setEditPieceCheckOutTime(e.target.value)
+                                    }
+                                    style={dateTimeInputStyle}
+                                  />
+                                </label>
+                              </div>
+                            ) : (
+                              <PieceSegmentCell row={row} />
+                            )}
+                          </td>
+
+                          <td style={tdStyle}>
                             {row.hourlyWage > 0
                               ? formatCurrency(row.hourlyWage)
                               : "-"}
@@ -2433,25 +2588,39 @@ export default function AdminPage() {
 
                           <td style={tdStyle}>
                             {isEditingAttendance ? (
-                              <input
-                                type="text"
-                                inputMode="numeric"
-                                value={editGrossPay}
-                                onChange={(e) =>
-                                  setEditGrossPay(e.target.value)
-                                }
-                                placeholder={
-                                  row.autoGrossPay !== null
-                                    ? `자동 ${row.autoGrossPay.toLocaleString()}`
-                                    : "자동"
-                                }
-                                title="비워두면 근무시간 × 시급으로 자동 계산합니다"
-                                style={{
-                                  ...dateTimeInputStyle,
-                                  width: "112px",
-                                  textAlign: "right",
-                                }}
-                              />
+                              <div>
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  value={editGrossPay}
+                                  onChange={(e) =>
+                                    setEditGrossPay(e.target.value)
+                                  }
+                                  placeholder={
+                                    row.hourlyPay !== null
+                                      ? `시급분 자동 ${row.hourlyPay.toLocaleString()}`
+                                      : "시급분 자동"
+                                  }
+                                  title="시급분만 대체합니다. 도급 일급은 별도로 지급됩니다. 비워두면 근무시간 × 시급으로 자동 계산합니다."
+                                  style={{
+                                    ...dateTimeInputStyle,
+                                    width: "112px",
+                                    textAlign: "right",
+                                  }}
+                                />
+                                <div
+                                  style={{
+                                    marginTop: "3px",
+                                    fontSize: "10px",
+                                    color: "#6b7280",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  시급분만 대체, 도급 일급은 별도 지급
+                                  {row.piecePay > 0 &&
+                                    ` (+${row.piecePay.toLocaleString()})`}
+                                </div>
+                              </div>
                             ) : (
                               <div>
                                 {row.grossPay !== null
@@ -2467,12 +2636,19 @@ export default function AdminPage() {
                                       color: "#b45309",
                                     }}
                                     title={
-                                      row.autoGrossPay !== null
-                                        ? `자동 계산은 ${row.autoGrossPay.toLocaleString()}원입니다`
-                                        : "자동 계산값이 없는 날입니다"
+                                      (row.autoGrossPay !== null
+                                        ? `자동 계산은 ${row.autoGrossPay.toLocaleString()}원입니다. `
+                                        : "자동 계산값이 없는 날입니다. ") +
+                                      "직접 지정은 시급분만 대체하고, 도급 일급은 별도로 지급됩니다."
                                     }
                                   >
-                                    직접 지정
+                                    시급분 직접 지정
+                                    {row.piecePay > 0 && (
+                                      <span style={{ fontWeight: 600, color: "#6b7280" }}>
+                                        {" "}
+                                        + 도급 {row.piecePay.toLocaleString()}
+                                      </span>
+                                    )}
                                   </div>
                                 )}
                               </div>
@@ -3781,6 +3957,95 @@ function SummaryCard({
 
 // 동명이인 구분용. 직원 목록 API 가 이미 내려주는
 // resident_number_masked("710906-2******") 에서 앞 6자리만 사용합니다.
+/** 이 시간(분)보다 짧은 도급 구간은 눈에 띄게 표시합니다. */
+const SHORT_PIECE_MINUTES = 30;
+
+const pieceEditLabelStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "2px",
+  fontSize: "10px",
+  fontWeight: 800,
+  color: "#92400e",
+};
+
+function formatKstClock(value: string | null) {
+  if (!value) return "-";
+
+  return new Date(value).toLocaleTimeString("ko-KR", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+// 출퇴근 기록 표의 "도급 구간" 칸.
+// 시각(보정 없이 찍힌 그대로) / 실제 근무시간 / 일급 / 짧은 구간·누락 표시.
+function PieceSegmentCell({ row }: { row: GroupedAttendanceRow }) {
+  if (!row.pieceCheckIn && !row.pieceCheckOut) {
+    return <span style={{ color: "#9ca3af" }}>-</span>;
+  }
+
+  const minutes = row.pieceElapsedMinutes;
+  const isShort = minutes !== null && minutes < SHORT_PIECE_MINUTES;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+      <span style={{ fontWeight: 700, color: "#78350f", whiteSpace: "nowrap" }}>
+        {formatKstClock(row.pieceCheckIn)} ~{" "}
+        {row.pieceMissingCheckOut ? (
+          <span style={{ color: "#dc2626" }}>퇴근 누락</span>
+        ) : row.pieceCheckOut ? (
+          formatKstClock(row.pieceCheckOut)
+        ) : (
+          "근무 중"
+        )}
+      </span>
+
+      {minutes !== null && (
+        <span
+          style={{
+            alignSelf: "flex-start",
+            padding: "1px 6px",
+            borderRadius: "999px",
+            fontSize: "11px",
+            fontWeight: 800,
+            backgroundColor: isShort ? "#fde68a" : "#f3f4f6",
+            color: isShort ? "#92400e" : "#374151",
+          }}
+          title={
+            isShort
+              ? `도급 구간이 ${SHORT_PIECE_MINUTES}분보다 짧습니다. 일급은 전액 지급됩니다.`
+              : "도급 구간 실제 근무시간"
+          }
+        >
+          {isShort ? "⚠ " : ""}
+          실제 {formatWorkMinutes(minutes)}
+        </span>
+      )}
+
+      <span style={{ fontSize: "12px", color: "#374151" }}>
+        {row.pieceMissingCheckOut ? (
+          <span style={{ color: "#dc2626", fontWeight: 700 }}>일급 미지급</span>
+        ) : row.piecePay > 0 ? (
+          <>
+            일급 {row.piecePay.toLocaleString("ko-KR")}원
+            {row.pieceUsedFallbackWage && (
+              <span title="기록에 일급 스냅샷이 없어 현재 일급으로 계산했습니다">
+                {" "}
+                *
+              </span>
+            )}
+          </>
+        ) : (
+          "-"
+        )}
+      </span>
+    </div>
+  );
+}
+
 function getResidentPrefix(residentNumberMasked?: string | null) {
   const digits = String(residentNumberMasked || "").replace(/[^0-9]/g, "");
 
@@ -4657,6 +4922,8 @@ type ManualRow = {
   date: string;
   checkInTime: string;
   checkOutTime: string;
+  /** 시급 구간 / 도급 구간. 기본 시급. */
+  segmentType: SegmentType;
 };
 
 // React key 용 일련번호.
@@ -4672,6 +4939,7 @@ function createManualRow(base?: Partial<ManualRow>): ManualRow {
     date: base?.date ?? "",
     checkInTime: base?.checkInTime ?? "",
     checkOutTime: base?.checkOutTime ?? "",
+    segmentType: base?.segmentType ?? "hourly",
   };
 }
 

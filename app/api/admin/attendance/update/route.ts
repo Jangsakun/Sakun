@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { isSegmentAllowedFor } from "@/app/lib/attendanceFlow";
+import {
+  getDailyWage,
+  toContractType,
+  type SegmentType,
+} from "@/app/lib/contractType";
 import {
   logAttendanceChanges,
   readCheckedAt,
@@ -18,7 +24,25 @@ export async function PATCH(request: Request) {
       date,
       checkInTime,
       checkOutTime,
+      segment: rawSegment,
     } = body;
+
+    // 구간 종류(시급/도급). 값이 없으면 시급(기존 화면 호환).
+    const segment: SegmentType =
+      rawSegment === undefined || rawSegment === null || rawSegment === ""
+        ? "hourly"
+        : rawSegment === "piece"
+        ? "piece"
+        : rawSegment === "hourly"
+        ? "hourly"
+        : ("invalid" as SegmentType);
+
+    if (segment !== "hourly" && segment !== "piece") {
+      return NextResponse.json(
+        { success: false, message: "구간 종류 값이 올바르지 않습니다." },
+        { status: 400 }
+      );
+    }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -81,6 +105,36 @@ export async function PATCH(request: Request) {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
+    // 새 기록을 만들 때 쓸 값: 근로형태로 쓸 수 있는 구간인지, 도급 일급 스냅샷.
+    let pieceSnapshot: number | null = null;
+
+    if (employeeId && (!checkInRecordId || !checkOutRecordId)) {
+      const { data: employeeRow } = await supabase
+        .from("employees")
+        .select("contract_type, daily_wage")
+        .eq("id", employeeId)
+        .maybeSingle();
+
+      if (
+        employeeRow &&
+        !isSegmentAllowedFor(toContractType(employeeRow.contract_type), segment)
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              segment === "piece"
+                ? "시급 직원에게는 도급 기록을 넣을 수 없습니다."
+                : "도급 직원에게는 시급 기록을 넣을 수 없습니다.",
+          },
+          { status: 400 }
+        );
+      }
+
+      const dailyWage = getDailyWage(employeeRow);
+      pieceSnapshot = segment === "piece" && dailyWage > 0 ? dailyWage : null;
+    }
+
     // 성공한 변경만 모아 마지막에 한 번 기록합니다.
     const auditEntries: AuditEntry[] = [];
     const numericEmployeeId = Number(employeeId);
@@ -108,6 +162,7 @@ export async function PATCH(request: Request) {
           })
           .eq("id", checkInRecordId)
           .eq("record_type", "check_in")
+          .eq("segment_type", segment)
           .select("id, employee_id, checked_at");
 
         if (checkInError) {
@@ -154,6 +209,8 @@ export async function PATCH(request: Request) {
               {
                 employee_id: employeeId,
                 record_type: "check_in",
+                segment_type: segment,
+                piece_daily_wage_snapshot: pieceSnapshot,
                 checked_at: checkInIso,
                 lat: null,
                 lng: null,
@@ -215,6 +272,7 @@ export async function PATCH(request: Request) {
           })
           .eq("id", checkOutRecordId)
           .eq("record_type", "check_out")
+          .eq("segment_type", segment)
           .select("id, employee_id, checked_at");
 
         if (checkOutError) {
@@ -261,6 +319,8 @@ export async function PATCH(request: Request) {
               {
                 employee_id: employeeId,
                 record_type: "check_out",
+                segment_type: segment,
+                piece_daily_wage_snapshot: pieceSnapshot,
                 checked_at: checkOutIso,
                 lat: null,
                 lng: null,

@@ -1,4 +1,10 @@
 import { NextResponse } from "next/server";
+import { isSegmentAllowedFor } from "@/app/lib/attendanceFlow";
+import {
+  getDailyWage,
+  toContractType,
+  type SegmentType,
+} from "@/app/lib/contractType";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { logAttendanceChanges } from "@/app/lib/attendanceAudit";
 import { loadPayOverrides } from "@/app/lib/payOverride";
@@ -354,6 +360,11 @@ async function handleEntryRows(
       date: String(item.date ?? "").trim(),
       checkInTime: String(item.checkInTime ?? "").trim(),
       checkOutTime: String(item.checkOutTime ?? "").trim(),
+      // 구간 종류. 값이 없으면 시급(기존 화면 호환).
+      segmentType:
+        item.segmentType === undefined || item.segmentType === ""
+          ? "hourly"
+          : String(item.segmentType),
     };
   });
 
@@ -365,7 +376,7 @@ async function handleEntryRows(
   const { data: employeeRows } = ids.length
     ? await supabase
         .from("employees")
-        .select("id, name, is_active, hourly_wage")
+        .select("id, name, is_active, hourly_wage, contract_type, daily_wage")
         .in("id", ids)
     : { data: [] };
 
@@ -375,6 +386,8 @@ async function handleEntryRows(
       name: string;
       is_active: boolean;
       hourly_wage: number | null;
+      contract_type: string | null;
+      daily_wage: number | null;
     }[]).map((item) => [item.id, item])
   );
 
@@ -443,18 +456,41 @@ async function handleEntryRows(
       }
     }
 
-    // 같은 날 기록이 이미 있으면 건너뜁니다.
-    // 중복으로 넣으면 그 날 급여가 이중 계산됩니다.
+    if (entry.segmentType !== "hourly" && entry.segmentType !== "piece") {
+      push("구간 종류 값이 올바르지 않습니다.");
+      continue;
+    }
+
+    const segment: SegmentType = entry.segmentType;
+
+    // 직원 근로형태로 쓸 수 있는 구간인지 (시급 직원=시급만, 도급 직원=도급만, 시급+도급=둘 다)
+    if (!isSegmentAllowedFor(toContractType(employee.contract_type), segment)) {
+      push(
+        segment === "piece"
+          ? "시급 직원에게는 도급 기록을 넣을 수 없습니다."
+          : "도급 직원에게는 시급 기록을 넣을 수 없습니다."
+      );
+      continue;
+    }
+
+    // 같은 날 같은 구간 기록이 이미 있으면 건너뜁니다.
+    // 중복으로 넣으면 그 날 급여가 이중 계산됩니다(DB 중복 불가 제약도 막음).
+    // 시급+도급 직원은 시급 기록이 있는 날에도 도급 기록은 추가할 수 있습니다.
     const { data: existing } = await supabase
       .from("attendance_records")
       .select("id")
       .eq("employee_id", entry.employeeId)
+      .eq("segment_type", segment)
       .gte("checked_at", `${entry.date}T00:00:00+09:00`)
       .lte("checked_at", `${entry.date}T23:59:59.999+09:00`)
       .limit(1);
 
     if ((existing || []).length > 0) {
-      push("이미 그 날 기록이 있어 건너뜀");
+      push(
+        segment === "piece"
+          ? "이미 그 날 도급 기록이 있어 건너뜀"
+          : "이미 그 날 기록이 있어 건너뜀"
+      );
       continue;
     }
 
@@ -466,21 +502,30 @@ async function handleEntryRows(
         Number(employee.hourly_wage || 0)
       );
 
+      // 도급 기록은 직원의 현재 일급을 스냅샷으로 남깁니다(없으면 비움 → 급여는 현재 일급으로 대신 계산).
+      const dailyWage = getDailyWage(employee);
+      const pieceSnapshot =
+        segment === "piece" && dailyWage > 0 ? dailyWage : null;
+
       const rows: {
         employee_id: number;
         record_type: "check_in" | "check_out";
+        segment_type: SegmentType;
         checked_at: string;
         lat: null;
         lng: null;
         hourly_wage_snapshot: number;
+        piece_daily_wage_snapshot: number | null;
       }[] = [
         {
           employee_id: entry.employeeId,
           record_type: "check_in",
+          segment_type: segment,
           checked_at: checkInAt.toISOString(),
           lat: null,
           lng: null,
           hourly_wage_snapshot: hourlyWageSnapshot,
+          piece_daily_wage_snapshot: pieceSnapshot,
         },
       ];
 
@@ -488,10 +533,12 @@ async function handleEntryRows(
         rows.push({
           employee_id: entry.employeeId,
           record_type: "check_out",
+          segment_type: segment,
           checked_at: checkOutAt.toISOString(),
           lat: null,
           lng: null,
           hourly_wage_snapshot: hourlyWageSnapshot,
+          piece_daily_wage_snapshot: pieceSnapshot,
         });
       }
 

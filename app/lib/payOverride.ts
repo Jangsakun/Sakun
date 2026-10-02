@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 // 관리자가 직접 지정한 하루치 세전급여(attendance_pay_override).
+// 시급분만 대체합니다. 도급 일급은 직접지정과 무관하게 따로 더합니다(app/lib/dayPay.ts).
 //
 // 왜 공용 파일인가
 //   같은 수정값을 출퇴근 기록 화면 / 관리자 급여 / 근로자 급여 세 곳이 읽습니다.

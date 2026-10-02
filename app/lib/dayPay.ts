@@ -6,7 +6,9 @@
 //   시급분: 시급 구간(segment_type=hourly) 기록만으로 app/lib/workTime.ts 규칙 그대로 계산
 //   도급분: 도급 구간(segment_type=piece) 출근+퇴근이 모두 있으면 일급 스냅샷 전액
 //          (근무시간 무관, 10분이어도 전액). 퇴근이 없으면 0원 + 누락 표시.
-//   관리자 세전급여 직접지정이 있으면 그 날 전체(시급분+도급분)를 그 금액으로 대체.
+//   관리자 세전급여 직접지정이 있으면 그 날 "시급분만" 그 금액으로 대체.
+//   도급 일급은 직접지정과 무관하게 항상 따로 계산해서 더합니다. (2026-10-02 결정 변경)
+//     예: 지정 100,000 + 도급 일급 50,000 = 그 날 150,000
 //
 // 서버 전용 의존성을 넣지 마세요(관리자 화면 클라이언트 컴포넌트도 import 합니다).
 
@@ -143,18 +145,15 @@ export function getHourlyWageForDay(
 export type DayPayResult<T extends PayRecord = PayRecord> = {
   hourly: DayWorkResult<T> & { wage: number; pay: number; hasHourly: boolean };
   piece: PieceDayResult<T>;
-  /** 자동 계산 금액 = 시급분 + 도급분 */
+  /** 자동 계산 금액 = 자동 시급분 + 도급분 */
   autoPay: number;
-  /** 관리자 직접지정 금액(없으면 null). 있으면 그 날 전체를 대체 */
+  /** 관리자 직접지정 금액(없으면 null). 있으면 그 날 시급분만 대체 */
   override: number | null;
-  /** 실제 그 날 기본급 = override ?? autoPay */
+  /** 실제 그 날 기본급 = 시급분(직접지정 ?? 자동) + 도급분 */
   basePay: number;
-  /**
-   * 주휴수당 평균시급 계산에 쓰는 "시급분" 금액.
-   * 직접지정한 날은 시급분/도급분을 나눌 수 없으므로 지정 금액 전체를 시급분으로 봅니다.
-   */
+  /** 기본급 중 시급분 = 직접지정 금액 ?? 자동 시급분. 주휴수당 평균시급 계산에 씁니다. */
   hourlyPortion: number;
-  /** 기본급 중 도급분(직접지정한 날은 0) */
+  /** 기본급 중 도급분(직접지정과 무관). 주휴수당에 들어가지 않습니다. */
   piecePortion: number;
   /** 주휴수당 15시간 판정에 쓰는 시간(분) — WEEKLY_ALLOWANCE_INCLUDES_PIECE_MINUTES 반영 */
   allowanceMinutes: number;
@@ -189,7 +188,8 @@ export function calcDayPay<T extends PayRecord>(
     options.override === undefined || options.override === null
       ? null
       : Number(options.override);
-  const basePay = override !== null ? override : autoPay;
+  const hourlyPortion = override !== null ? override : hourlyPay;
+  const basePay = hourlyPortion + piece.amount;
 
   const allowanceMinutes =
     work.workedMinutes +
@@ -201,8 +201,8 @@ export function calcDayPay<T extends PayRecord>(
     autoPay,
     override,
     basePay,
-    hourlyPortion: override !== null ? override : hourlyPay,
-    piecePortion: override !== null ? 0 : piece.amount,
+    hourlyPortion,
+    piecePortion: piece.amount,
     allowanceMinutes,
   };
 }
