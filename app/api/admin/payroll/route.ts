@@ -83,6 +83,8 @@ type DailyWorkRow = {
   allowanceMinutes: number;
   /** 도급 출근만 있고 퇴근이 없어 일급을 주지 않은 날 */
   pieceMissingCheckOut: boolean;
+  /** 시급 출근만 있고 퇴근이 없는 지난 날(시급분 0원) */
+  hourlyMissingCheckOut: boolean;
   /** 관리자가 직접 지정한 금액. 자동 계산이면 null. */
   payOverride: number | null;
   weeklyAllowanceStatus: string;
@@ -104,6 +106,7 @@ type WeeklyPayrollRow = {
   allowanceMinutes: number;
   pieceDays: number;
   pieceMissingDates: string[];
+  missingCheckOutDates: string[];
   hourlyWage: number;
   weeklyAllowanceStatus: string;
   isPiece: boolean;
@@ -339,6 +342,7 @@ export async function POST(request: Request) {
     }
 
     const dailyWorks: DailyWorkRow[] = [];
+    const now = new Date();
 
     for (const key in grouped) {
       const items = [...grouped[key]].sort(
@@ -360,10 +364,14 @@ export async function POST(request: Request) {
       // 시급분 + 도급분. 계산 규칙은 app/lib/dayPay.ts 한 곳에 있습니다.
       // (시급분은 시급 구간 기록만, 도급분은 도급 구간 출근+퇴근이 모두 있을 때 일급 스냅샷 전액)
       // 스냅샷이 비어 있으면 시급은 현재 시급, 일급은 현재 일급으로 대신 계산합니다.
+      // now: 오늘 퇴근 전을 "누락"으로 잘못 잡지 않기 위해 넘깁니다.
+      // estimate: false — 진행 중인 날은 기존처럼 0원(추정 금액을 지급액에 넣지 않음).
       const dayPay = calcDayPay(date, items, {
         fallbackHourlyWage: employee?.hourly_wage,
         fallbackDailyWage: getDailyWage(employee),
         override: override !== undefined ? override.grossPay : null,
+        now,
+        estimate: false,
       });
 
       const workedMinutes = dayPay.hourly.workedMinutes;
@@ -385,6 +393,7 @@ export async function POST(request: Request) {
         piecePortion: dayPay.piecePortion,
         allowanceMinutes: dayPay.allowanceMinutes,
         pieceMissingCheckOut: dayPay.piece.missingCheckOut,
+        hourlyMissingCheckOut: dayPay.hourly.missingCheckOut,
         payOverride: override !== undefined ? override.grossPay : null,
         weeklyAllowanceStatus,
         isPiece,
@@ -440,6 +449,7 @@ export async function POST(request: Request) {
           allowanceMinutes: 0,
           pieceDays: 0,
           pieceMissingDates: [],
+          missingCheckOutDates: [],
           hourlyWage: row.wage,
           weeklyAllowanceStatus: row.weeklyAllowanceStatus || "검토필요",
           isPiece: row.isPiece,
@@ -455,6 +465,8 @@ export async function POST(request: Request) {
       weekly[key].allowanceMinutes += row.allowanceMinutes;
       if (row.piecePortion > 0) weekly[key].pieceDays += 1;
       if (row.pieceMissingCheckOut) weekly[key].pieceMissingDates.push(row.date);
+      if (row.hourlyMissingCheckOut)
+        weekly[key].missingCheckOutDates.push(row.date);
     }
 
     const result = Object.values(weekly).map((w) => {
@@ -502,6 +514,8 @@ export async function POST(request: Request) {
         pieceDays: w.pieceDays,
         /** 도급 출근만 있고 퇴근이 없어 일급을 주지 않은 날 */
         pieceMissingDates: w.pieceMissingDates,
+        /** 시급 출근만 있고 퇴근이 없는 지난 날(오늘 퇴근 전은 제외) */
+        missingCheckOutDates: w.missingCheckOutDates,
         weeklyAllowance,
         grossPay,
         netPay,

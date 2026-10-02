@@ -938,6 +938,8 @@ export default function AdminPage() {
         fallbackHourlyWage: employee?.hourly_wage,
         fallbackDailyWage: getDailyWage(employee),
         now: new Date(),
+        // 표의 금액은 확정분만. 근무 중인 시간은 추정해서 더하지 않습니다.
+        estimate: false,
       });
       const dayWork = dayPay.hourly;
       const checkInRecord = dayWork.checkIn;

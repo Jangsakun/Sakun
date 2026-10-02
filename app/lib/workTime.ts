@@ -230,8 +230,10 @@ export type DayWorkResult<T extends AttendanceLike = AttendanceLike> = {
   /** 화면 표시용 첫 출근 / 마지막 퇴근 기록 */
   checkIn: T | null;
   checkOut: T | null;
-  /** 출근은 있는데 퇴근이 없는 지난 날(또는 오늘이지만 추정을 요청하지 않은 경우). 0원. */
+  /** 출근은 있는데 퇴근이 없는 "지난 날". 0원. (오늘 퇴근 전은 누락이 아님 → inProgress) */
   missingCheckOut: boolean;
+  /** 오늘 출근했고 아직 퇴근 전. now 를 넘겼을 때만 판단합니다. */
+  inProgress: boolean;
   /** 오늘 퇴근 전이라 현재 시각까지로 추정한 값. 확정 금액이 아닙니다. */
   estimated: boolean;
 };
@@ -241,13 +243,16 @@ export type DayWorkResult<T extends AttendanceLike = AttendanceLike> = {
  * (출근 시각 보정은 기록 시점에 이미 적용되어 저장됩니다. 관리자 수기 수정값이 최종값).
  *
  * @param options.now 주면, dateKey 가 now 의 KST 날짜(=오늘)이고 퇴근 전일 때
- *                    현재 시각까지로 추정합니다(estimated=true). 지난 날에는 쓰지 않습니다.
+ *                    "퇴근 누락"이 아니라 "근무 중(inProgress)"으로 봅니다.
+ *                    now 를 주지 않으면 오늘 퇴근 전도 누락으로 판정되므로, 화면·목록에서는 꼭 넘기세요.
+ * @param options.estimate 오늘 근무 중일 때 현재 시각까지 근무시간을 추정할지(기본 true).
+ *                    실제 지급액을 만드는 관리자 급여 API 는 false (진행 중인 날은 0원, 기존과 동일).
  * @param options.rule 비교 검증용. 날짜와 무관하게 이 규칙으로 계산합니다. 화면·급여에서는 쓰지 마세요.
  */
 export function calcDayWork<T extends AttendanceLike>(
   dateKey: string,
   records: T[],
-  options: { now?: Date; rule?: WorkTimeRule } = {}
+  options: { now?: Date; rule?: WorkTimeRule; estimate?: boolean } = {}
 ): DayWorkResult<T> {
   const rule = options.rule ?? getWorkTimeRule(dateKey);
   const { sorted, checkIn, checkOut } = selectDayBoundary(records);
@@ -257,6 +262,7 @@ export function calcDayWork<T extends AttendanceLike>(
     checkIn,
     checkOut,
     missingCheckOut: false,
+    inProgress: false,
     estimated: false,
   };
 
@@ -268,8 +274,13 @@ export function calcDayWork<T extends AttendanceLike>(
     const isToday = options.now && toKstDateKey(options.now) === dateKey;
 
     if (isToday) {
+      if (options.estimate === false) {
+        return { ...base, inProgress: true, workedMinutes: 0, lunchDeducted: false };
+      }
+
       return {
         ...base,
+        inProgress: true,
         estimated: true,
         ...calcSpanMinutes(dateKey, new Date(checkIn.checked_at), options.now!),
       };

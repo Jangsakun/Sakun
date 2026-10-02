@@ -166,14 +166,20 @@ export function calcDayPay<T extends PayRecord>(
     fallbackHourlyWage?: number | null;
     fallbackDailyWage?: number | null;
     override?: number | null;
+    /** 오늘 퇴근 전을 "누락"이 아닌 "근무 중"으로 보려면 꼭 넘깁니다. */
     now?: Date;
+    /** 오늘 근무 중인 시급 구간을 현재 시각까지 추정할지(기본 true). 관리자 급여 API 는 false. */
+    estimate?: boolean;
   } = {}
 ): DayPayResult<T> {
   const hourlyRecords = records.filter(
     (record) => toSegmentType(record.segment_type) === "hourly"
   );
 
-  const work = calcDayWork(dateKey, hourlyRecords, { now: options.now });
+  const work = calcDayWork(dateKey, hourlyRecords, {
+    now: options.now,
+    estimate: options.estimate,
+  });
   const wage = getHourlyWageForDay(hourlyRecords, options.fallbackHourlyWage);
   const hourlyPay = calcHourlyPay(work.workedMinutes, wage);
 
