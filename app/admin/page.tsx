@@ -3400,7 +3400,7 @@ export default function AdminPage() {
         color: "#991b1b",
       }}
     >
-      <strong>⚠️ 계약 종료일이 임박한 직원</strong>
+      <strong>⚠️ 계약 종료일이 임박한 직원 ({CONTRACT_WARNING_DAYS}일 이내)</strong>
 
       <div style={{ marginTop: "12px" }}>
         {filteredContractEmployees.filter((emp) => {
@@ -3412,10 +3412,10 @@ export default function AdminPage() {
             (end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
           );
 
-          return diffDays >= 0 && diffDays <= 7;
+          return diffDays >= 0 && diffDays <= CONTRACT_WARNING_DAYS;
         }).length === 0 ? (
           <div style={{ color: "#6b7280", marginTop: "8px" }}>
-            현재 선택한 근무지 기준 7일 이내 계약 종료 예정 직원이 없습니다.
+            현재 선택한 근무지 기준 {CONTRACT_WARNING_DAYS}일 이내 계약 종료 예정 직원이 없습니다.
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -3430,8 +3430,14 @@ export default function AdminPage() {
                     (1000 * 60 * 60 * 24)
                 );
 
-                return diffDays >= 0 && diffDays <= 7;
+                return diffDays >= 0 && diffDays <= CONTRACT_WARNING_DAYS;
               })
+              // 30일로 늘리면서 인원이 많아져 급한 사람부터 보이게 정렬합니다.
+              .sort((a, b) =>
+                String(a.contract_end_date).localeCompare(
+                  String(b.contract_end_date)
+                ) || a.name.localeCompare(b.name, "ko")
+              )
               .map((emp) => {
                 const today = new Date();
                 const end = new Date(`${emp.contract_end_date}T00:00:00`);
@@ -4694,6 +4700,13 @@ const manualFieldStyle: CSSProperties = {
   color: "#111827",
   boxSizing: "border-box",
 };
+
+/**
+ * 근로계약 탭 "계약 종료일이 임박한 직원" 카드에 보여줄 기간(일).
+ * 11개월 갱신을 미리 챙기려고 7일 → 30일로 늘렸습니다(2026-10-01).
+ * BISEO 만료 알림(CONTRACT_ALERT_MAX_DAYS)도 같은 30일입니다.
+ */
+const CONTRACT_WARNING_DAYS = 30;
 
 const manualSelectButtonStyle: CSSProperties = {
   height: "30px",

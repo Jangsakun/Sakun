@@ -64,6 +64,9 @@ revoke all on table public.employment_contract_history from anon, authenticated;
 
 -- ⚠️ service_role 의 RLS bypass 와 테이블 GRANT 는 별개 권한 체계다.
 --    쌓기만 하는 기록이라 update/delete 는 주지 않는다.
+-- ⚠️ Supabase 는 새 테이블에 service_role 전체 권한을 기본으로 붙이므로
+--    grant 만으로는 부족하고 나머지를 명시적으로 회수해야 한다(2026-10-01 실측).
+revoke update, delete, truncate on public.employment_contract_history from service_role;
 grant select, insert on public.employment_contract_history to service_role;
 grant usage, select on sequence public.employment_contract_history_id_seq to service_role;
 
