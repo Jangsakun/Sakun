@@ -57,7 +57,8 @@
   ⚠️ 매일 오전 10시 BISEO 알림 전에 '오늘' 테스트 기록은 지울 것.
   ⚠️ 테스트 직원 감사로그(attendance_record_audit)는 서버 키로 못 지움(append-only) → 최종 정리 때 SQL Editor 용 SQL 필요.
 - 6단계(관리자 화면) 2026-10-02 구현·검증 완료·커밋. 7단계(BISEO 연동) 구현·검증 완료·커밋.
-- 배포 전 남은 일: 사용자 승인 후 push(근태 SaaS) → 배포 확인 → BISEO `.env.local` 의 ATTENDANCE_SAAS_API_URL 을 https://sakun.kr 로 변경하고 BISEO 서버·이상자 워커 재시작 → 사용자가 실제 직원 근로형태 변경.
+- **2026-10-02 15:25 배포 완료**(push ebec24e, Vercel 자동 배포). 운영에서 8월/9월 급여 합계 변경 전과 동일 확인, BISEO `.env.local` ATTENDANCE_SAAS_API_URL=https://sakun.kr 로 변경(BISEO 합산이 운영 API 와 1원 단위 일치 확인).
+- 남은 일: 사용자가 실제 직원 근로형태 변경 → 시급+도급 실사용 확인 / 10-05(월) 새 근무시간 규칙 적용 확인 / 최종 정리(테스트 직원 203~206·기기 178~181·기록·BISEO 알림/확인요청/감사로그 테스트 행 삭제, 직원 207 은 실제 가입자라 삭제 금지, 근태 SaaS 감사로그는 남김).
   BISEO 쪽 변경은 Desktopiseoweblibattendance + ATTENDANCE-INTEGRATION.md §20 (BISEO 는 git 추적 안 됨 — 변경 파일 목록은 §20).
 - 검증 스크립트: `_verify/` (git 제외 — .git/info/exclude).
 - 다음: 2단계(데이터 구조) — 사용자 확인 후. 0단계 결정사항은 대화 기록 대신 아래 요약 참고:
