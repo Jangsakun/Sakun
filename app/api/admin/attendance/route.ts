@@ -570,6 +570,7 @@ async function handleEntryRows(
           oldValue: null,
           newValue: row.checked_at,
           source: "admin-manual-add" as const,
+          segmentType: segment,
         }))
       );
 
@@ -1071,6 +1072,7 @@ export async function PUT(request: Request) {
               oldValue: null,
               newValue: row.checked_at,
               source: "admin-manual-add" as const,
+              segmentType: "hourly" as const,
             }))
           );
         }

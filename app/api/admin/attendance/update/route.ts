@@ -200,6 +200,7 @@ export async function PATCH(request: Request) {
           oldValue: previousCheckedAt,
           newValue: row.checked_at,
           source: "admin-time-edit",
+          segmentType: segment,
         });
       } else {
         const { data: insertedCheckIn, error: checkInInsertError } =
@@ -252,6 +253,7 @@ export async function PATCH(request: Request) {
           oldValue: null,
           newValue: row.checked_at,
           source: "admin-time-edit",
+          segmentType: segment,
         });
       }
     }
@@ -310,6 +312,7 @@ export async function PATCH(request: Request) {
           oldValue: previousCheckedAt,
           newValue: row.checked_at,
           source: "admin-time-edit",
+          segmentType: segment,
         });
       } else {
         const { data: insertedCheckOut, error: checkOutInsertError } =
@@ -362,6 +365,7 @@ export async function PATCH(request: Request) {
           oldValue: null,
           newValue: row.checked_at,
           source: "admin-time-edit",
+          segmentType: segment,
         });
       }
     }

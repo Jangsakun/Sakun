@@ -136,6 +136,14 @@ select table_name, grantee, string_agg(privilege_type, ',' order by privilege_ty
 - 범위 밖(의도): 관리자 수동 입력·수정, BISEO mutate.ts 는 관리자가 지정한 시각을 그대로 쓴다.
 - 남은 점: `record_attendance()` 는 공개 키로도 실행 가능하다(§4 참고). 공개 키 정리 때 함께 회수.
 
-### ⑤ 미조사 항목
+### ⑤ BISEO 전용 급여 API 는 인증 없이 열려 있음 (2026-10-02, 7단계)
+- `POST /api/internal/payroll-summary` — 읽기 전용(쓰기 없음)이지만 **전 직원 이름·급여 합계를 반환하고 인증이 없다.**
+  관리자 급여 API(`/api/admin/payroll`)와 같은 수준의 노출이다(새 위험이 아니라 같은 위험의 두 번째 입구).
+- 이 주소를 따로 만든 이유: 나중에 `/api/admin/*` 에 인증을 걸어도 BISEO 가 영향받지 않게 하기 위함.
+- 인증을 걸 때: `BISEO_INTERNAL_API_KEY` 환경변수 + 요청 헤더 검사(시간 일정 비교). BISEO 쪽은 `lib/attendance/summary.ts` 의
+  `fetchSaasPayroll()` 한 곳에서 헤더를 붙이면 된다. 근태 SaaS 쪽은 `app/api/internal/payroll-summary/route.ts` 한 곳.
+- `middleware.ts` 가 `admin.sakun.kr` 호스트에서 `/api/internal` 도 리다이렉트 없이 통과시키도록 예외를 추가했다.
+
+### ⑥ 미조사 항목
 - 과거 비정상 접근 여부(Vercel·Supabase 로그) — 조사하지 않음.
 - 주민번호가 평문 저장인지 암호화인지, 암호화 시 근로자 급여조회 본인확인(이름+주민번호)에 미치는 영향 — 조사하지 않음.

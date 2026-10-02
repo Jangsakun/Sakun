@@ -7,14 +7,15 @@ export function middleware(request: NextRequest) {
 
   // 1) admin.sakun.kr 로 접속하면 /admin 으로 보내기
   if (host === "admin.sakun.kr") {
-    // 정적 파일, Next 내부 경로, 관리자 API는 그대로 통과
+    // 정적 파일, Next 내부 경로, 관리자 API, BISEO 전용 내부 API는 그대로 통과
     if (
       pathname.startsWith("/_next") ||
       pathname.startsWith("/favicon.ico") ||
       pathname.startsWith("/robots.txt") ||
       pathname.startsWith("/sitemap.xml") ||
       pathname.match(/\.[^/]+$/) ||
-      pathname.startsWith("/api/admin")
+      pathname.startsWith("/api/admin") ||
+      pathname.startsWith("/api/internal")
     ) {
       return NextResponse.next();
     }

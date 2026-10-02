@@ -33,6 +33,8 @@ export type AuditEntry = {
    * 금액 이력은 "언제 고쳤나"보다 "어느 날 금액인가"가 핵심이라 따로 남깁니다.
    */
   workDate?: string | null;
+  /** 변경된 출퇴근 기록의 구간 종류. 세전급여 직접지정 등 해당 없으면 비웁니다. */
+  segmentType?: "hourly" | "piece" | null;
 };
 
 type RequestMeta = {
@@ -82,12 +84,18 @@ export async function readRecordsForDelete(
   supabase: SupabaseClient,
   recordIds: number[]
 ): Promise<
-  { id: number; employee_id: number; record_type: string; checked_at: string }[]
+  {
+    id: number;
+    employee_id: number;
+    record_type: string;
+    checked_at: string;
+    segment_type?: string | null;
+  }[]
 > {
   try {
     const { data, error } = await supabase
       .from("attendance_records")
-      .select("id, employee_id, record_type, checked_at")
+      .select("id, employee_id, record_type, checked_at, segment_type")
       .in("id", recordIds);
 
     if (error || !data) return [];
@@ -97,6 +105,7 @@ export async function readRecordsForDelete(
       employee_id: number;
       record_type: string;
       checked_at: string;
+      segment_type?: string | null;
     }[];
   } catch {
     return [];
@@ -125,6 +134,7 @@ export async function logAttendanceChanges(
     new_value: entry.newValue ?? null,
     source: entry.source,
     work_date: entry.workDate ?? null,
+    segment_type: entry.segmentType ?? null,
     actor: "admin-ui",
     request_ip: requestIp,
     user_agent: userAgent,

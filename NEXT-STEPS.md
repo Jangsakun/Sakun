@@ -15,6 +15,8 @@
 | `20261002100000_work_segments.sql` | ✅ 2026-10-02 실행 완료 (기존 10,558건 전부 hourly 확인) |
 | `20261003100000_cleanup_duplicate_attendance.sql` | ✅ 2026-10-02 12:08 실행 완료 — 삭제 26건/감사로그 26건, 급여 23개 기간 1원 단위 동일 확인 |
 | `20261003110000_record_attendance_function.sql` | ✅ 2026-10-02 실행 완료 — 출퇴근 저장 DB 함수 + 중복 불가 제약 + 서버 시각 저장 (4단계) |
+| `20261004100000_audit_segment_type.sql` | ✅ 2026-10-02 실행 완료 — 감사로그 segment_type (수정·수동입력·삭제 모두 구간 기록 확인) |
+| BISEO `0039_attendance_audit_segment_type.sql` | ✅ 2026-10-02 BISEO DB(zrvjflemurvvdnqwclyb)에 적용 |
 
 둘 다 반영돼 관리자 화면 "DB 용량" 탭과 출퇴근 수정 이력이 정상 동작한다(실측 확인).
 
@@ -54,7 +56,9 @@
   employee_devices 178~181, 이들의 attendance_records(2026-09-21 주 과거 기록 포함), BISEO 알림 행.
   ⚠️ 매일 오전 10시 BISEO 알림 전에 '오늘' 테스트 기록은 지울 것.
   ⚠️ 테스트 직원 감사로그(attendance_record_audit)는 서버 키로 못 지움(append-only) → 최종 정리 때 SQL Editor 용 SQL 필요.
-- 6단계(관리자 화면) 2026-10-02 구현·검증 완료(커밋 전). 다음: 7단계 BISEO 연동.
+- 6단계(관리자 화면) 2026-10-02 구현·검증 완료·커밋. 7단계(BISEO 연동) 구현·검증 완료·커밋.
+- 배포 전 남은 일: 사용자 승인 후 push(근태 SaaS) → 배포 확인 → BISEO `.env.local` 의 ATTENDANCE_SAAS_API_URL 을 https://sakun.kr 로 변경하고 BISEO 서버·이상자 워커 재시작 → 사용자가 실제 직원 근로형태 변경.
+  BISEO 쪽 변경은 Desktopiseoweblibattendance + ATTENDANCE-INTEGRATION.md §20 (BISEO 는 git 추적 안 됨 — 변경 파일 목록은 §20).
 - 검증 스크립트: `_verify/` (git 제외 — .git/info/exclude).
 - 다음: 2단계(데이터 구조) — 사용자 확인 후. 0단계 결정사항은 대화 기록 대신 아래 요약 참고:
   도급=출퇴근 둘 다 있어야 일급 스냅샷 지급, 도급 퇴근 시간제한·출근 보정 미적용, 주휴 15h 판정은 시급구간만(설정값),

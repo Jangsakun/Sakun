@@ -536,7 +536,7 @@ export async function DELETE(
     if (attendanceCount > 0) {
       const { data: doomed } = await supabase
         .from("attendance_records")
-        .select("id, employee_id, record_type, checked_at")
+        .select("id, employee_id, record_type, checked_at, segment_type")
         .eq("employee_id", employeeId);
 
       const rows = (doomed || []) as {
@@ -544,6 +544,7 @@ export async function DELETE(
         employee_id: number;
         record_type: string;
         checked_at: string;
+        segment_type?: string | null;
       }[];
 
       if (rows.length > 0) {
@@ -557,6 +558,7 @@ export async function DELETE(
           old_value: row.checked_at,
           new_value: null,
           source: "admin-employee-delete",
+          segment_type: row.segment_type === "piece" ? "piece" : "hourly",
           actor: "admin-ui",
           request_ip: forwarded
             ? forwarded.split(",")[0].trim()

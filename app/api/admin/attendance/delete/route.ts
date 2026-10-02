@@ -90,6 +90,9 @@ export async function DELETE(request: Request) {
           oldValue: before?.checked_at ?? row.checked_at,
           newValue: null,
           source: "admin-delete" as const,
+          segmentType: (before?.segment_type === "piece" ? "piece" : "hourly") as
+            | "hourly"
+            | "piece",
         };
       })
     );
