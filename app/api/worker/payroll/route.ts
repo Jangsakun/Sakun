@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { loadPayOverrides, payOverrideKey } from "@/app/lib/payOverride";
 import { getDailyWage, isPieceContract } from "@/app/lib/contractType";
+import { calcDayWork, calcHourlyPay } from "@/app/lib/workTime";
 
 function createSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -27,34 +28,6 @@ function formatDateKeyKst(value: string | Date) {
   }).format(date);
 }
 
-function getKstHourMinute(value: string | Date) {
-  const date = typeof value === "string" ? new Date(value) : value;
-
-  const timeText = date.toLocaleTimeString("en-GB", {
-    timeZone: "Asia/Seoul",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-
-  const [hourText, minuteText] = timeText.split(":");
-
-  return {
-    hour: Number(hourText),
-    minute: Number(minuteText),
-    totalMinutes: Number(hourText) * 60 + Number(minuteText),
-  };
-}
-
-function createKstDateTime(dateKey: string, hour: number, minute: number) {
-  return new Date(
-    `${dateKey}T${String(hour).padStart(2, "0")}:${String(minute).padStart(
-      2,
-      "0"
-    )}:00+09:00`
-  );
-}
-
 function formatTimeKst(value: string | Date) {
   const date = typeof value === "string" ? new Date(value) : value;
 
@@ -75,90 +48,6 @@ function formatMinutesToText(totalMinutes: number) {
   if (hours > 0 && minutes > 0) return `${hours}시간 ${minutes}분`;
   if (hours > 0) return `${hours}시간`;
   return `${minutes}분`;
-}
-
-function normalizeCheckIn(value: string, workplace = "장사꾼") {
-  const source = new Date(value);
-  const dateKey = formatDateKeyKst(source);
-  const { totalMinutes } = getKstHourMinute(source);
-
-  const start0700 = 6 * 60 + 45;
-  const end0710 = 7 * 60 + 10;
-  const start0900 = 8 * 60 + 45;
-  const end0910 = 9 * 60 + 10;
-  const start0930 = 9 * 60 + 11;
-  const end0930 = 9 * 60 + 30;
-  const start1800 = 17 * 60 + 50;
-  const end1800 = 18 * 60 + 10;
-
-  if (workplace === "헤모즈" && totalMinutes >= start0700 && totalMinutes <= end0710) {
-    return createKstDateTime(dateKey, 7, 0);
-  }
-
-  if (totalMinutes >= start0900 && totalMinutes <= end0910) {
-    return createKstDateTime(dateKey, 9, 0);
-  }
-
-  if (totalMinutes >= start0930 && totalMinutes <= end0930) {
-    return createKstDateTime(dateKey, 9, 30);
-  }
-
-  if (totalMinutes >= start1800 && totalMinutes <= end1800) {
-    return createKstDateTime(dateKey, 18, 0);
-  }
-
-  return source;
-}
-
-function normalizeCheckOut(value: string, workplace = "장사꾼") {
-  const source = new Date(value);
-  const dateKey = formatDateKeyKst(source);
-  const { hour, minute, totalMinutes } = getKstHourMinute(source);
-
-  const start1230 = 12 * 60 + 20;
-  const end1230 = 12 * 60 + 40;
-
-  if (workplace === "헤모즈" && totalMinutes >= start1230 && totalMinutes <= end1230) {
-    return createKstDateTime(dateKey, 12, 30);
-  }
-
-  if (hour >= 17) {
-    if (minute <= 10) {
-      return createKstDateTime(dateKey, hour, 0);
-    }
-
-    if (minute <= 40) {
-      return createKstDateTime(dateKey, hour, 30);
-    }
-
-    return createKstDateTime(dateKey, hour + 1, 0);
-  }
-
-  return source;
-}
-
-function isCheckInType(value: string) {
-  const normalized = String(value || "").toLowerCase().trim();
-
-  return (
-    normalized === "check-in" ||
-    normalized === "check_in" ||
-    normalized === "checkin" ||
-    normalized === "in" ||
-    normalized === "출근"
-  );
-}
-
-function isCheckOutType(value: string) {
-  const normalized = String(value || "").toLowerCase().trim();
-
-  return (
-    normalized === "check-out" ||
-    normalized === "check_out" ||
-    normalized === "checkout" ||
-    normalized === "out" ||
-    normalized === "퇴근"
-  );
 }
 
 function getWageForDay(items: any[], fallbackWage: number) {
@@ -372,13 +261,11 @@ export async function POST(request: NextRequest) {
 
         const dayWage = getWageForDay(sortedItems, hourlyWage);
 
-        const checkIn = sortedItems.find((item) =>
-          isCheckInType(item.record_type)
-        );
-
-        const checkOut = [...sortedItems]
-          .reverse()
-          .find((item) => isCheckOutType(item.record_type));
+        // 근무시간 계산은 app/lib/workTime.ts 한 곳에서 합니다.
+        // 오늘 퇴근 전이면 현재 시각까지 추정, 퇴근이 누락된 지난 날은 0원(누락 표시).
+        const workTime = calcDayWork(date, sortedItems, { now: new Date() });
+        const checkIn = workTime.checkIn;
+        const checkOut = workTime.checkOut;
 
         if (!checkIn) {
           return {
@@ -401,40 +288,22 @@ export async function POST(request: NextRequest) {
         }
 
         // 관리자 페이지에서 수동 수정한 시간이 최종 확정값입니다.
-        // 근로자가 출퇴근 버튼을 누를 때는 이미 출퇴근 API에서 자동 보정되어 DB에 저장됩니다.
-        // 따라서 근로자 급여조회에서는 DB에 저장된 checked_at 값을 다시 30분 단위로 보정하지 않고 그대로 사용합니다.
+        // DB 에 저장된 checked_at 값을 다시 보정하지 않고 그대로 사용합니다.
         const normalizedCheckInDate = new Date(checkIn.checked_at);
 
         const finalCheckOut = checkOut || null;
         const normalizedCheckOutDate = finalCheckOut
           ? new Date(finalCheckOut.checked_at)
-          : new Date();
+          : null;
 
-        const checkInMinutes = getKstHourMinute(normalizedCheckInDate);
-        const checkOutMinutes = getKstHourMinute(normalizedCheckOutDate);
-
-        let paidMinutes = Math.max(
-          0,
-          Math.floor(
-            (normalizedCheckOutDate.getTime() -
-              normalizedCheckInDate.getTime()) /
-              (1000 * 60)
-          )
-        );
-
-        const lunchDeducted =
-          checkInMinutes.totalMinutes < 12 * 60 + 30 &&
-          checkOutMinutes.totalMinutes > 13 * 60 + 30;
-
-        if (lunchDeducted) {
-          paidMinutes = Math.max(0, paidMinutes - 60);
-        }
+        const paidMinutes = workTime.workedMinutes;
+        const lunchDeducted = workTime.lunchDeducted;
 
         const override = payOverrides.get(payOverrideKey(employee.id, date));
 
         const autoPay = isPiece
           ? dailyWage
-          : Math.floor((paidMinutes / 60) * dayWage);
+          : calcHourlyPay(paidMinutes, dayWage);
 
         const grossPay =
           override !== undefined ? override.grossPay : autoPay;
@@ -452,13 +321,16 @@ export async function POST(request: NextRequest) {
           hourlyWage: dayWage,
           grossPay,
           netPay,
-          isWorking: Boolean(checkIn && !finalCheckOut),
+          isWorking: workTime.estimated,
+          missingCheckOut: workTime.missingCheckOut,
           lunchDeducted,
           checkInRecordId: checkIn.id ? String(checkIn.id) : null,
           checkOutRecordId: finalCheckOut?.id ? String(finalCheckOut.id) : null,
           checkInText: formatTimeKst(normalizedCheckInDate),
-          checkOutText: finalCheckOut
+          checkOutText: normalizedCheckOutDate
             ? formatTimeKst(normalizedCheckOutDate)
+            : workTime.missingCheckOut
+            ? "퇴근 누락"
             : "퇴근 전",
           workText: formatMinutesToText(paidMinutes),
           lunchText: lunchDeducted ? "점심 1시간 제외" : "-",

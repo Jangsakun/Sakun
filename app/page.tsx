@@ -4,6 +4,7 @@ import { Noto_Sans_KR } from "next/font/google";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { calcDayWork, toKstDateKey } from "@/app/lib/workTime";
 
 const notoSansKr = Noto_Sans_KR({
   subsets: ["latin"],
@@ -1122,29 +1123,13 @@ export default function Home() {
       .reverse()
       .find((record) => isCheckOutType(record.record_type));
 
-    let totalWorkMinutes = 0;
-
-    if (firstCheckIn && lastCheckOut) {
-      const checkInDate = normalizeDisplayCheckIn(firstCheckIn.checked_at);
-      const checkOutDate = normalizeDisplayCheckOut(lastCheckOut.checked_at);
-
-     let diff = Math.max(
-  0,
-  Math.floor(
-    (checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60)
-  )
-);
-
-const checkInMinutes = getSeoulHourMinute(checkInDate).totalMinutes;
-const checkOutMinutes = getSeoulHourMinute(checkOutDate).totalMinutes;
-
-// 점심시간 차감: 12:30 이전 출근 + 13:30 이후 퇴근이면 1시간 차감
-if (checkInMinutes <= 12 * 60 + 30 && checkOutMinutes >= 13 * 60 + 30) {
-  diff -= 60;
-}
-
-totalWorkMinutes = Math.max(0, diff);
-    }
+    // 근무시간은 급여 계산과 같은 모듈(app/lib/workTime.ts)로 계산합니다.
+    // 퇴근 전에는 0 → 화면에 "-" 로 표시됩니다.
+    const totalWorkMinutes =
+      firstCheckIn && lastCheckOut
+        ? calcDayWork(toKstDateKey(firstCheckIn.checked_at), sortedRecords)
+            .workedMinutes
+        : 0;
 
     return {
       checkIn: firstCheckIn

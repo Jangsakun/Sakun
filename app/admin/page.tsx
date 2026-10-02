@@ -30,6 +30,7 @@ import {
   toContractType,
   type ContractType,
 } from "@/app/lib/contractType";
+import { calcDayWork, calcHourlyPay } from "@/app/lib/workTime";
 import {
   ROWS_PER_FILE,
   buildBankTransferRows,
@@ -124,6 +125,8 @@ type GroupedAttendanceRow = {
   checkInRecordId: number | null;
   checkOutRecordId: number | null;
   workMinutes: number | null;
+  /** 출근만 있고 퇴근이 없는 지난 날. 급여 0원. */
+  missingCheckOut: boolean;
   hourlyWage: number;
   /** 실제로 쓰이는 금액. 수정값이 있으면 수정값, 없으면 자동 계산값. */
   grossPay: number | null;
@@ -899,42 +902,13 @@ export default function AdminPage() {
       const workplaceName = sorted[0].employees?.workplace_name || "장사꾼";
       const date = toSeoulDateKey(sorted[0].checked_at);
 
-      const checkInRecord =
-        sorted.find((item) => item.record_type === "check_in") || null;
+      // 근무시간은 급여 API 와 같은 모듈(app/lib/workTime.ts)로 계산합니다.
+      const dayWork = calcDayWork(date, sorted);
+      const checkInRecord = dayWork.checkIn;
+      const checkOutRecord = dayWork.checkOut;
 
-      const checkOutCandidates = sorted.filter(
-        (item) => item.record_type === "check_out"
-      );
-      const checkOutRecord =
-        checkOutCandidates.length > 0
-          ? checkOutCandidates[checkOutCandidates.length - 1]
-          : null;
-
-      let workMinutes: number | null = null;
-
-      if (checkInRecord && checkOutRecord) {
-        const savedCheckIn = new Date(checkInRecord.checked_at);
-        const savedCheckOut = new Date(checkOutRecord.checked_at);
-
-        const diffMs = savedCheckOut.getTime() - savedCheckIn.getTime();
-
-        if (diffMs >= 0) {
-          let calculatedMinutes = Math.floor(diffMs / 1000 / 60);
-
-          const lunchStart = createSeoulDateTime(date, 12, 30);
-          const lunchEnd = createSeoulDateTime(date, 13, 30);
-
-          const includesFullLunch =
-            savedCheckIn.getTime() <= lunchStart.getTime() &&
-            savedCheckOut.getTime() >= lunchEnd.getTime();
-
-          if (includesFullLunch) {
-            calculatedMinutes = Math.max(0, calculatedMinutes - 60);
-          }
-
-          workMinutes = calculatedMinutes;
-        }
-      }
+      const workMinutes: number | null =
+        checkInRecord && checkOutRecord ? dayWork.workedMinutes : null;
 
       const employee = employeeMap.get(employeeId);
 
@@ -956,11 +930,11 @@ export default function AdminPage() {
         // 서버 급여 계산(app/lib/contractType.ts)과 같은 규칙입니다.
         if (checkInRecord) {
           grossPay = getDailyWage(employee);
-          netPay = Math.round(grossPay * 0.967);
+          netPay = Math.floor(grossPay * 0.967);
         }
       } else if (workMinutes !== null && hourlyWage > 0) {
-        grossPay = Math.round((workMinutes / 60) * hourlyWage);
-        netPay = Math.round(grossPay * 0.967);
+        grossPay = calcHourlyPay(workMinutes, hourlyWage);
+        netPay = Math.floor(grossPay * 0.967);
       }
 
       const autoGrossPay = grossPay;
@@ -972,7 +946,7 @@ export default function AdminPage() {
 
       if (overrideValue !== null) {
         grossPay = overrideValue;
-        netPay = Math.round(overrideValue * 0.967);
+        netPay = Math.floor(overrideValue * 0.967);
       }
 
       let statusText = "기록 확인 필요";
@@ -1005,6 +979,7 @@ export default function AdminPage() {
         checkInRecordId: checkInRecord?.id || null,
         checkOutRecordId: checkOutRecord?.id || null,
         workMinutes,
+        missingCheckOut: dayWork.missingCheckOut,
         hourlyWage,
         grossPay,
         netPay,
@@ -2420,7 +2395,13 @@ export default function AdminPage() {
                           </td>
 
                           <td style={tdStyle}>
-                            {formatWorkMinutes(row.workMinutes)}
+                            {row.missingCheckOut ? (
+                              <span style={{ color: "#dc2626", fontWeight: 700 }}>
+                                퇴근 누락
+                              </span>
+                            ) : (
+                              formatWorkMinutes(row.workMinutes)
+                            )}
                           </td>
 
                           <td style={tdStyle}>
@@ -3774,15 +3755,6 @@ function getResidentPrefix(residentNumberMasked?: string | null) {
   const digits = String(residentNumberMasked || "").replace(/[^0-9]/g, "");
 
   return digits.length >= 6 ? digits.slice(0, 6) : "";
-}
-
-function createSeoulDateTime(dateKey: string, hour: number, minute: number) {
-  return new Date(
-    `${dateKey}T${String(hour).padStart(2, "0")}:${String(minute).padStart(
-      2,
-      "0"
-    )}:00+09:00`
-  );
 }
 
 function toSeoulDateKey(value: string) {

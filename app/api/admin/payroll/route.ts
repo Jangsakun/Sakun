@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { loadPayOverrides, payOverrideKey } from "@/app/lib/payOverride";
 import { getDailyWage, isPieceContract } from "@/app/lib/contractType";
+import { calcDayWork, calcHourlyPay, isCheckInType } from "@/app/lib/workTime";
 
 /** PostgREST 한 번에 받을 수 있는 최대 행 수. */
 const PAGE_SIZE = 1000;
@@ -86,11 +87,6 @@ type WeeklyPayrollRow = {
   isPiece: boolean;
 };
 
-type WorkSession = {
-  checkIn: AttendanceRecord;
-  checkOut: AttendanceRecord;
-};
-
 function formatKST(date: Date) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Seoul",
@@ -98,26 +94,6 @@ function formatKST(date: Date) {
     month: "2-digit",
     day: "2-digit",
   }).format(date);
-}
-
-function isCheckInType(value: string) {
-  const normalized = String(value || "").toLowerCase().trim();
-  return (
-    normalized === "check_in" ||
-    normalized === "checkin" ||
-    normalized === "in" ||
-    normalized === "출근"
-  );
-}
-
-function isCheckOutType(value: string) {
-  const normalized = String(value || "").toLowerCase().trim();
-  return (
-    normalized === "check_out" ||
-    normalized === "checkout" ||
-    normalized === "out" ||
-    normalized === "퇴근"
-  );
 }
 
 function getEmployeeObject(rawEmployee: EmployeeNested) {
@@ -211,75 +187,7 @@ async function freezeMissingWageSnapshots(
   return null;
 }
 
-function pairSessions(items: AttendanceRecord[]) {
-  const sessions: WorkSession[] = [];
-  let openCheckIn: AttendanceRecord | null = null;
-
-  for (const item of items) {
-    if (isCheckInType(item.record_type)) {
-      if (!openCheckIn) {
-        openCheckIn = item;
-      }
-      continue;
-    }
-
-    if (isCheckOutType(item.record_type)) {
-      if (openCheckIn) {
-        const inTime = new Date(openCheckIn.checked_at).getTime();
-        const outTime = new Date(item.checked_at).getTime();
-
-        if (outTime > inTime) {
-          sessions.push({
-            checkIn: openCheckIn,
-            checkOut: item,
-          });
-        }
-
-        openCheckIn = null;
-      }
-    }
-  }
-
-  return sessions;
-}
-
-function calculateDailyWorkedMinutes(date: string, sessions: WorkSession[]) {
-  let totalMinutes = 0;
-
-  for (const session of sessions) {
-    // 관리자 급여관리는 출퇴근 보정시간이 아니라 실제 기록 시간을 기준으로 계산합니다.
-    const actualIn = new Date(session.checkIn.checked_at);
-    const actualOut = new Date(session.checkOut.checked_at);
-
-    const diffMs = actualOut.getTime() - actualIn.getTime();
-
-    if (diffMs > 0) {
-      totalMinutes += Math.floor(diffMs / 1000 / 60);
-    }
-  }
-
-  if (sessions.length === 0) {
-    return 0;
-  }
-
-  const firstActualIn = new Date(sessions[0].checkIn.checked_at);
-  const lastActualOut = new Date(
-    sessions[sessions.length - 1].checkOut.checked_at
-  );
-
-  const lunchStart = new Date(`${date}T12:30:00+09:00`);
-  const lunchEnd = new Date(`${date}T13:30:00+09:00`);
-
-  const includesFullLunch =
-    firstActualIn.getTime() <= lunchStart.getTime() &&
-    lastActualOut.getTime() >= lunchEnd.getTime();
-
-  if (includesFullLunch) {
-    totalMinutes = Math.max(0, totalMinutes - 60);
-  }
-
-  return totalMinutes;
-}
+// 근무시간 계산은 app/lib/workTime.ts 로 통합했습니다(과거 날짜는 이 파일의 기존 방식 그대로).
 
 export async function POST(request: Request) {
   try {
@@ -447,8 +355,7 @@ export async function POST(request: Request) {
 
       const date = formatKST(new Date(items[0].checked_at));
 
-      const sessions = pairSessions(items);
-      const workedMinutes = calculateDailyWorkedMinutes(date, sessions);
+      const { workedMinutes } = calcDayWork(date, items);
       const hours = workedMinutes / 60;
 
       const override = payOverrides.get(payOverrideKey(employeeId, date));
@@ -460,7 +367,7 @@ export async function POST(request: Request) {
         ? hasCheckIn
           ? getDailyWage(employee)
           : 0
-        : Math.floor((workedMinutes / 60) * wage);
+        : calcHourlyPay(workedMinutes, wage);
 
       const basePay = override !== undefined ? override.grossPay : autoPay;
 
