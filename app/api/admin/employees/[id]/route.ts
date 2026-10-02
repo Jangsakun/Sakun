@@ -58,6 +58,8 @@ export async function PATCH(
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     const updatePayload: Record<string, unknown> = {};
+    let wagePropagation: { previousWage: number; wageNumber: number } | null =
+      null;
 
     if (typeof name === "string") {
       updatePayload.name = name.trim();
@@ -238,55 +240,12 @@ export async function PATCH(
 
       const previousWage = Number(currentEmployee.hourly_wage || 0);
 
+      // 과거 기록 전파(아래 applyWagePropagation)는 여기서 하지 않고, 이 요청의 다른 검증
+      // (근로형태·도급 일급 등)이 모두 통과한 뒤 직원 정보를 저장하기 직전에 실행합니다.
+      // 시급과 다른 항목을 한 번에 저장할 때, 뒤쪽 검증이 실패했는데 과거 기록만 바뀌는 것을 막기 위해서입니다.
+      // (시급만 단독으로 보내는 요청의 동작은 이전과 똑같습니다.)
       if (previousWage > 0 && previousWage !== wageNumber) {
-        const kstDate = new Intl.DateTimeFormat("en-CA", {
-          timeZone: "Asia/Seoul",
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-        }).format(new Date());
-
-        const effectiveStart = `${kstDate}T00:00:00+09:00`;
-
-        // 변경일 이전의 구버전 기록 중 스냅샷이 비어 있는 것만
-        // 변경 전 시급으로 고정합니다.
-        // 도급 구간 기록은 일급 스냅샷으로 계산하므로 시급 전파 대상에서 뺍니다.
-        const { error: pastSnapshotError } = await supabase
-          .from("attendance_records")
-          .update({ hourly_wage_snapshot: previousWage })
-          .eq("employee_id", id)
-          .eq("segment_type", "hourly")
-          .lt("checked_at", effectiveStart)
-          .is("hourly_wage_snapshot", null);
-
-        if (pastSnapshotError) {
-          return NextResponse.json(
-            {
-              success: false,
-              message: `과거 시급 고정 실패: ${pastSnapshotError.message}`,
-            },
-            { status: 500 }
-          );
-        }
-
-        // 변경일에 이미 출근/퇴근 기록이 생성돼 있어도
-        // 그 날짜 전체에는 새 시급이 적용되도록 스냅샷을 새 시급으로 맞춥니다.
-        const { error: currentSnapshotError } = await supabase
-          .from("attendance_records")
-          .update({ hourly_wage_snapshot: wageNumber })
-          .eq("employee_id", id)
-          .eq("segment_type", "hourly")
-          .gte("checked_at", effectiveStart);
-
-        if (currentSnapshotError) {
-          return NextResponse.json(
-            {
-              success: false,
-              message: `변경일 시급 적용 실패: ${currentSnapshotError.message}`,
-            },
-            { status: 500 }
-          );
-        }
+        wagePropagation = { previousWage, wageNumber };
       }
 
       updatePayload.hourly_wage = wageNumber;
@@ -386,6 +345,60 @@ export async function PATCH(
         },
         { status: 400 }
       );
+    }
+
+    // 시급 변경 전파 — 위 검증이 모두 통과한 뒤에만 실행합니다.
+    if (wagePropagation) {
+      const { previousWage, wageNumber } = wagePropagation;
+
+      const kstDate = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Seoul",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(new Date());
+
+      const effectiveStart = `${kstDate}T00:00:00+09:00`;
+
+      // 변경일 이전의 구버전 기록 중 스냅샷이 비어 있는 것만
+      // 변경 전 시급으로 고정합니다.
+      // 도급 구간 기록은 일급 스냅샷으로 계산하므로 시급 전파 대상에서 뺍니다.
+      const { error: pastSnapshotError } = await supabase
+        .from("attendance_records")
+        .update({ hourly_wage_snapshot: previousWage })
+        .eq("employee_id", id)
+        .eq("segment_type", "hourly")
+        .lt("checked_at", effectiveStart)
+        .is("hourly_wage_snapshot", null);
+
+      if (pastSnapshotError) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: `과거 시급 고정 실패: ${pastSnapshotError.message}`,
+          },
+          { status: 500 }
+        );
+      }
+
+      // 변경일에 이미 출근/퇴근 기록이 생성돼 있어도
+      // 그 날짜 전체에는 새 시급이 적용되도록 스냅샷을 새 시급으로 맞춥니다.
+      const { error: currentSnapshotError } = await supabase
+        .from("attendance_records")
+        .update({ hourly_wage_snapshot: wageNumber })
+        .eq("employee_id", id)
+        .eq("segment_type", "hourly")
+        .gte("checked_at", effectiveStart);
+
+      if (currentSnapshotError) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: `변경일 시급 적용 실패: ${currentSnapshotError.message}`,
+          },
+          { status: 500 }
+        );
+      }
     }
 
     const { error } = await supabase

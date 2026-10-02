@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import ScheduleTab from "./components/ScheduleTab";
 import DbSizeTab from "./components/DbSizeTab";
@@ -27,9 +28,7 @@ import {
   CONTRACT_TYPE_LABEL,
   SEGMENT_TYPE_LABEL,
   getDailyWage,
-  isHybridContract,
   toContractType,
-  usesDailyWage,
   type ContractType,
   type SegmentType,
 } from "@/app/lib/contractType";
@@ -108,6 +107,8 @@ type Employee = {
   hourly_wage?: number;
   contract_type?: string | null;
   daily_wage?: number | null;
+  /** 기기 재연결 코드 만료 시각. 지금보다 뒤면 발급된 코드가 살아 있다(코드 값은 내려오지 않음). */
+  reconnect_expires_at?: string | null;
   contract_start_date?: string | null;
   contract_end_date?: string | null;
   first_hire_date?: string | null;
@@ -344,7 +345,6 @@ export default function AdminPage() {
   const [employeeMessage, setEmployeeMessage] = useState("");
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [contractSearch, setContractSearch] = useState("");
-  const [wages, setWages] = useState<{ [key: number]: number }>({});
 
   const [payrollRows, setPayrollRows] = useState<PayrollRow[]>([]);
   const [payrollLoading, setPayrollLoading] = useState(false);
@@ -368,6 +368,8 @@ export default function AdminPage() {
     useState<ContractType>("hourly");
   // 도급일 때만 쓰는 일당(원). 빈 문자열 = 미입력.
   const [editDailyWage, setEditDailyWage] = useState("");
+  // 시급(원). 시급 / 시급+도급일 때 입력. 목록 행에 있던 [시급저장] 이 직원 수정 화면으로 옮겨졌다.
+  const [editHourlyWage, setEditHourlyWage] = useState("");
 
   const [editingAttendanceKey, setEditingAttendanceKey] = useState<
     string | null
@@ -557,13 +559,6 @@ export default function AdminPage() {
         setEmployees(data.employees);
         setEmployeeMessage("");
 
-        const initialWages: { [key: number]: number } = {};
-
-        data.employees.forEach((emp) => {
-          initialWages[emp.id] = emp.hourly_wage || 0;
-        });
-
-        setWages(initialWages);
       } else {
         setEmployees([]);
         setEmployeeMessage(data.message || "직원 목록 조회 실패");
@@ -873,9 +868,14 @@ export default function AdminPage() {
 
   const filteredEmployees = useMemo(() => {
     return employees.filter((employee) => {
-      const matchesName = employee.name
-        .toLowerCase()
-        .includes(employeeSearch.toLowerCase());
+      const keyword = employeeSearch.trim().toLowerCase();
+      const keywordDigits = keyword.replace(/[^0-9]/g, "");
+      const phoneDigits = String(employee.phone || "").replace(/[^0-9]/g, "");
+
+      // 이름 또는 휴대폰번호(숫자만 비교, 하이픈 유무 무관)
+      const matchesName =
+        employee.name.toLowerCase().includes(keyword) ||
+        (keywordDigits.length > 0 && phoneDigits.includes(keywordDigits));
 
       const employeeWorkplace = employee.workplace_name || "장사꾼";
       const matchesWorkplace =
@@ -1179,6 +1179,7 @@ export default function AdminPage() {
     setEditEmploymentType(employee.employment_type === "carrot" ? "carrot" : "fixed");
     setEditContractType(toContractType(employee.contract_type));
     setEditDailyWage(employee.daily_wage ? String(employee.daily_wage) : "");
+    setEditHourlyWage(String(employee.hourly_wage || 0));
     setEditScheduleGroup(
       isValidScheduleGroupForWorkplace(workplaceName, scheduleGroup)
         ? scheduleGroup
@@ -1197,6 +1198,7 @@ export default function AdminPage() {
     setEditEmploymentType("fixed");
     setEditContractType("hourly");
     setEditDailyWage("");
+    setEditHourlyWage("");
     setEditScheduleGroup("");
   };
 
@@ -1208,6 +1210,24 @@ export default function AdminPage() {
       !(Number.isInteger(dailyWageNumber) && dailyWageNumber > 0)
     ) {
       alert("도급 / 시급+도급은 도급 일급을 입력해야 합니다.");
+      return;
+    }
+
+    // 시급은 시급 / 시급+도급에서만 입력합니다(도급 전용은 시급을 건드리지 않음).
+    // 값이 바뀐 경우에만 보냅니다 — 서버가 기존 [시급저장] 과 같은 규칙으로 과거 기록 시급을 전파합니다.
+    const hourlyWageNumber = Number(editHourlyWage);
+    const originalHourlyWage = Number(
+      employees.find((item) => item.id === employeeId)?.hourly_wage || 0
+    );
+    const sendHourlyWage = editContractType !== "piece";
+
+    if (
+      sendHourlyWage &&
+      (editHourlyWage.trim() === "" ||
+        !Number.isInteger(hourlyWageNumber) ||
+        hourlyWageNumber < 0)
+    ) {
+      alert("시급을 0원 이상의 숫자로 입력해주세요.");
       return;
     }
 
@@ -1231,6 +1251,9 @@ export default function AdminPage() {
           contractType: editContractType,
           // 시급으로 바꿀 때는 예전 일급을 건드리지 않습니다(다시 도급으로 돌릴 때 참고용).
           ...(editContractType !== "hourly" ? { dailyWage: dailyWageNumber } : {}),
+          ...(sendHourlyWage && hourlyWageNumber !== originalHourlyWage
+            ? { hourlyWage: hourlyWageNumber }
+            : {}),
         }),
       });
 
@@ -1247,43 +1270,6 @@ export default function AdminPage() {
     } catch (error) {
       console.error(error);
       alert("직원 수정 중 오류 발생");
-    }
-  };
-
-  const handleWageChange = (id: number, value: number) => {
-    setWages((prev) => ({
-      ...prev,
-      [id]: value,
-    }));
-  };
-
-  const updateWage = async (id: number) => {
-    const wage = wages[id];
-
-    try {
-      const response = await fetch(`/api/admin/employees/${id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          hourlyWage: wage,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!data.success) {
-        alert(data.message || "시급 수정 실패");
-        return;
-      }
-
-      alert("시급 수정 완료");
-      await fetchEmployees();
-      await fetchRecords();
-    } catch (error) {
-      console.error(error);
-      alert("시급 수정 중 오류 발생");
     }
   };
 
@@ -2729,61 +2715,49 @@ export default function AdminPage() {
 
         {tab === "employees" && (
           <section style={cardStyle}>
-            <div style={sectionHeaderStyle}>
-              <div>
+            <div style={employeeHeaderStyle}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: "12px", flexWrap: "wrap" }}>
                 <h2 style={sectionTitleStyle}>직원 관리</h2>
-                <p style={sectionDescriptionStyle}>
-                  직원 검색, 정보 수정, 활성/비활성 상태 변경, 시급 수정, 기기 재연결 코드 발급이 가능합니다.
-                </p>
+                <span style={employeeCountStyle}>
+                  재직 {employees.filter((employee) => employee.is_active).length}명 · 전체{" "}
+                  {employees.length}명
+                </span>
               </div>
             </div>
 
-            <div style={reconnectGuideBoxStyle}>
-              휴대폰을 바꾼 직원이 있으면 <strong>기기 재연결</strong> 버튼을
-              눌러 코드를 발급한 뒤, 새 휴대폰에서 회원등록 화면에 재연결
-              코드를 입력하게 하면 됩니다.
+            <div style={employeeFilterRowStyle}>
+              <input
+                type="text"
+                placeholder="이름 또는 휴대폰번호 검색"
+                value={employeeSearch}
+                onChange={(e) => setEmployeeSearch(e.target.value)}
+                style={employeeSearchInputStyle}
+              />
+
+              <WorkplaceMultiFilter
+                selected={selectedWorkplaces}
+                onChange={setSelectedWorkplaces}
+              />
+
+              <select
+                value={selectedStatus}
+                onChange={(e) => setSelectedStatus(e.target.value as StatusFilter)}
+                style={employeeStatusSelectStyle}
+                aria-label="상태 필터"
+              >
+                <option value="전체">상태 전체</option>
+                <option value="활성">활성</option>
+                <option value="비활성">비활성</option>
+              </select>
+
+              <button onClick={fetchEmployees} style={employeeRefreshButtonStyle}>
+                새로고침
+              </button>
             </div>
 
-            <div style={filterRowStyle}>
-              <div style={fieldGroupStyle}>
-                <label style={labelStyle}>직원 이름 검색</label>
-                <input
-                  type="text"
-                  placeholder="직원 이름 입력"
-                  value={employeeSearch}
-                  onChange={(e) => setEmployeeSearch(e.target.value)}
-                  style={inputStyle}
-                />
-              </div>
-
-              <div style={workplaceFieldGroupStyle}>
-                <label style={labelStyle}>근무지 필터</label>
-                <WorkplaceMultiFilter
-                  selected={selectedWorkplaces}
-                  onChange={setSelectedWorkplaces}
-                />
-              </div>
-
-              <div style={fieldGroupStyle}>
-                <label style={labelStyle}>상태 필터</label>
-                <select
-                  value={selectedStatus}
-                  onChange={(e) =>
-                    setSelectedStatus(e.target.value as StatusFilter)
-                  }
-                  style={inputStyle}
-                >
-                  <option value="전체">전체</option>
-                  <option value="활성">활성</option>
-                  <option value="비활성">비활성</option>
-                </select>
-              </div>
-
-              <div style={fieldButtonGroupStyle}>
-                <button onClick={fetchEmployees} style={primaryButtonStyle}>
-                  직원 새로고침
-                </button>
-              </div>
+            <div style={employeeHintStyle}>
+              휴대폰을 바꾼 직원은 오른쪽 <strong>⋯</strong> 메뉴에서 기기 재연결 코드를 발급해 새
+              휴대폰 회원등록 화면에 입력하게 하면 됩니다.
             </div>
 
             {employeeLoading ? (
@@ -2794,198 +2768,169 @@ export default function AdminPage() {
               <div style={emptyBoxStyle}>직원이 없습니다.</div>
             ) : (
               <div style={tableScrollStyle}>
-                <table style={employeeTableStyle}>
+                <table style={employeeListTableStyle}>
                   <thead>
                     <tr>
-                      <th style={thStyle}>이름</th>
-                      <th style={thStyle}>휴대폰번호</th>
-                      <th style={thStyle}>주민번호</th>
-                      <th style={thStyle}>은행</th>
-                      <th style={thStyle}>계좌번호</th>
-                      <th style={thStyle}>근무지</th>
-                      <th style={thStyle}>고용형태</th>
-                      <th style={thStyle}>계약형태</th>
-                      <th style={thStyle}>역할그룹</th>
-                      <th style={thStyle}>시급</th>
-                      <th style={thStyle}>상태</th>
-                      <th style={thStyle}>기기 재연결</th>
-                      <th style={thStyle}>관리</th>
+                      <th style={{ ...empThStyle, ...empStickyLeftStyle, zIndex: 3 }}>이름</th>
+                      <th style={empThStyle}>연락처</th>
+                      <th style={empThStyle}>급여 계좌</th>
+                      <th style={empThStyle}>근무 정보</th>
+                      <th style={empThStyle}>역할그룹</th>
+                      <th style={{ ...empThStyle, textAlign: "right" }}>시급</th>
+                      <th style={empThStyle}>상태</th>
+                      <th
+                        style={{
+                          ...empThStyle,
+                          ...empStickyRightStyle,
+                          zIndex: 3,
+                          textAlign: "right",
+                        }}
+                      >
+                        관리
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredEmployees.map((employee) => {
                       const reconnectInfo = reconnectInfoMap[employee.id];
+                      const inactive = !employee.is_active;
+                      const rowColor = inactive ? "#9ca3af" : "#111827";
+                      const subColor = inactive ? "#b6bcc6" : "#6b7280";
+                      const contractType = toContractType(employee.contract_type);
+                      const workplace = employee.workplace_name || "장사꾼";
+                      const noGroupWorkplace =
+                        workplace === "헤모즈" ||
+                        workplace === "깨소금" ||
+                        workplace === "로엔티크";
+                      const codeIssued =
+                        !!reconnectInfo ||
+                        (!!employee.reconnect_expires_at &&
+                          new Date(employee.reconnect_expires_at).getTime() > Date.now());
 
                       return (
-                        <tr key={employee.id}>
-                          <td style={tdStyle}>
-                            <span style={nameTextStyle}>{employee.name}</span>
-                          </td>
-
-                          <td style={tdStyle}>{formatPhone(employee.phone)}</td>
-
-                          <td style={tdStyle}>{getMaskedResidentNumber(employee)}</td>
-
-                          <td style={tdStyle}>{employee.bank_name || "-"}</td>
-
-                          <td style={tdStyle}>{employee.account_number || "-"}</td>
-
-                          <td style={tdStyle}>
-                            <span
-                              style={{
-                                ...badgeStyle,
-                                ...getWorkplaceBadgeColor(
-                                  employee.workplace_name || "장사꾼"
-                                ),
-                              }}
-                            >
-                              {employee.workplace_name || "장사꾼"}
+                        <tr key={employee.id} style={{ color: rowColor }}>
+                          <td style={{ ...empTdStyle, ...empStickyLeftStyle, color: rowColor }}>
+                            <span style={{ fontWeight: 800, fontSize: "14px" }}>
+                              {employee.name}
                             </span>
                           </td>
 
-                          <td style={tdStyle}>
-                            <span
-                              style={{
-                                ...badgeStyle,
-                                backgroundColor:
-                                  employee.employment_type === "carrot"
-                                    ? "#ffedd5"
-                                    : "#dcfce7",
-                                color:
-                                  employee.employment_type === "carrot"
-                                    ? "#c2410c"
-                                    : "#166534",
-                              }}
-                            >
-                              {employee.employment_type === "carrot" ? "당근" : "고정"}
-                            </span>
-                          </td>
-
-                          <td style={tdStyle}>
-                            {usesDailyWage(employee) ? (
-                              <span
-                                style={{
-                                  ...badgeStyle,
-                                  backgroundColor: isHybridContract(employee)
-                                    ? "#e0e7ff"
-                                    : "#fef3c7",
-                                  color: isHybridContract(employee)
-                                    ? "#3730a3"
-                                    : "#92400e",
-                                }}
-                              >
-                                {CONTRACT_TYPE_LABEL[toContractType(employee.contract_type)]} · 일급{" "}
-                                {getDailyWage(employee).toLocaleString("ko-KR")}원
-                              </span>
-                            ) : (
-                              <span
-                                style={{
-                                  ...badgeStyle,
-                                  backgroundColor: "#f3f4f6",
-                                  color: "#374151",
-                                }}
-                              >
-                                {CONTRACT_TYPE_LABEL.hourly}
-                              </span>
-                            )}
-                          </td>
-
-                          <td style={tdStyle}>
-  {employee.workplace_name === "헤모즈" ||
-  employee.workplace_name === "깨소금" ||
-  employee.workplace_name === "로엔티크" ? (
-    <span style={mutedTextStyle}>없음</span>
-  ) : employee.schedule_group ? (
-    <span
-      style={{
-        ...badgeStyle,
-        backgroundColor: "#f5f3ff",
-        color: "#6d28d9",
-      }}
-    >
-      {employee.schedule_group}
-    </span>
-  ) : (
-    <span style={mutedTextStyle}>선택안함</span>
-  )}
-</td>
-
-                          <td style={tdStyle}>
-                            <div style={wageWrapStyle}>
-                              <input
-                                type="number"
-                                min={0}
-                                value={wages[employee.id] || 0}
-                                onChange={(e) =>
-                                  handleWageChange(
-                                    employee.id,
-                                    Number(e.target.value)
-                                  )
-                                }
-                                style={wageInputStyle}
-                              />
-                              <button
-                                onClick={() => updateWage(employee.id)}
-                                style={primarySmallButtonStyle}
-                              >
-                                시급저장
-                              </button>
+                          <td style={{ ...empTdStyle, color: rowColor }}>
+                            <div style={{ fontWeight: 600 }}>{formatPhone(employee.phone)}</div>
+                            <div style={{ ...empSubTextStyle, color: subColor }}>
+                              {getMaskedResidentNumber(employee)}
                             </div>
                           </td>
 
-                          <td style={tdStyle}>
-                            <span
-                              style={{
-                                ...badgeStyle,
-                                backgroundColor: employee.is_active
-                                  ? "#e8f5e9"
-                                  : "#ffebee",
-                                color: employee.is_active
-                                  ? "#2e7d32"
-                                  : "#c62828",
-                              }}
-                            >
-                              {employee.is_active ? "활성" : "비활성"}
-                            </span>
+                          <td style={{ ...empTdStyle, color: rowColor }}>
+                            <div style={{ fontWeight: 600 }}>{employee.bank_name || "-"}</div>
+                            <div style={{ ...empSubTextStyle, color: subColor }}>
+                              {employee.account_number || "-"}
+                            </div>
                           </td>
 
-                          <td style={tdStyle}>
-                            <div style={reconnectCellStyle}>
-                              <button
-                                onClick={() => issueReconnectCode(employee)}
-                                style={reconnectButtonStyle}
-                                disabled={reconnectLoadingId === employee.id}
+                          <td style={empTdStyle}>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "5px" }}>
+                              <span
+                                style={{
+                                  ...empBadgeStyle,
+                                  backgroundColor: "#e0f2fe",
+                                  color: "#075985",
+                                  opacity: inactive ? 0.5 : 1,
+                                }}
                               >
-                                {reconnectLoadingId === employee.id
-                                  ? "발급중..."
-                                  : "기기 재연결"}
-                              </button>
-
-                              {reconnectInfo ? (
-                                <div style={reconnectInfoBoxStyle}>
-                                  <div style={reconnectCodeTextStyle}>
-                                    코드: <strong>{reconnectInfo.code}</strong>
-                                  </div>
-                                  <div style={reconnectExpireTextStyle}>
-                                    만료: {formatDateTime(reconnectInfo.expiresAt)}
-                                  </div>
-                                  <button
-                                    onClick={() => copyReconnectCode(employee.id)}
-                                    style={copyButtonStyle}
-                                  >
-                                    코드 복사
-                                  </button>
-                                </div>
+                                {workplace}
+                              </span>
+                              <span
+                                style={{
+                                  ...empBadgeStyle,
+                                  backgroundColor:
+                                    employee.employment_type === "carrot" ? "#ffedd5" : "#dcfce7",
+                                  color:
+                                    employee.employment_type === "carrot" ? "#c2410c" : "#166534",
+                                  opacity: inactive ? 0.5 : 1,
+                                }}
+                              >
+                                {employee.employment_type === "carrot" ? "당근" : "고정"}
+                              </span>
+                              {contractType === "hourly" ? (
+                                <span
+                                  style={{
+                                    ...empBadgeStyle,
+                                    backgroundColor: "#f3f4f6",
+                                    color: "#374151",
+                                    opacity: inactive ? 0.5 : 1,
+                                  }}
+                                >
+                                  {CONTRACT_TYPE_LABEL.hourly}
+                                </span>
                               ) : (
-                                <div style={reconnectEmptyTextStyle}>
-                                  아직 발급된 코드 없음
-                                </div>
+                                <span
+                                  style={{
+                                    ...empBadgeStyle,
+                                    fontWeight: 800,
+                                    backgroundColor:
+                                      contractType === "hybrid" ? "#ede9fe" : "#ffedd5",
+                                    color: contractType === "hybrid" ? "#5b21b6" : "#9a3412",
+                                    opacity: inactive ? 0.5 : 1,
+                                  }}
+                                >
+                                  {CONTRACT_TYPE_LABEL[contractType]} · 일급{" "}
+                                  {getDailyWage(employee).toLocaleString("ko-KR")}원
+                                </span>
                               )}
                             </div>
                           </td>
 
-                          <td style={tdStyle}>
-                            <div style={actionWrapStyle}>
+                          <td style={empTdStyle}>
+                            {!noGroupWorkplace && employee.schedule_group ? (
+                              <span
+                                style={{
+                                  ...empBadgeStyle,
+                                  backgroundColor: "#f5f3ff",
+                                  color: "#6d28d9",
+                                  opacity: inactive ? 0.5 : 1,
+                                }}
+                              >
+                                {employee.schedule_group}
+                              </span>
+                            ) : (
+                              <span style={{ color: subColor }}>—</span>
+                            )}
+                          </td>
+
+                          <td
+                            style={{
+                              ...empTdStyle,
+                              color: rowColor,
+                              textAlign: "right",
+                              fontVariantNumeric: "tabular-nums",
+                              fontWeight: 700,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {contractType === "piece"
+                              ? "일급제"
+                              : `${(employee.hourly_wage || 0).toLocaleString("ko-KR")}원`}
+                          </td>
+
+                          <td style={empTdStyle}>
+                            <div
+                              style={{
+                                fontWeight: 700,
+                                whiteSpace: "nowrap",
+                                color: employee.is_active ? "#15803d" : "#9ca3af",
+                              }}
+                            >
+                              {employee.is_active ? "● 활성" : "○ 비활성"}
+                            </div>
+                            {codeIssued && (
+                              <div style={empReconnectNoteStyle}>재연결 코드 발급됨</div>
+                            )}
+                          </td>
+
+                          <td style={{ ...empTdStyle, ...empStickyRightStyle }}>
+                            <div style={empActionWrapStyle}>
                               <button
                                 onClick={() => startEdit(employee)}
                                 style={primarySmallButtonStyle}
@@ -2993,34 +2938,16 @@ export default function AdminPage() {
                                 수정
                               </button>
 
-                              <button
-                                onClick={() => toggleEmployeeActive(employee)}
-                                style={{
-                                  ...secondarySmallButtonStyle,
-                                  backgroundColor: employee.is_active
-                                    ? "#fff7ed"
-                                    : "#ecfdf5",
-                                }}
-                              >
-                                {employee.is_active ? "비활성화" : "활성화"}
-                              </button>
-
-                              <button
-                                onClick={() => deleteEmployee(employee)}
-                                disabled={deletingEmployeeId === employee.id}
-                                style={{
-                                  ...secondarySmallButtonStyle,
-                                  backgroundColor: "#fee2e2",
-                                  color: "#b91c1c",
-                                  borderColor: "#fecaca",
-                                  opacity:
-                                    deletingEmployeeId === employee.id ? 0.6 : 1,
-                                }}
-                              >
-                                {deletingEmployeeId === employee.id
-                                  ? "삭제중..."
-                                  : "삭제"}
-                              </button>
+                              <EmployeeActionMenu
+                                isActive={employee.is_active}
+                                reconnectLoading={reconnectLoadingId === employee.id}
+                                deleting={deletingEmployeeId === employee.id}
+                                canCopyCode={!!reconnectInfo?.code}
+                                onIssueReconnect={() => issueReconnectCode(employee)}
+                                onCopyCode={() => copyReconnectCode(employee.id)}
+                                onToggleActive={() => toggleEmployeeActive(employee)}
+                                onDelete={() => deleteEmployee(employee)}
+                              />
                             </div>
                           </td>
                         </tr>
@@ -3085,7 +3012,7 @@ export default function AdminPage() {
                       fontWeight: 600,
                     }}
                   >
-                    기본 정보와 근무지, 고용형태, 계약형태, 역할그룹을 한 번에 수정합니다.
+                    기본 정보와 근무지, 고용형태, 근로형태·시급·도급 일급, 역할그룹을 한 번에 수정합니다.
                   </div>
                 </div>
 
@@ -3208,46 +3135,80 @@ export default function AdminPage() {
                     </select>
                   </div>
 
-                  <div>
+                  <div style={{ gridColumn: "1 / -1" }}>
                     <label style={labelStyle}>근로형태</label>
-                    <select
-                      value={editContractType}
-                      onChange={(e) =>
-                        setEditContractType(e.target.value as ContractType)
-                      }
-                      style={inputStyle}
-                    >
-                      <option value="hourly">{CONTRACT_TYPE_LABEL.hourly}</option>
-                      <option value="piece">{CONTRACT_TYPE_LABEL.piece}</option>
-                      <option value="hybrid">{CONTRACT_TYPE_LABEL.hybrid}</option>
-                    </select>
-                  </div>
+                    <div style={contractToggleRowStyle}>
+                      {(["hourly", "piece", "hybrid"] as ContractType[]).map((type) => {
+                        const active = editContractType === type;
 
-                  {editContractType !== "hourly" ? (
-                    <div>
-                      <label style={labelStyle}>도급 일급 (세전, 원)</label>
-                      <input
-                        type="number"
-                        min={0}
-                        inputMode="numeric"
-                        placeholder="예: 100000"
-                        value={editDailyWage}
-                        onChange={(e) =>
-                          setEditDailyWage(e.target.value.replace(/[^0-9]/g, ""))
-                        }
-                        style={inputStyle}
-                      />
-                      <div style={{ marginTop: "6px", fontSize: "12px", color: "#6b7280" }}>
-                        {editContractType === "piece"
-                          ? "출퇴근을 모두 찍은 날 근무시간과 무관하게 이 금액이 지급됩니다. 주휴수당 없음."
-                          : "시급 근무와 별도로, 도급 출퇴근을 모두 찍은 날 이 금액이 더해집니다(10분만 찍어도 전액)."}
-                        <br />
-                        바꾼 금액은 이후 새로 찍는 도급 기록부터 적용됩니다(과거 기록 금액은 그대로).
-                      </div>
+                        return (
+                          <button
+                            key={type}
+                            type="button"
+                            onClick={() => setEditContractType(type)}
+                            aria-pressed={active}
+                            style={{
+                              ...contractToggleButtonStyle,
+                              ...(active
+                                ? type === "hybrid"
+                                  ? contractToggleActiveHybridStyle
+                                  : contractToggleActiveStyle
+                                : {}),
+                            }}
+                          >
+                            {CONTRACT_TYPE_LABEL[type]}
+                          </button>
+                        );
+                      })}
                     </div>
-                  ) : (
-                    <div />
-                  )}
+
+                    <div style={contractFieldsRowStyle}>
+                      {editContractType !== "piece" && (
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <label style={labelStyle}>시급 (원)</label>
+                          <input
+                            type="number"
+                            min={0}
+                            inputMode="numeric"
+                            placeholder="예: 10320"
+                            value={editHourlyWage}
+                            onChange={(e) =>
+                              setEditHourlyWage(e.target.value.replace(/[^0-9]/g, ""))
+                            }
+                            style={inputStyle}
+                          />
+                        </div>
+                      )}
+
+                      {editContractType !== "hourly" && (
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <label style={labelStyle}>도급 일급 (세전, 원)</label>
+                          <input
+                            type="number"
+                            min={0}
+                            inputMode="numeric"
+                            placeholder="예: 100000"
+                            value={editDailyWage}
+                            onChange={(e) =>
+                              setEditDailyWage(e.target.value.replace(/[^0-9]/g, ""))
+                            }
+                            style={
+                              editContractType === "hybrid"
+                                ? { ...inputStyle, border: "2px solid #7c3aed" }
+                                : inputStyle
+                            }
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {editContractType !== "hourly" && (
+                      <div style={{ marginTop: "8px", fontSize: "12px", color: "#6b7280" }}>
+                        도급 일급은 도급 출근·퇴근을 모두 찍은 날 지급됩니다. 바꾼 일급은 이후 새
+                        기록부터 적용됩니다.
+                      </div>
+                    )}
+                  </div>
 
                   {editWorkplaceName !== "로엔티크" && (
                     <div style={{ gridColumn: "1 / -1" }}>
@@ -3959,6 +3920,371 @@ function SummaryCard({
 
 // 동명이인 구분용. 직원 목록 API 가 이미 내려주는
 // resident_number_masked("710906-2******") 에서 앞 6자리만 사용합니다.
+const contractToggleRowStyle: CSSProperties = {
+  display: "flex",
+  gap: "8px",
+  marginBottom: "12px",
+};
+
+const contractToggleButtonStyle: CSSProperties = {
+  flex: 1,
+  padding: "11px 12px",
+  borderRadius: "12px",
+  border: "1px solid #d1d5db",
+  backgroundColor: "#ffffff",
+  color: "#374151",
+  fontSize: "14px",
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const contractToggleActiveStyle: CSSProperties = {
+  border: "2px solid #111827",
+  backgroundColor: "#111827",
+  color: "#ffffff",
+};
+
+const contractToggleActiveHybridStyle: CSSProperties = {
+  border: "2px solid #7c3aed",
+  backgroundColor: "#7c3aed",
+  color: "#ffffff",
+};
+
+const contractFieldsRowStyle: CSSProperties = {
+  display: "flex",
+  gap: "12px",
+};
+
+// ─────────────────────────────────────────────────────────────
+// 직원 목록 화면 (2026-10-02 UI 정리) — 칸 8개 표 + ⋯ 메뉴
+// ─────────────────────────────────────────────────────────────
+
+const employeeHeaderStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "12px",
+  marginBottom: "14px",
+};
+
+const employeeCountStyle: CSSProperties = {
+  fontSize: "13px",
+  fontWeight: 700,
+  color: "#6b7280",
+};
+
+const employeeFilterRowStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+  flexWrap: "wrap",
+  marginBottom: "8px",
+};
+
+const employeeSearchInputStyle: CSSProperties = {
+  flex: "1 1 280px",
+  minWidth: "220px",
+  padding: "11px 14px",
+  borderRadius: "12px",
+  border: "1px solid #d1d5db",
+  fontSize: "14px",
+  outline: "none",
+  backgroundColor: "#ffffff",
+};
+
+const employeeStatusSelectStyle: CSSProperties = {
+  padding: "11px 12px",
+  borderRadius: "12px",
+  border: "1px solid #d1d5db",
+  fontSize: "13px",
+  fontWeight: 600,
+  backgroundColor: "#ffffff",
+  color: "#374151",
+};
+
+const employeeRefreshButtonStyle: CSSProperties = {
+  padding: "11px 14px",
+  borderRadius: "12px",
+  border: "1px solid #d1d5db",
+  backgroundColor: "#ffffff",
+  color: "#374151",
+  fontSize: "13px",
+  fontWeight: 700,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+const employeeHintStyle: CSSProperties = {
+  fontSize: "12px",
+  color: "#9ca3af",
+  marginBottom: "12px",
+};
+
+const employeeListTableStyle: CSSProperties = {
+  width: "100%",
+  borderCollapse: "separate",
+  borderSpacing: 0,
+  minWidth: "980px",
+};
+
+const empThStyle: CSSProperties = {
+  textAlign: "left",
+  padding: "10px 12px",
+  fontSize: "12px",
+  fontWeight: 800,
+  color: "#475569",
+  backgroundColor: "#f8fafc",
+  borderBottom: "1px solid #e5e7eb",
+  whiteSpace: "nowrap",
+};
+
+const empTdStyle: CSSProperties = {
+  padding: "12px 12px",
+  fontSize: "13px",
+  verticalAlign: "middle",
+  backgroundColor: "#ffffff",
+  borderBottom: "1px solid #f1f5f9",
+  lineHeight: 1.4,
+  height: "60px",
+};
+
+const empSubTextStyle: CSSProperties = {
+  marginTop: "2px",
+  fontSize: "11px",
+  color: "#6b7280",
+  fontWeight: 500,
+};
+
+// 가로 스크롤이 생겨도 이름(왼쪽)과 관리(오른쪽) 칸은 고정
+const empStickyLeftStyle: CSSProperties = {
+  position: "sticky",
+  left: 0,
+  zIndex: 1,
+  backgroundColor: "#ffffff",
+};
+
+const empStickyRightStyle: CSSProperties = {
+  position: "sticky",
+  right: 0,
+  zIndex: 1,
+  backgroundColor: "#ffffff",
+  boxShadow: "-6px 0 8px -6px rgba(15, 23, 42, 0.12)",
+};
+
+const empBadgeStyle: CSSProperties = {
+  display: "inline-block",
+  padding: "3px 9px",
+  borderRadius: "999px",
+  fontSize: "11px",
+  fontWeight: 700,
+  whiteSpace: "nowrap",
+};
+
+const empReconnectNoteStyle: CSSProperties = {
+  marginTop: "3px",
+  fontSize: "11px",
+  fontWeight: 600,
+  color: "#2563eb",
+  whiteSpace: "nowrap",
+};
+
+const empActionWrapStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "flex-end",
+  alignItems: "center",
+  gap: "6px",
+};
+
+const empMenuButtonStyle: CSSProperties = {
+  width: "30px",
+  height: "30px",
+  borderRadius: "8px",
+  border: "1px solid #d1d5db",
+  backgroundColor: "#ffffff",
+  color: "#374151",
+  fontSize: "16px",
+  fontWeight: 900,
+  lineHeight: 1,
+  cursor: "pointer",
+};
+
+const EMPLOYEE_MENU_WIDTH = 190;
+
+const empMenuPanelStyle: CSSProperties = {
+  position: "fixed",
+  zIndex: 200,
+  width: EMPLOYEE_MENU_WIDTH,
+  padding: "6px",
+  borderRadius: "12px",
+  border: "1px solid #e5e7eb",
+  backgroundColor: "#ffffff",
+  boxShadow: "0 12px 32px rgba(15, 23, 42, 0.18)",
+};
+
+const empMenuItemStyle: CSSProperties = {
+  display: "block",
+  width: "100%",
+  textAlign: "left",
+  padding: "9px 12px",
+  borderRadius: "8px",
+  border: "none",
+  backgroundColor: "transparent",
+  color: "#111827",
+  fontSize: "13px",
+  fontWeight: 600,
+  cursor: "pointer",
+};
+
+// 행 오른쪽 끝 [⋯] 버튼과 작은 메뉴.
+//   - 메뉴 바깥을 누르거나 Esc 를 누르면 닫힙니다(스크롤·창 크기 변경에도 닫음).
+//   - 가로 스크롤 영역(overflow)에 잘리지 않도록 position: fixed 로 띄웁니다.
+//   - 삭제는 부모의 deleteEmployee 가 기존처럼 확인창을 거칩니다.
+function EmployeeActionMenu({
+  isActive,
+  reconnectLoading,
+  deleting,
+  canCopyCode,
+  onIssueReconnect,
+  onCopyCode,
+  onToggleActive,
+  onDelete,
+}: {
+  isActive: boolean;
+  reconnectLoading: boolean;
+  deleting: boolean;
+  canCopyCode: boolean;
+  onIssueReconnect: () => void;
+  onCopyCode: () => void;
+  onToggleActive: () => void;
+  onDelete: () => void;
+}) {
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!position) return;
+
+    const close = () => setPosition(null);
+
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+
+      if (panelRef.current?.contains(target) || buttonRef.current?.contains(target)) {
+        return;
+      }
+
+      close();
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", close);
+    window.addEventListener("scroll", close, true);
+
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [position]);
+
+  const toggle = () => {
+    if (position) {
+      setPosition(null);
+      return;
+    }
+
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    // 메뉴 오른쪽 끝을 [⋯] 버튼 오른쪽 끝에 맞춥니다.
+    setPosition({
+      top: rect.bottom + 6,
+      left: Math.max(8, rect.right - EMPLOYEE_MENU_WIDTH),
+    });
+  };
+
+  const pick = (action: () => void) => {
+    setPosition(null);
+    action();
+  };
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={toggle}
+        style={empMenuButtonStyle}
+        aria-haspopup="menu"
+        aria-expanded={!!position}
+        aria-label="더보기 메뉴"
+      >
+        ⋯
+      </button>
+
+      {position &&
+        createPortal(
+        // 표 칸(sticky) 안에 그리면 아래 줄의 sticky 칸에 가려지므로 body 로 꺼내서 띄웁니다.
+        <div
+          ref={panelRef}
+          role="menu"
+          style={{ ...empMenuPanelStyle, top: position.top, left: position.left }}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            style={empMenuItemStyle}
+            disabled={reconnectLoading}
+            onClick={() => pick(onIssueReconnect)}
+          >
+            {reconnectLoading ? "발급중..." : "기기 재연결 코드 발급"}
+          </button>
+
+          {canCopyCode && (
+            <button
+              type="button"
+              role="menuitem"
+              style={empMenuItemStyle}
+              onClick={() => pick(onCopyCode)}
+            >
+              재연결 코드 복사
+            </button>
+          )}
+
+          <button
+            type="button"
+            role="menuitem"
+            style={empMenuItemStyle}
+            onClick={() => pick(onToggleActive)}
+          >
+            {isActive ? "비활성화" : "활성화"}
+          </button>
+
+          <div style={{ height: "1px", margin: "4px 6px", backgroundColor: "#e5e7eb" }} />
+
+          <button
+            type="button"
+            role="menuitem"
+            style={{ ...empMenuItemStyle, color: "#dc2626", fontWeight: 700 }}
+            disabled={deleting}
+            onClick={() => pick(onDelete)}
+          >
+            {deleting ? "삭제중..." : "직원 삭제"}
+          </button>
+        </div>,
+        document.body
+      )}
+    </>
+  );
+}
+
 /** 이 시간(분)보다 짧은 도급 구간은 눈에 띄게 표시합니다. */
 const SHORT_PIECE_MINUTES = 30;
 
@@ -4089,17 +4415,6 @@ function formatCheckOutTime(value: string | null) {
 function formatDate(value: string) {
   const [year, month, day] = value.split("-");
   return `${year}.${month}.${day}`;
-}
-
-function formatDateTime(value: string) {
-  return new Date(value).toLocaleString("ko-KR", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
 
 function formatWorkMinutes(minutes: number | null) {
@@ -4273,16 +4588,6 @@ const warningBoxStyle: CSSProperties = {
   border: "1px solid #fed7aa",
 };
 
-const reconnectGuideBoxStyle: CSSProperties = {
-  marginBottom: "18px",
-  padding: "14px 16px",
-  borderRadius: "14px",
-  backgroundColor: "#eff6ff",
-  color: "#1d4ed8",
-  border: "1px solid #bfdbfe",
-  lineHeight: 1.6,
-  fontSize: "14px",
-};
 
 const tabWrapStyle: CSSProperties = {
   display: "flex",
@@ -4518,26 +4823,7 @@ const dateTimeInputStyle: CSSProperties = {
   color: "#111827",
 };
 
-const wageWrapStyle: CSSProperties = {
-  display: "inline-flex",
-  gap: "6px",
-  alignItems: "center",
-  flexWrap: "nowrap",
-  whiteSpace: "nowrap",
-};
 
-const wageInputStyle: CSSProperties = {
-  height: "32px",
-  padding: "0 8px",
-  width: "94px",
-  borderRadius: "8px",
-  border: "1px solid #d1d5db",
-  outline: "none",
-  fontSize: "12px",
-  backgroundColor: "#ffffff",
-  color: "#111827",
-  boxSizing: "border-box",
-};
 
 const primaryButtonStyle: CSSProperties = {
   padding: "12px 16px",
@@ -5037,63 +5323,12 @@ const secondarySmallButtonStyle: CSSProperties = {
   whiteSpace: "nowrap",
 };
 
-const reconnectCellStyle: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: "8px",
-  minWidth: "230px",
-  whiteSpace: "nowrap",
-};
 
-const reconnectButtonStyle: CSSProperties = {
-  height: "32px",
-  padding: "0 12px",
-  border: "none",
-  borderRadius: "8px",
-  cursor: "pointer",
-  backgroundColor: "#2563eb",
-  color: "#ffffff",
-  fontWeight: 700,
-  fontSize: "12px",
-  whiteSpace: "nowrap",
-};
 
-const reconnectInfoBoxStyle: CSSProperties = {
-  backgroundColor: "#f8fafc",
-  border: "1px solid #e5e7eb",
-  borderRadius: "10px",
-  padding: "6px 8px",
-  display: "inline-flex",
-  alignItems: "center",
-  gap: "6px",
-};
 
-const reconnectCodeTextStyle: CSSProperties = {
-  fontSize: "11px",
-  color: "#111827",
-};
 
-const reconnectExpireTextStyle: CSSProperties = {
-  fontSize: "11px",
-  color: "#6b7280",
-};
 
-const copyButtonStyle: CSSProperties = {
-  padding: "6px 10px",
-  border: "1px solid #d1d5db",
-  borderRadius: "8px",
-  cursor: "pointer",
-  backgroundColor: "#ffffff",
-  color: "#111827",
-  fontWeight: 700,
-  fontSize: "12px",
-};
 
-const reconnectEmptyTextStyle: CSSProperties = {
-  fontSize: "11px",
-  color: "#94a3b8",
-  whiteSpace: "nowrap",
-};
 
 const emptyBoxStyle: CSSProperties = {
   padding: "28px 20px",
@@ -5104,10 +5339,4 @@ const emptyBoxStyle: CSSProperties = {
   borderRadius: "16px",
 
   
-};
-
-const mutedTextStyle: CSSProperties = {
-  fontSize: "13px",
-  color: "#9ca3af",
-  fontWeight: 500,
 };

@@ -39,6 +39,7 @@ export async function GET() {
         contract_start_date,
         contract_end_date,
         first_hire_date,
+        reconnect_expires_at,
         created_at
         `
       )
