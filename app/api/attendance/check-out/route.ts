@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { checkAttendanceAction } from "@/app/lib/attendanceFlow";
-import { loadDayRecords, resolveRequestedSegment } from "@/app/lib/attendanceServer";
+import { recordAttendance, resolveRequestedSegment } from "@/app/lib/attendanceServer";
 import { toContractType } from "@/app/lib/contractType";
 import { createClient } from "@supabase/supabase-js";
 import { getDistanceInMeters } from "@/app/lib/geo";
@@ -28,131 +27,6 @@ const WORKPLACES = [
   },
 ];
 
-function getKstDateParts(date: Date) {
-  const formatter = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Seoul",
-    hour12: false,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-
-  const parts = formatter.formatToParts(date);
-
-  const getPart = (type: string) =>
-    parts.find((part) => part.type === type)?.value || "00";
-
-  return {
-    year: Number(getPart("year")),
-    month: Number(getPart("month")),
-    day: Number(getPart("day")),
-    hour: Number(getPart("hour")),
-    minute: Number(getPart("minute")),
-  };
-}
-
-function toKstDateFromParts(
-  year: number,
-  month: number,
-  day: number,
-  hour: number,
-  minute: number
-) {
-  const utcMillis = Date.UTC(year, month - 1, day, hour - 9, minute, 0, 0);
-  return new Date(utcMillis);
-}
-
-function formatTimeLabel(hour: number, minute: number) {
-  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-}
-
-function getNextCheckoutWindowLabel(hour: number, minute: number) {
-  let nextHour = hour;
-  let nextMinute = 0;
-
-  if (minute >= 11 && minute <= 29) {
-    nextMinute = 30;
-  } else if (minute >= 41) {
-    nextHour += 1;
-    nextMinute = 0;
-  }
-
-  return formatTimeLabel(nextHour, nextMinute);
-}
-
-function getEmployeeWorkplaceName(employee: any) {
-  return String(
-    employee?.workplace_name ||
-      employee?.workplace ||
-      employee?.workplace_label ||
-      "장사꾼"
-  ).trim();
-}
-
-function isHemozEarlyCheckoutWindow(date: Date) {
-  const { hour, minute } = getKstDateParts(date);
-  const totalMinutes = hour * 60 + minute;
-
-  return totalMinutes >= 12 * 60 + 30 && totalMinutes <= 12 * 60 + 40;
-}
-
-function isCheckoutAllowedAtKst(date: Date, workplaceName: string) {
-  const { hour, minute } = getKstDateParts(date);
-  const totalMinutes = hour * 60 + minute;
-
-  if (workplaceName === "헤모즈" && isHemozEarlyCheckoutWindow(date)) {
-    return { allowed: true, message: "" };
-  }
-
-  if (totalMinutes < 12 * 60 + 30) {
-    return {
-      allowed: false,
-      message: "12시 30분 이후부터 퇴근 가능합니다.",
-    };
-  }
-
-  const ok =
-    (minute >= 0 && minute <= 10) || (minute >= 30 && minute <= 40);
-
-  if (ok) {
-    return { allowed: true, message: "" };
-  }
-
-  return {
-    allowed: false,
-    message: `퇴근 가능 시간이 아닙니다. 다음 가능 시간: ${getNextCheckoutWindowLabel(
-      hour,
-      minute
-    )}`,
-  };
-}
-
-function normalizeCheckOutTime(checkedAt: string, workplaceName: string): Date {
-  const originalDate = new Date(checkedAt);
-  const { year, month, day, hour, minute } = getKstDateParts(originalDate);
-  const totalMinutes = hour * 60 + minute;
-
-  if (
-    workplaceName === "헤모즈" &&
-    totalMinutes >= 12 * 60 + 30 &&
-    totalMinutes <= 12 * 60 + 40
-  ) {
-    return toKstDateFromParts(year, month, day, 12, 30);
-  }
-
-  if (minute <= 10) {
-    return toKstDateFromParts(year, month, day, hour, 0);
-  }
-
-  if (minute <= 40) {
-    return toKstDateFromParts(year, month, day, hour, 30);
-  }
-
-  return toKstDateFromParts(year, month, day, hour + 1, 0);
-}
-
 function getNearestWorkplaceDistance(parsedLat: number, parsedLng: number) {
   const distances = WORKPLACES.map((workplace) => {
     const distance = getDistanceInMeters(
@@ -176,15 +50,15 @@ function getNearestWorkplaceDistance(parsedLat: number, parsedLng: number) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, birthDate, phoneLast4, lat, lng, checkedAt, accuracy } = body;
+    // checkedAt 은 받지 않습니다. 저장 시각은 DB 시각(now())입니다.
+    const { name, birthDate, phoneLast4, lat, lng, accuracy } = body;
 
     if (
       !name ||
       !birthDate ||
       !phoneLast4 ||
       lat === undefined ||
-      lng === undefined ||
-      !checkedAt
+      lng === undefined
     ) {
       return NextResponse.json(
         { success: false, message: "필수값 누락" },
@@ -213,13 +87,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const checkedDate = new Date(checkedAt);
-    if (Number.isNaN(checkedDate.getTime())) {
-      return NextResponse.json(
-        { success: false, message: "시간값 오류" },
-        { status: 400 }
-      );
-    }
 
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -290,8 +157,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const workplaceName = getEmployeeWorkplaceName(employee);
-
     // 시급 구간 / 도급 구간 중 어느 퇴근인지. 값이 없으면 직원 근로형태의 기본 구간.
     const requested = resolveRequestedSegment(body.segment, employee.contract_type);
     if ("error" in requested) {
@@ -302,94 +167,25 @@ export async function POST(request: Request) {
     }
     const segment = requested.segment;
 
-    // 도급 퇴근은 시간 제한이 없습니다(10분만 일해도 찍을 수 있어야 함).
-    if (segment === "hourly") {
-      const checkoutRule = isCheckoutAllowedAtKst(checkedDate, workplaceName);
-      if (!checkoutRule.allowed) {
-        return NextResponse.json(
-          { success: false, message: checkoutRule.message },
-          { status: 400 }
-        );
-      }
-    }
-
-    const { records: dayRecords, error: dayError } = await loadDayRecords(
-      supabase,
-      employee.id,
-      checkedAt
-    );
-
-    if (dayError) {
-      return NextResponse.json(
-        { success: false, message: `오늘 기록 조회 실패: ${dayError.message}` },
-        { status: 500 }
-      );
-    }
-
-    // 화면과 같은 규칙으로 다시 검사합니다(출근 없는 퇴근, 두 번째 퇴근 등).
-    const flow = checkAttendanceAction(
-      employee.contract_type,
+    // 저장 시각·시각 보정·퇴근 가능 시간·하루 흐름 규칙·중복 방지는 DB 함수가 한 번에 처리합니다.
+    const saved = await recordAttendance(supabase, {
+      employeeId: employee.id,
+      recordType: "check_out",
       segment,
-      "check-out",
-      dayRecords
-    );
-    if (!flow.allowed) {
-      return NextResponse.json(
-        { success: false, message: flow.message },
-        { status: 409 }
-      );
-    }
-
-    // 같은 구간 출근 기록의 스냅샷을 그대로 이어 씁니다.
-    // 출근/퇴근 사이에 시급·일급이 바뀌어도 하루 금액이 서로 달라지지 않습니다.
-    const segmentCheckIn = dayRecords.find(
-      (record) =>
-        (record.segment_type || "hourly") === segment &&
-        record.record_type === "check_in"
-    );
-
-    const currentHourlyWage = Number(employee.hourly_wage || 0);
-    const checkInSnapshot = Number(segmentCheckIn?.hourly_wage_snapshot || 0);
-
-    const hourlyWageSnapshot =
-      checkInSnapshot > 0
-        ? checkInSnapshot
-        : currentHourlyWage > 0
-        ? currentHourlyWage
-        : 10320;
-
-    // 도급 퇴근은 시각을 보정하지 않습니다(보정하면 도급 출근보다 앞설 수 있음).
-    const normalizedCheckedAt =
-      segment === "hourly"
-        ? normalizeCheckOutTime(checkedAt, workplaceName).toISOString()
-        : checkedDate.toISOString();
-
-    const payload: any = {
-      employee_id: employee.id,
-      record_type: "check_out",
-      segment_type: segment,
       lat: parsedLat,
       lng: parsedLng,
-      checked_at: normalizedCheckedAt,
       accuracy: parsedAccuracy,
       distance: Math.round(distance),
-      hourly_wage_snapshot: hourlyWageSnapshot,
-      piece_daily_wage_snapshot:
-        segment === "piece"
-          ? segmentCheckIn?.piece_daily_wage_snapshot ?? null
-          : null,
-    };
+    });
 
-    const { error } = await supabase
-      .from("attendance_records")
-      .insert([payload]);
-
-    if (error) {
+    if (!saved.ok) {
       return NextResponse.json(
-        { success: false, message: error.message },
-        { status: 500 }
+        { success: false, message: saved.message },
+        { status: saved.status }
       );
     }
+
+    const normalizedCheckedAt = saved.checkedAt;
 
     return NextResponse.json({
       success: true,

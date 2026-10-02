@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { loadPayOverrides, payOverrideKey } from "@/app/lib/payOverride";
 import { getDailyWage, isPieceContract } from "@/app/lib/contractType";
-import { calcDayWork, calcHourlyPay } from "@/app/lib/workTime";
+import { calcDayPay } from "@/app/lib/dayPay";
 
 function createSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -48,17 +48,6 @@ function formatMinutesToText(totalMinutes: number) {
   if (hours > 0 && minutes > 0) return `${hours}시간 ${minutes}분`;
   if (hours > 0) return `${hours}시간`;
   return `${minutes}분`;
-}
-
-function getWageForDay(items: any[], fallbackWage: number) {
-  const snapshotWage = items
-    .map((item) => Number(item.hourly_wage_snapshot || 0))
-    .find((wage) => wage > 0);
-
-  if (snapshotWage) return snapshotWage;
-  if (fallbackWage > 0) return fallbackWage;
-
-  return 10320;
 }
 
 function getCurrentWeekRangeKst() {
@@ -215,7 +204,7 @@ export async function POST(request: NextRequest) {
 
     const hourlyWage = Number(employee.hourly_wage || 10320);
 
-    // 도급은 출근한 날마다 일당, 주휴수당 없음. 관리자 급여와 같은 규칙입니다.
+    // 도급 전용 계약은 주휴수당 없음. 시급+도급은 시급분만 주휴수당 대상.
     const isPiece = isPieceContract(employee);
     const dailyWage = getDailyWage(employee);
 
@@ -249,6 +238,9 @@ export async function POST(request: NextRequest) {
 
     let totalMinutes = 0;
     let totalGrossPay = 0;
+    // 주휴수당은 시급분 기준(도급 일급이 섞이면 평균시급이 부풀려짐)
+    let totalHourlyPortion = 0;
+    let totalAllowanceMinutes = 0;
 
     const dailyRows = Object.entries(grouped)
       .sort(([a], [b]) => a.localeCompare(b))
@@ -259,15 +251,40 @@ export async function POST(request: NextRequest) {
             new Date(b.checked_at).getTime()
         );
 
-        const dayWage = getWageForDay(sortedItems, hourlyWage);
+        const override = payOverrides.get(payOverrideKey(employee.id, date));
 
-        // 근무시간 계산은 app/lib/workTime.ts 한 곳에서 합니다.
-        // 오늘 퇴근 전이면 현재 시각까지 추정, 퇴근이 누락된 지난 날은 0원(누락 표시).
-        const workTime = calcDayWork(date, sortedItems, { now: new Date() });
+        // 시급분 + 도급분 계산은 app/lib/dayPay.ts 한 곳에서 합니다(관리자 급여와 같은 규칙).
+        // 시급: 오늘 퇴근 전이면 현재 시각까지 추정, 퇴근이 누락된 지난 날은 0원(누락 표시).
+        // 도급: 도급 출근+퇴근이 모두 있으면 일급 전액, 퇴근 누락이면 0원.
+        const dayPay = calcDayPay(date, sortedItems, {
+          fallbackHourlyWage: hourlyWage,
+          fallbackDailyWage: dailyWage,
+          override: override !== undefined ? override.grossPay : null,
+          now: new Date(),
+        });
+
+        const workTime = dayPay.hourly;
+        const piece = dayPay.piece;
+        const dayWage = workTime.wage;
         const checkIn = workTime.checkIn;
         const checkOut = workTime.checkOut;
 
-        if (!checkIn) {
+        const pieceFields = {
+          piecePay: dayPay.piecePortion,
+          pieceCheckInText: piece.checkIn
+            ? formatTimeKst(new Date(piece.checkIn.checked_at))
+            : null,
+          pieceCheckOutText: piece.checkOut
+            ? formatTimeKst(new Date(piece.checkOut.checked_at))
+            : piece.missingCheckOut
+            ? "도급 퇴근 누락"
+            : piece.inProgress
+            ? "도급 퇴근 전"
+            : null,
+          pieceMissingCheckOut: piece.missingCheckOut,
+        };
+
+        if (!checkIn && !piece.hasPiece) {
           return {
             date,
             checkIn: null,
@@ -284,13 +301,13 @@ export async function POST(request: NextRequest) {
             checkOutText: "-",
             workText: "0분",
             lunchText: "-",
+            hourlyPay: 0,
+            ...pieceFields,
           };
         }
 
         // 관리자 페이지에서 수동 수정한 시간이 최종 확정값입니다.
         // DB 에 저장된 checked_at 값을 다시 보정하지 않고 그대로 사용합니다.
-        const normalizedCheckInDate = new Date(checkIn.checked_at);
-
         const finalCheckOut = checkOut || null;
         const normalizedCheckOutDate = finalCheckOut
           ? new Date(finalCheckOut.checked_at)
@@ -299,41 +316,39 @@ export async function POST(request: NextRequest) {
         const paidMinutes = workTime.workedMinutes;
         const lunchDeducted = workTime.lunchDeducted;
 
-        const override = payOverrides.get(payOverrideKey(employee.id, date));
-
-        const autoPay = isPiece
-          ? dailyWage
-          : calcHourlyPay(paidMinutes, dayWage);
-
-        const grossPay =
-          override !== undefined ? override.grossPay : autoPay;
-
+        const grossPay = dayPay.basePay;
         const netPay = calcNetPay(grossPay);
 
         totalMinutes += paidMinutes;
+        totalAllowanceMinutes += dayPay.allowanceMinutes;
         totalGrossPay += grossPay;
+        totalHourlyPortion += dayPay.hourlyPortion;
 
         return {
           date,
-          checkIn: checkIn.checked_at,
+          checkIn: checkIn?.checked_at || null,
           checkOut: finalCheckOut?.checked_at || null,
           paidMinutes,
           hourlyWage: dayWage,
           grossPay,
           netPay,
-          isWorking: workTime.estimated,
+          isWorking: workTime.estimated || piece.inProgress,
           missingCheckOut: workTime.missingCheckOut,
           lunchDeducted,
-          checkInRecordId: checkIn.id ? String(checkIn.id) : null,
+          checkInRecordId: checkIn?.id ? String(checkIn.id) : null,
           checkOutRecordId: finalCheckOut?.id ? String(finalCheckOut.id) : null,
-          checkInText: formatTimeKst(normalizedCheckInDate),
+          checkInText: checkIn ? formatTimeKst(new Date(checkIn.checked_at)) : "-",
           checkOutText: normalizedCheckOutDate
             ? formatTimeKst(normalizedCheckOutDate)
+            : !checkIn
+            ? "-"
             : workTime.missingCheckOut
             ? "퇴근 누락"
             : "퇴근 전",
           workText: formatMinutesToText(paidMinutes),
           lunchText: lunchDeducted ? "점심 1시간 제외" : "-",
+          hourlyPay: dayPay.override !== null ? dayPay.override : workTime.pay,
+          ...pieceFields,
         };
       });
 
@@ -342,10 +357,12 @@ export async function POST(request: NextRequest) {
 
     const totalHours = totalMinutes / 60;
     const averageHourlyWage =
-      totalHours > 0 ? totalGrossPay / totalHours : hourlyWage;
+      totalHours > 0 ? totalHourlyPortion / totalHours : hourlyWage;
 
     const weeklyAllowanceAmount =
-      !isPiece && weeklyAllowanceStatus === "대상" && totalHours >= 15
+      !isPiece &&
+      weeklyAllowanceStatus === "대상" &&
+      totalAllowanceMinutes >= 15 * 60
         ? Math.floor((totalHours / 5) * averageHourlyWage)
         : 0;
 

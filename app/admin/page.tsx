@@ -27,12 +27,11 @@ import {
   CONTRACT_TYPE_LABEL,
   getDailyWage,
   isHybridContract,
-  isPieceContract,
   toContractType,
   usesDailyWage,
   type ContractType,
 } from "@/app/lib/contractType";
-import { calcDayWork, calcHourlyPay } from "@/app/lib/workTime";
+import { calcDayPay } from "@/app/lib/dayPay";
 import {
   ROWS_PER_FILE,
   buildBankTransferRows,
@@ -48,6 +47,9 @@ type AdminRecord = {
   created_at: string;
   employee_id: number;
   hourly_wage_snapshot?: number | null;
+  /** hourly=시급 구간, piece=도급 구간 */
+  segment_type?: string | null;
+  piece_daily_wage_snapshot?: number | null;
   employees: {
     id: number;
     name: string;
@@ -129,6 +131,22 @@ type GroupedAttendanceRow = {
   workMinutes: number | null;
   /** 출근만 있고 퇴근이 없는 지난 날. 급여 0원. */
   missingCheckOut: boolean;
+  /** 그 날 시급 구간 기록이 있는지(없으면 "도급만" 한 날) */
+  hasHourly: boolean;
+  /** 시급분 자동 계산액(시급 출퇴근 완료일 때) */
+  hourlyPay: number | null;
+  pieceCheckIn: string | null;
+  pieceCheckOut: string | null;
+  pieceCheckInRecordId: number | null;
+  pieceCheckOutRecordId: number | null;
+  /** 도급분(일급 스냅샷). 도급 출퇴근 완료일 때만 0 초과 */
+  piecePay: number;
+  /** 도급 구간 실제 근무시간(분) */
+  pieceElapsedMinutes: number | null;
+  /** 도급 출근만 있고 퇴근이 없는 지난 날 → 일급 미지급 */
+  pieceMissingCheckOut: boolean;
+  /** 기록에 일급 스냅샷이 없어 현재 일급으로 계산함 */
+  pieceUsedFallbackWage: boolean;
   hourlyWage: number;
   /** 실제로 쓰이는 금액. 수정값이 있으면 수정값, 없으면 자동 계산값. */
   grossPay: number | null;
@@ -905,39 +923,30 @@ export default function AdminPage() {
       const date = toSeoulDateKey(sorted[0].checked_at);
 
       // 근무시간은 급여 API 와 같은 모듈(app/lib/workTime.ts)로 계산합니다.
-      const dayWork = calcDayWork(date, sorted);
+      const employee = employeeMap.get(employeeId);
+
+      // 시급분 + 도급분은 급여 API 와 같은 모듈(app/lib/dayPay.ts)로 계산합니다.
+      const dayPay = calcDayPay(date, sorted, {
+        fallbackHourlyWage: employee?.hourly_wage,
+        fallbackDailyWage: getDailyWage(employee),
+      });
+      const dayWork = dayPay.hourly;
       const checkInRecord = dayWork.checkIn;
       const checkOutRecord = dayWork.checkOut;
 
       const workMinutes: number | null =
         checkInRecord && checkOutRecord ? dayWork.workedMinutes : null;
 
-      const employee = employeeMap.get(employeeId);
+      const hourlyWage = dayWork.wage;
 
-      // 과거 출퇴근 기록은 당시 저장된 시급 스냅샷을 우선 사용합니다.
-      // 스냅샷이 없는 구버전 기록만 현재 직원 시급을 임시 fallback으로 사용합니다.
-      const snapshotWage =
-        sorted
-          .map((item) => Number(item.hourly_wage_snapshot || 0))
-          .find((wage) => wage > 0) || 0;
+      // 계산할 수 있는 구간이 하나라도 있을 때만 금액을 표시합니다
+      // (시급 출퇴근 완료 또는 도급 출퇴근 완료).
+      const hasPayableSegment =
+        workMinutes !== null || (dayPay.piece.checkIn && dayPay.piece.checkOut);
 
-      const hourlyWage =
-        snapshotWage > 0 ? snapshotWage : employee?.hourly_wage || 0;
-
-      let grossPay: number | null = null;
-      let netPay: number | null = null;
-
-      if (isPieceContract(employee)) {
-        // 도급은 출근 기록만 있으면 그 날 일당입니다(퇴근 기록 불필요).
-        // 서버 급여 계산(app/lib/contractType.ts)과 같은 규칙입니다.
-        if (checkInRecord) {
-          grossPay = getDailyWage(employee);
-          netPay = Math.floor(grossPay * 0.967);
-        }
-      } else if (workMinutes !== null && hourlyWage > 0) {
-        grossPay = calcHourlyPay(workMinutes, hourlyWage);
-        netPay = Math.floor(grossPay * 0.967);
-      }
+      let grossPay: number | null = hasPayableSegment ? dayPay.autoPay : null;
+      let netPay: number | null =
+        grossPay !== null ? Math.floor(grossPay * 0.967) : null;
 
       const autoGrossPay = grossPay;
 
@@ -982,6 +991,16 @@ export default function AdminPage() {
         checkOutRecordId: checkOutRecord?.id || null,
         workMinutes,
         missingCheckOut: dayWork.missingCheckOut,
+        hasHourly: dayWork.hasHourly,
+        hourlyPay: workMinutes !== null ? dayWork.pay : null,
+        pieceCheckIn: dayPay.piece.checkIn?.checked_at || null,
+        pieceCheckOut: dayPay.piece.checkOut?.checked_at || null,
+        pieceCheckInRecordId: dayPay.piece.checkIn?.id || null,
+        pieceCheckOutRecordId: dayPay.piece.checkOut?.id || null,
+        piecePay: dayPay.piece.amount,
+        pieceElapsedMinutes: dayPay.piece.elapsedMinutes,
+        pieceMissingCheckOut: dayPay.piece.missingCheckOut,
+        pieceUsedFallbackWage: dayPay.piece.usedFallbackWage,
         hourlyWage,
         grossPay,
         netPay,

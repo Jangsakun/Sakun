@@ -250,10 +250,12 @@ export async function PATCH(
 
         // 변경일 이전의 구버전 기록 중 스냅샷이 비어 있는 것만
         // 변경 전 시급으로 고정합니다.
+        // 도급 구간 기록은 일급 스냅샷으로 계산하므로 시급 전파 대상에서 뺍니다.
         const { error: pastSnapshotError } = await supabase
           .from("attendance_records")
           .update({ hourly_wage_snapshot: previousWage })
           .eq("employee_id", id)
+          .eq("segment_type", "hourly")
           .lt("checked_at", effectiveStart)
           .is("hourly_wage_snapshot", null);
 
@@ -273,6 +275,7 @@ export async function PATCH(
           .from("attendance_records")
           .update({ hourly_wage_snapshot: wageNumber })
           .eq("employee_id", id)
+          .eq("segment_type", "hourly")
           .gte("checked_at", effectiveStart);
 
         if (currentSnapshotError) {

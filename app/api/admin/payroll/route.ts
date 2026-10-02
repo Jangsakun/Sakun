@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { loadPayOverrides, payOverrideKey } from "@/app/lib/payOverride";
-import { getDailyWage, isPieceContract } from "@/app/lib/contractType";
-import { calcDayWork, calcHourlyPay, isCheckInType } from "@/app/lib/workTime";
+import {
+  getDailyWage,
+  isPieceContract,
+  toContractType,
+} from "@/app/lib/contractType";
+import { calcDayPay } from "@/app/lib/dayPay";
 
 /** PostgREST 한 번에 받을 수 있는 최대 행 수. */
 const PAGE_SIZE = 1000;
@@ -16,6 +20,8 @@ const ATTENDANCE_SELECT = `
   checked_at,
   employee_id,
   hourly_wage_snapshot,
+  segment_type,
+  piece_daily_wage_snapshot,
   employees (
     id,
     name,
@@ -54,10 +60,13 @@ type AttendanceRecord = {
   checked_at: string;
   employee_id: number;
   hourly_wage_snapshot?: number | null;
+  segment_type?: string | null;
+  piece_daily_wage_snapshot?: number | null;
   employees: EmployeeNested;
 };
 
 type DailyWorkRow = {
+  contractType: string;
   employeeId: number;
   employeeName: string;
   workplaceName: string;
@@ -66,10 +75,18 @@ type DailyWorkRow = {
   workedMinutes: number;
   wage: number;
   basePay: number;
+  /** 기본급 중 시급분(직접지정한 날은 지정 금액 전체) — 주휴수당 평균시급 계산용 */
+  hourlyPortion: number;
+  /** 기본급 중 도급분(직접지정한 날은 0) */
+  piecePortion: number;
+  /** 주휴수당 15시간 판정용 시간(분) */
+  allowanceMinutes: number;
+  /** 도급 출근만 있고 퇴근이 없어 일급을 주지 않은 날 */
+  pieceMissingCheckOut: boolean;
   /** 관리자가 직접 지정한 금액. 자동 계산이면 null. */
   payOverride: number | null;
   weeklyAllowanceStatus: string;
-  /** 도급 계약이면 true. 주휴수당을 주지 않습니다. */
+  /** 도급 전용 계약이면 true. 주휴수당을 주지 않습니다. (시급+도급은 false) */
   isPiece: boolean;
 };
 
@@ -82,9 +99,15 @@ type WeeklyPayrollRow = {
   totalHours: number;
   totalMinutes: number;
   totalBasePay: number;
+  totalHourlyPortion: number;
+  totalPiecePortion: number;
+  allowanceMinutes: number;
+  pieceDays: number;
+  pieceMissingDates: string[];
   hourlyWage: number;
   weeklyAllowanceStatus: string;
   isPiece: boolean;
+  contractType: string;
 };
 
 function formatKST(date: Date) {
@@ -99,28 +122,6 @@ function formatKST(date: Date) {
 function getEmployeeObject(rawEmployee: EmployeeNested) {
   if (!rawEmployee) return null;
   return Array.isArray(rawEmployee) ? rawEmployee[0] || null : rawEmployee;
-}
-
-function getWageForDay(items: AttendanceRecord[], employee: any) {
-  // 급여 계산은 출퇴근 당시 저장된 시급 스냅샷을 최우선으로 사용합니다.
-  // 이 값이 있으면 employees.hourly_wage가 나중에 바뀌어도 과거 급여는 바뀌지 않습니다.
-  const snapshotWage = items
-    .map((item) => Number(item.hourly_wage_snapshot || 0))
-    .find((wage) => wage > 0);
-
-  if (snapshotWage) {
-    return snapshotWage;
-  }
-
-  // 구버전 출퇴근 기록처럼 스냅샷이 아직 없는 데이터만 현재 시급을 임시 사용합니다.
-  // 아래 freezeMissingWageSnapshots()가 조회 시 해당 값을 DB에 즉시 고정하므로
-  // 이후 직원 시급이 변경되어도 같은 과거 기록은 다시 바뀌지 않습니다.
-  const employeeWage = Number(employee?.hourly_wage || 0);
-  if (employeeWage > 0) {
-    return employeeWage;
-  }
-
-  return 10320;
 }
 
 async function freezeMissingWageSnapshots(
@@ -349,27 +350,27 @@ export async function POST(request: Request) {
       const employeeId = items[0]?.employee_id;
       const employeeName = employee?.name || "이름없음";
       const workplaceName = employee?.workplace_name || "장사꾼";
-      const wage = getWageForDay(items, employee);
       const weeklyAllowanceStatus =
         employee?.weekly_allowance_status || "검토필요";
 
       const date = formatKST(new Date(items[0].checked_at));
 
-      const { workedMinutes } = calcDayWork(date, items);
-      const hours = workedMinutes / 60;
-
       const override = payOverrides.get(payOverrideKey(employeeId, date));
 
-      // 도급은 출근 기록만 있으면 그 날 일당을 줍니다(퇴근 기록 불필요).
-      const isPiece = isPieceContract(employee);
-      const hasCheckIn = items.some((item) => isCheckInType(item.record_type));
-      const autoPay = isPiece
-        ? hasCheckIn
-          ? getDailyWage(employee)
-          : 0
-        : calcHourlyPay(workedMinutes, wage);
+      // 시급분 + 도급분. 계산 규칙은 app/lib/dayPay.ts 한 곳에 있습니다.
+      // (시급분은 시급 구간 기록만, 도급분은 도급 구간 출근+퇴근이 모두 있을 때 일급 스냅샷 전액)
+      // 스냅샷이 비어 있으면 시급은 현재 시급, 일급은 현재 일급으로 대신 계산합니다.
+      const dayPay = calcDayPay(date, items, {
+        fallbackHourlyWage: employee?.hourly_wage,
+        fallbackDailyWage: getDailyWage(employee),
+        override: override !== undefined ? override.grossPay : null,
+      });
 
-      const basePay = override !== undefined ? override.grossPay : autoPay;
+      const workedMinutes = dayPay.hourly.workedMinutes;
+      const hours = workedMinutes / 60;
+      const wage = dayPay.hourly.wage;
+      const basePay = dayPay.basePay;
+      const isPiece = isPieceContract(employee);
 
       dailyWorks.push({
         employeeId,
@@ -380,9 +381,14 @@ export async function POST(request: Request) {
         workedMinutes,
         wage,
         basePay,
+        hourlyPortion: dayPay.hourlyPortion,
+        piecePortion: dayPay.piecePortion,
+        allowanceMinutes: dayPay.allowanceMinutes,
+        pieceMissingCheckOut: dayPay.piece.missingCheckOut,
         payOverride: override !== undefined ? override.grossPay : null,
         weeklyAllowanceStatus,
         isPiece,
+        contractType: toContractType(employee?.contract_type),
       });
     }
 
@@ -429,15 +435,26 @@ export async function POST(request: Request) {
           totalHours: 0,
           totalMinutes: 0,
           totalBasePay: 0,
+          totalHourlyPortion: 0,
+          totalPiecePortion: 0,
+          allowanceMinutes: 0,
+          pieceDays: 0,
+          pieceMissingDates: [],
           hourlyWage: row.wage,
           weeklyAllowanceStatus: row.weeklyAllowanceStatus || "검토필요",
           isPiece: row.isPiece,
+          contractType: row.contractType,
         };
       }
 
       weekly[key].totalHours += row.hours;
       weekly[key].totalMinutes += row.workedMinutes;
       weekly[key].totalBasePay += row.basePay;
+      weekly[key].totalHourlyPortion += row.hourlyPortion;
+      weekly[key].totalPiecePortion += row.piecePortion;
+      weekly[key].allowanceMinutes += row.allowanceMinutes;
+      if (row.piecePortion > 0) weekly[key].pieceDays += 1;
+      if (row.pieceMissingCheckOut) weekly[key].pieceMissingDates.push(row.date);
     }
 
     const result = Object.values(weekly).map((w) => {
@@ -445,16 +462,20 @@ export async function POST(request: Request) {
       // 시급이 주 중간에 바뀐 경우를 위해 일별 기본급을 먼저 계산한 뒤 합산합니다.
       const totalHours = Number((w.totalMinutes / 60).toFixed(4));
       const basePay = Math.floor(w.totalBasePay);
+      // 주휴수당 평균시급은 시급분만으로 계산합니다(도급 일급이 섞이면 시급이 부풀려짐).
+      // 시급 구간만 있는 직원은 시급분 = 기본급이라 기존 계산과 같습니다.
+      const hourlyBasePay = Math.floor(w.totalHourlyPortion);
       const averageHourlyWage =
-        totalHours > 0 ? basePay / totalHours : w.hourlyWage;
+        totalHours > 0 ? hourlyBasePay / totalHours : w.hourlyWage;
 
       let weeklyAllowance = 0;
 
-      // 도급은 주휴수당 대상이 아닙니다.
+      // 도급 전용 계약은 주휴수당 대상이 아닙니다. 시급+도급은 시급분만 대상입니다.
+      // 15시간 판정 시간에 도급 구간을 넣을지는 dayPay.ts WEEKLY_ALLOWANCE_INCLUDES_PIECE_MINUTES.
       if (
         !w.isPiece &&
         w.weeklyAllowanceStatus === "대상" &&
-        w.totalMinutes >= 15 * 60
+        w.allowanceMinutes >= 15 * 60
       ) {
         weeklyAllowance = Math.floor((w.totalMinutes / 60 / 5) * averageHourlyWage);
       } else {
@@ -473,8 +494,14 @@ export async function POST(request: Request) {
         totalHours,
         hourlyWage: Math.round(averageHourlyWage),
         weeklyAllowanceStatus: w.weeklyAllowanceStatus,
-        contractType: w.isPiece ? "piece" : "hourly",
+        contractType: w.contractType,
         basePay,
+        /** 기본급 중 시급분 / 도급분 (직접지정한 날은 지정 금액 전체가 시급분) */
+        hourlyBasePay,
+        pieceBasePay: basePay - hourlyBasePay,
+        pieceDays: w.pieceDays,
+        /** 도급 출근만 있고 퇴근이 없어 일급을 주지 않은 날 */
+        pieceMissingDates: w.pieceMissingDates,
         weeklyAllowance,
         grossPay,
         netPay,

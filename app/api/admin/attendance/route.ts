@@ -211,6 +211,8 @@ export async function POST(request: Request) {
             created_at,
             employee_id,
             hourly_wage_snapshot,
+            segment_type,
+            piece_daily_wage_snapshot,
             employees (
               id,
               name,
