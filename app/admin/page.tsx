@@ -122,6 +122,8 @@ type EmployeeListResponse = {
 
 type GroupedAttendanceRow = {
   key: string;
+  /** 시급 / 도급 / 시급+도급. 수정 모드에서 어떤 입력칸을 보일지 정한다. */
+  contractType: ContractType;
   employeeId: number;
   employeeName: string;
   residentPrefix: string;
@@ -1007,6 +1009,7 @@ export default function AdminPage() {
 
       rows.push({
         key,
+        contractType: toContractType(employee?.contract_type),
         employeeId,
         employeeName,
         residentPrefix: getResidentPrefix(employee?.resident_number_masked),
@@ -1451,10 +1454,10 @@ export default function AdminPage() {
 
   const startAttendanceEdit = (row: GroupedAttendanceRow) => {
     setEditingAttendanceKey(row.key);
-    setEditCheckInTime(toDateTimeLocalValue(row.checkIn));
-    setEditCheckOutTime(toDateTimeLocalValue(row.checkOut));
-    setEditPieceCheckInTime(toDateTimeLocalValue(row.pieceCheckIn));
-    setEditPieceCheckOutTime(toDateTimeLocalValue(row.pieceCheckOut));
+    setEditCheckInTime(toKstTimeValue(row.checkIn));
+    setEditCheckOutTime(toKstTimeValue(row.checkOut));
+    setEditPieceCheckInTime(toKstTimeValue(row.pieceCheckIn));
+    setEditPieceCheckOutTime(toKstTimeValue(row.pieceCheckOut));
     // 고정해둔 금액이 없으면 비워둡니다.
     // 비어 있는 상태 = 근무시간 × 시급 자동 계산.
     setEditGrossPay(row.payOverride !== null ? String(row.payOverride) : "");
@@ -1480,24 +1483,23 @@ export default function AdminPage() {
       return;
     }
 
-    if (editPieceCheckInTime && editPieceCheckOutTime) {
-      const pieceIn = new Date(editPieceCheckInTime).getTime();
-      const pieceOut = new Date(editPieceCheckOutTime).getTime();
-
-      if (pieceOut < pieceIn) {
-        alert("도급 퇴근 시간은 도급 출근 시간보다 빠를 수 없습니다.");
-        return;
-      }
+    // 같은 날짜의 시각(HH:MM)끼리라 문자열 비교로 충분합니다.
+    if (
+      editPieceCheckInTime &&
+      editPieceCheckOutTime &&
+      editPieceCheckOutTime < editPieceCheckInTime
+    ) {
+      alert("도급 퇴근 시간은 도급 출근 시간보다 빠를 수 없습니다.");
+      return;
     }
 
-    if (editCheckInTime && editCheckOutTime) {
-      const inTime = new Date(editCheckInTime).getTime();
-      const outTime = new Date(editCheckOutTime).getTime();
-
-      if (outTime < inTime) {
-        alert("퇴근 시간은 출근 시간보다 빠를 수 없습니다.");
-        return;
-      }
+    if (
+      editCheckInTime &&
+      editCheckOutTime &&
+      editCheckOutTime < editCheckInTime
+    ) {
+      alert("퇴근 시간은 출근 시간보다 빠를 수 없습니다.");
+      return;
     }
 
     // 쉼표를 넣어 입력하는 경우가 많아 떼고 읽습니다.
@@ -1519,13 +1521,13 @@ export default function AdminPage() {
     // 빈 칸으로 둔 쪽은 "그대로"입니다(지우려면 삭제 버튼).
     const timesChanged =
       (!!editCheckInTime || !!editCheckOutTime) &&
-      (editCheckInTime !== toDateTimeLocalValue(row.checkIn) ||
-        editCheckOutTime !== toDateTimeLocalValue(row.checkOut));
+      (editCheckInTime !== toKstTimeValue(row.checkIn) ||
+        editCheckOutTime !== toKstTimeValue(row.checkOut));
 
     const pieceTimesChanged =
       (!!editPieceCheckInTime || !!editPieceCheckOutTime) &&
-      (editPieceCheckInTime !== toDateTimeLocalValue(row.pieceCheckIn) ||
-        editPieceCheckOutTime !== toDateTimeLocalValue(row.pieceCheckOut));
+      (editPieceCheckInTime !== toKstTimeValue(row.pieceCheckIn) ||
+        editPieceCheckOutTime !== toKstTimeValue(row.pieceCheckOut));
 
     const grossChanged = nextOverride !== row.payOverride;
 
@@ -1553,8 +1555,8 @@ export default function AdminPage() {
             employeeId: row.employeeId,
             employeeName: row.employeeName,
             date: row.date,
-            checkInTime: editCheckInTime || null,
-            checkOutTime: editCheckOutTime || null,
+            checkInTime: combineDateTime(row.date, editCheckInTime) || null,
+            checkOutTime: combineDateTime(row.date, editCheckOutTime) || null,
             segment: "hourly",
           }),
         });
@@ -1581,8 +1583,8 @@ export default function AdminPage() {
             employeeId: row.employeeId,
             employeeName: row.employeeName,
             date: row.date,
-            checkInTime: editPieceCheckInTime || null,
-            checkOutTime: editPieceCheckOutTime || null,
+            checkInTime: combineDateTime(row.date, editPieceCheckInTime) || null,
+            checkOutTime: combineDateTime(row.date, editPieceCheckOutTime) || null,
             segment: "piece",
           }),
         });
@@ -1641,6 +1643,59 @@ export default function AdminPage() {
     }
   };
 
+
+  // 수정 중 단축키: Enter = 저장, Esc = 취소.
+  // 키 이벤트는 한 번만 달아 두고, 항상 "지금 수정 중인 줄"과 최신 저장 함수를 ref 로 읽습니다.
+  const latestEditRef = useRef<{
+    row: GroupedAttendanceRow | null;
+    save: (row: GroupedAttendanceRow) => void;
+    cancel: () => void;
+    saving: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    latestEditRef.current = {
+      row:
+        editingAttendanceKey === null
+          ? null
+          : groupedAttendanceRows.find((item) => item.key === editingAttendanceKey) ??
+            null,
+      save: saveAttendanceEdit,
+      cancel: cancelAttendanceEdit,
+      saving: attendanceSaving,
+    };
+  });
+
+  useEffect(() => {
+    if (editingAttendanceKey === null) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      const latest = latestEditRef.current;
+
+      if (!latest?.row || event.isComposing) return;
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        latest.cancel();
+        return;
+      }
+
+      if (event.key === "Enter") {
+        const target = event.target as HTMLElement | null;
+
+        // 버튼 위에서 누른 Enter 는 그 버튼의 원래 동작(클릭)을 따릅니다.
+        if (target?.tagName === "BUTTON" || target?.tagName === "TEXTAREA") return;
+
+        event.preventDefault();
+
+        if (!latest.saving) latest.save(latest.row);
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [editingAttendanceKey]);
 
   const deleteAttendanceRow = async (row: GroupedAttendanceRow) => {
     const recordIds = [
@@ -2431,7 +2486,7 @@ export default function AdminPage() {
               <div style={emptyBoxStyle}>검색 결과가 없습니다.</div>
             ) : (
               <div style={tableScrollStyle}>
-                <table style={tableStyle}>
+                <table style={attendanceTableStyle}>
                   <thead>
                     <tr>
                       <th style={thStyle}>이름</th>
@@ -2446,7 +2501,8 @@ export default function AdminPage() {
                       <th style={thStyle}>세전 급여</th>
                       <th style={thStyle}>세후 급여</th>
                       <th style={thStyle}>상태</th>
-                      <th style={thStyle}>관리</th>
+                      {/* 관리 칸은 오른쪽에 고정 — 가로 스크롤을 해도 수정·저장·취소 버튼이 항상 보입니다 */}
+                      <th style={{ ...thStyle, ...empStickyRightStyle, zIndex: 3 }}>관리</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2477,15 +2533,31 @@ export default function AdminPage() {
 
                           <td style={tdStyle}>
                             {isEditingAttendance ? (
-                              <input
-                                type="datetime-local"
-                                step={60}
-                                value={editCheckInTime}
-                                onChange={(e) =>
-                                  setEditCheckInTime(e.target.value)
-                                }
-                                style={dateTimeInputStyle}
-                              />
+                              row.contractType === "piece" ? (
+                                // 도급 직원은 기록이 전부 도급 구간이라 이 칸이 도급 출근입니다.
+                                <label style={pieceEditLabelStyle}>
+                                  도급 출근
+                                  <input
+                                    type="time"
+                                    step={60}
+                                    value={editPieceCheckInTime}
+                                    onChange={(e) =>
+                                      setEditPieceCheckInTime(e.target.value)
+                                    }
+                                    style={timeInputStyle}
+                                  />
+                                </label>
+                              ) : (
+                                <input
+                                  type="time"
+                                  step={60}
+                                  value={editCheckInTime}
+                                  onChange={(e) =>
+                                    setEditCheckInTime(e.target.value)
+                                  }
+                                  style={timeInputStyle}
+                                />
+                              )
                             ) : !row.hasHourly &&
                               (row.pieceCheckIn || row.pieceCheckOut) ? (
                               <span
@@ -2505,15 +2577,30 @@ export default function AdminPage() {
 
                           <td style={tdStyle}>
                             {isEditingAttendance ? (
-                              <input
-                                type="datetime-local"
-                                step={60}
-                                value={editCheckOutTime}
-                                onChange={(e) =>
-                                  setEditCheckOutTime(e.target.value)
-                                }
-                                style={dateTimeInputStyle}
-                              />
+                              row.contractType === "piece" ? (
+                                <label style={pieceEditLabelStyle}>
+                                  도급 퇴근
+                                  <input
+                                    type="time"
+                                    step={60}
+                                    value={editPieceCheckOutTime}
+                                    onChange={(e) =>
+                                      setEditPieceCheckOutTime(e.target.value)
+                                    }
+                                    style={timeInputStyle}
+                                  />
+                                </label>
+                              ) : (
+                                <input
+                                  type="time"
+                                  step={60}
+                                  value={editCheckOutTime}
+                                  onChange={(e) =>
+                                    setEditCheckOutTime(e.target.value)
+                                  }
+                                  style={timeInputStyle}
+                                />
+                              )
                             ) : (
                               formatCheckOutTime(row.checkOut)
                             )}
@@ -2530,7 +2617,10 @@ export default function AdminPage() {
                           </td>
 
                           <td style={tdStyle}>
-                            {isEditingAttendance ? (
+                            {isEditingAttendance && row.contractType === "hybrid" ? (
+                              // 도급 입력칸은 시급+도급 직원에게만 보입니다.
+                              // (시급 직원은 도급이 없고, 도급 직원은 앞의 출근/퇴근 칸이 곧 도급 기록입니다.)
+                              // 가로로 길어지지 않도록 위아래로 쌓습니다.
                               <div
                                 style={{
                                   display: "flex",
@@ -2541,25 +2631,25 @@ export default function AdminPage() {
                                 <label style={pieceEditLabelStyle}>
                                   도급 출근
                                   <input
-                                    type="datetime-local"
+                                    type="time"
                                     step={60}
                                     value={editPieceCheckInTime}
                                     onChange={(e) =>
                                       setEditPieceCheckInTime(e.target.value)
                                     }
-                                    style={dateTimeInputStyle}
+                                    style={timeInputStyle}
                                   />
                                 </label>
                                 <label style={pieceEditLabelStyle}>
                                   도급 퇴근
                                   <input
-                                    type="datetime-local"
+                                    type="time"
                                     step={60}
                                     value={editPieceCheckOutTime}
                                     onChange={(e) =>
                                       setEditPieceCheckOutTime(e.target.value)
                                     }
-                                    style={dateTimeInputStyle}
+                                    style={timeInputStyle}
                                   />
                                 </label>
                               </div>
@@ -2586,27 +2676,31 @@ export default function AdminPage() {
                                   }
                                   placeholder={
                                     row.hourlyPay !== null
-                                      ? `시급분 자동 ${row.hourlyPay.toLocaleString()}`
-                                      : "시급분 자동"
+                                      ? `자동 ${row.hourlyPay.toLocaleString()}`
+                                      : "자동"
                                   }
-                                  title="시급분만 대체합니다. 도급 일급은 별도로 지급됩니다. 비워두면 근무시간 × 시급으로 자동 계산합니다."
+                                  title="시급분만 대체, 도급 일급은 별도 지급됩니다. 비워두면 근무시간 × 시급으로 자동 계산합니다."
                                   style={{
                                     ...dateTimeInputStyle,
-                                    width: "112px",
+                                    width: "92px",
+                                    minWidth: 0,
+                                    padding: "7px 8px",
+                                    fontSize: "13px",
                                     textAlign: "right",
                                   }}
                                 />
                                 <div
                                   style={{
-                                    marginTop: "3px",
+                                    marginTop: "2px",
                                     fontSize: "10px",
                                     color: "#6b7280",
                                     whiteSpace: "nowrap",
                                   }}
+                                  title="시급분만 대체, 도급 일급은 별도 지급"
                                 >
-                                  시급분만 대체, 도급 일급은 별도 지급
+                                  시급분만 대체
                                   {row.piecePay > 0 &&
-                                    ` (+${row.piecePay.toLocaleString()})`}
+                                    ` · 도급 +${row.piecePay.toLocaleString()}`}
                                 </div>
                               </div>
                             ) : (
@@ -2661,7 +2755,7 @@ export default function AdminPage() {
                             </span>
                           </td>
 
-                          <td style={tdStyle}>
+                          <td style={{ ...tdStyle, ...empStickyRightStyle }}>
                             <div style={actionWrapStyle}>
                               {isEditingAttendance ? (
                                 <>
@@ -4466,6 +4560,18 @@ function toDateTimeLocalValue(value: string | null) {
   return `${year}-${month}-${day}T${hour}:${minute}`;
 }
 
+// 수정 모드는 그 줄의 날짜 칸에 이미 날짜가 있으므로 시각(HH:MM, 한국 시간)만 입력합니다.
+function toKstTimeValue(value: string | null) {
+  const full = toDateTimeLocalValue(value);
+
+  return full ? full.slice(11, 16) : "";
+}
+
+// 줄의 날짜(YYYY-MM-DD)와 시각(HH:MM)을 합쳐 API 가 받는 "YYYY-MM-DDTHH:MM" 로 만듭니다.
+function combineDateTime(date: string, time: string) {
+  return time ? `${date}T${time}` : "";
+}
+
 function getMaskedResidentNumber(
   employee?: Pick<Employee, "resident_number" | "resident_number_masked"> | null
 ) {
@@ -4809,6 +4915,29 @@ const smallInputStyle: CSSProperties = {
   fontSize: "14px",
   backgroundColor: "#ffffff",
   color: "#111827",
+};
+
+// 수정 모드의 시각 입력칸(날짜 없이 시:분만). 줄이 길어지지 않게 좁게.
+const timeInputStyle: CSSProperties = {
+  padding: "7px 6px",
+  width: "112px",
+  minWidth: "112px",
+  borderRadius: "10px",
+  border: "1px solid #d1d5db",
+  outline: "none",
+  fontSize: "13px",
+  backgroundColor: "#ffffff",
+  color: "#111827",
+};
+
+// 출퇴근 기록 표 — 수정 모드에서도 가로 스크롤 없이 한 줄이 보이도록 최소 폭을 낮춘 표 스타일
+const attendanceTableStyle: CSSProperties = {
+  width: "100%",
+  borderCollapse: "separate",
+  borderSpacing: 0,
+  minWidth: "1080px",
+  // 칸이 좁아져도 이름·금액이 세로로 쪼개져 보이지 않게
+  whiteSpace: "nowrap",
 };
 
 const dateTimeInputStyle: CSSProperties = {
