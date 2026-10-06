@@ -978,7 +978,28 @@ export default function AdminPage() {
       let statusColor = "#92400e";
       let statusBg = "#fef3c7";
 
-      if (!dayWork.hasHourly && dayPay.piece.hasPiece) {
+      const isPieceContract = toContractType(employee?.contract_type) === "piece";
+
+      if (isPieceContract && dayWork.hasHourly) {
+        // 도급 직원인데 시급 구간 기록이 남아 있는 날 — 가리지 않고 경고
+        statusText = "⚠ 구간 불일치";
+        statusColor = "#b45309";
+        statusBg = "#fef3c7";
+      } else if (isPieceContract && dayPay.piece.hasPiece) {
+        if (dayPay.piece.missingCheckOut) {
+          statusText = "도급 · 퇴근 누락";
+          statusColor = "#b91c1c";
+          statusBg = "#fee2e2";
+        } else if (dayPay.piece.checkIn && !dayPay.piece.checkOut) {
+          statusText = "도급 · 근무 중";
+          statusColor = "#9a3412";
+          statusBg = "#ffedd5";
+        } else if (dayPay.piece.checkIn && dayPay.piece.checkOut) {
+          statusText = "도급";
+          statusColor = "#9a3412";
+          statusBg = "#ffedd5";
+        }
+      } else if (!dayWork.hasHourly && dayPay.piece.hasPiece) {
         // 시급 기록 없이 도급만 한 날
         if (dayPay.piece.missingCheckOut) {
           statusText = "도급 퇴근 누락";
@@ -2558,6 +2579,8 @@ export default function AdminPage() {
                                   style={timeInputStyle}
                                 />
                               )
+                            ) : row.contractType === "piece" && !row.hasHourly ? (
+                              <span style={notApplicableStyle}>해당없음</span>
                             ) : !row.hasHourly &&
                               (row.pieceCheckIn || row.pieceCheckOut) ? (
                               <span
@@ -2601,13 +2624,17 @@ export default function AdminPage() {
                                   style={timeInputStyle}
                                 />
                               )
+                            ) : row.contractType === "piece" && !row.hasHourly ? (
+                              <span style={notApplicableStyle}>해당없음</span>
                             ) : (
                               formatCheckOutTime(row.checkOut)
                             )}
                           </td>
 
                           <td style={tdStyle}>
-                            {row.missingCheckOut ? (
+                            {row.contractType === "piece" && !row.hasHourly ? (
+                              <span style={notApplicableStyle}>해당없음</span>
+                            ) : row.missingCheckOut ? (
                               <span style={{ color: "#dc2626", fontWeight: 700 }}>
                                 퇴근 누락
                               </span>
@@ -2659,9 +2686,11 @@ export default function AdminPage() {
                           </td>
 
                           <td style={tdStyle}>
-                            {row.hourlyWage > 0
-                              ? formatCurrency(row.hourlyWage)
-                              : "-"}
+                            {row.contractType === "piece"
+                              ? "일급제"
+                              : row.hourlyWage > 0
+                                ? formatCurrency(row.hourlyWage)
+                                : "-"}
                           </td>
 
                           <td style={tdStyle}>
@@ -4401,6 +4430,12 @@ function formatKstClock(value: string | null) {
     hour12: false,
   });
 }
+
+const notApplicableStyle: CSSProperties = {
+  color: "#9ca3af",
+  fontSize: "12px",
+  whiteSpace: "nowrap",
+};
 
 // 출퇴근 기록 표의 "도급 구간" 칸.
 // 시각(보정 없이 찍힌 그대로) / 실제 근무시간 / 일급 / 짧은 구간·누락 표시.
