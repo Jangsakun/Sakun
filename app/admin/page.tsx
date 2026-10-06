@@ -2851,7 +2851,7 @@ export default function AdminPage() {
             <div style={employeeFilterRowStyle}>
               <input
                 type="text"
-                placeholder="이름 또는 휴대폰번호 검색"
+                placeholder="이름 · 휴대폰번호 검색"
                 value={employeeSearch}
                 onChange={(e) => setEmployeeSearch(e.target.value)}
                 style={employeeSearchInputStyle}
@@ -4113,6 +4113,7 @@ const employeeSearchInputStyle: CSSProperties = {
   fontSize: "14px",
   outline: "none",
   backgroundColor: "#ffffff",
+  color: "#1f2328",
 };
 
 const employeeStatusSelectStyle: CSSProperties = {
@@ -5252,7 +5253,7 @@ function EmployeePicker({
         data-role="employee-picker-input"
         value={open ? query : selected?.label ?? ""}
         autoComplete="off"
-        placeholder={selected ? selected.label : "이름 검색"}
+        placeholder="이름 검색"
         onFocus={openList}
         onClick={() => {
           if (!open) openList();

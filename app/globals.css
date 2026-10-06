@@ -19,6 +19,20 @@
   }
 }
 
+/* 관리자 화면: 입력칸은 항상 흰 배경이므로 글자색을 진하게 고정한다.
+   (다크 모드 PC 에서 body 의 밝은 글자색이 입력칸에 상속돼 흐리게 보이던 문제) */
+.admin-scope input,
+.admin-scope textarea,
+.admin-scope select {
+  color: #1f2328;
+}
+
+.admin-scope input::placeholder,
+.admin-scope textarea::placeholder {
+  color: #6e7781;
+  opacity: 1;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
