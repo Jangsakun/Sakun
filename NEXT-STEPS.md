@@ -181,7 +181,7 @@ BISEO(`Desktop/biseo/web/lib/attendance/`)의 `confirm.ts` → `mutate.ts` 가
 **2단계(근로자 앱 흐름·서명) 전에 할 것**
 - `CONTRACT_PII_KEY`(32바이트 base64) 생성 → `.env.local` + Vercel 환경변수. **키를 잃으면 암호화된 주민번호 복구 불가** → 사용자에게 보관 안내
 - `next.config.ts` 에 `outputFileTracingIncludes` 로 `assets/contracts/**` 포함(서버가 양식·글꼴을 읽음) → 배포 후 실제 생성 확인
-- 근로자 본인 확인에 기기 ID(employee_devices) 확인 추가 — 사용자 설명 완료, 반대 없으면 진행
+- ~~근로자 본인 확인에 기기 ID 확인 추가~~ — **2026-10-14 사용자 결정: 하지 않음.** 근로자 확인은 기존과 같은 이름+생년월일+휴대폰 뒤 4자리(동료가 남의 계약서를 열 수 있는 위험은 사용자 인지)
 - 테스트 계약서 6건 정리 SQL(트리거 잠시 끄고 삭제) — 사용자에게 전달함
 
 **알아둘 것**
