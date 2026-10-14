@@ -17,6 +17,11 @@
 | `20261003110000_record_attendance_function.sql` | ✅ 2026-10-02 실행 완료 — 출퇴근 저장 DB 함수 + 중복 불가 제약 + 서버 시각 저장 (4단계) |
 | `20261004100000_audit_segment_type.sql` | ✅ 2026-10-02 실행 완료 — 감사로그 segment_type (수정·수동입력·삭제 모두 구간 기록 확인) |
 | BISEO `0039_attendance_audit_segment_type.sql` | ✅ 2026-10-02 BISEO DB(zrvjflemurvvdnqwclyb)에 적용 |
+| `20260928100000_attendance_pay_override.sql` | ✅ 2026-09-28 실행 완료 — 세전급여 직접 지정 |
+| `20260930100000_employment_contract_renewal.sql` | ✅ 2026-10-01 실행 완료 — 11개월 갱신·첫입사일·갱신 기록 |
+| `20261001100000_audit_tables_append_only.sql` | ⏳ **미실행** (2026-10-14 확인) — 갱신 기록·출퇴근 감사 테이블이 아직 서버 키로 수정·삭제 가능. 실행하면 막힘. 테스트 갱신 기록 10줄 정리 SQL 도 같이 줘야 함 |
+| BISEO `0038_contract_alert_window_30d.sql` | ⏳ **미실행** — 실행 후에 `contract-alerts.ts` 의 `CONTRACT_ALERT_MAX_DAYS` 를 7→30 으로. **순서 반대면 알림 저장 전체 실패** (0036 이 days_remaining 1~7 로 막음) |
+| `20261014100000_employment_contracts.sql` | ✅ 2026-10-14 실행 완료 — 전자 근로계약서 테이블 6개 + 비공개 버킷 |
 
 둘 다 반영돼 관리자 화면 "DB 용량" 탭과 출퇴근 수정 이력이 정상 동작한다(실측 확인).
 
@@ -155,3 +160,31 @@ BISEO(`Desktop/biseo/web/lib/attendance/`)의 `confirm.ts` → `mutate.ts` 가
 직원 id=36 **강순아** 의 `phone` 이 `010-0000-0000` 으로 덮여 있다(2026-09-08, 보안 점검 중
 쓰기 요청 실수). 원본 소실, 이력 테이블 없어 복구 불가. `phone_last4` 는 `6888` 로 남아 있다.
 → 본인에게 확인 후 직원 관리 화면에서 수정 필요.
+
+---
+
+## 전자 근로계약서 (1차: 장사꾼 명의) — 진행 상황
+
+**1단계 완료·배포 (2026-10-14, 커밋 `bff03d5`)** — 검증 모듈, 양식 PDF 생성, 관리자 "전자계약" 탭.
+검증: 단위 21 + DB·API 49 + 화면 14, 전부 통과. 샘플 PDF: 바탕화면 `근로계약서_1단계_샘플`.
+
+**사용자 확정 사항 (2026-10-14)**
+- 대상: 신규 가입자만. 기존 직원은 전부 제외(계약서 행을 만들지 않음 = 페이지 안 뜸)
+- 11개월 양식 = 바탕화면 `용역계약서_11개월_10320원_장사꾼.pdf` 그대로 사용(근무시간 칸 없음 → 근무시간·휴게·52h 검사는 1주만)
+- 인쇄된 연도 2026 은 실제 연도와 다를 때만 흰색으로 덮고 실제 연도 기입
+- 1주 근무시간은 한 번 입력 → 체크한 요일 칸에 동일 기입. 일요일 칸 없음(일요일 근무 제외)
+- 2026 최저시급 10,320원. 서명 전 출근 차단 안 함. 야간(자정 넘김) 없음
+- 직인: 주급명세서 직인(public/stamp.png) 그대로 → assets/contracts/seals/jangsakun.png
+- 관리자 로그인 보강 안 함(쿠키 `admin_auth=ok` 고정값 — 위조 가능, 사용자 인지)
+- 주민번호: 계약서 쪽만 AES-256-GCM 암호화. 기존 `employees.resident_number`(평문)은 범위 밖
+
+**2단계(근로자 앱 흐름·서명) 전에 할 것**
+- `CONTRACT_PII_KEY`(32바이트 base64) 생성 → `.env.local` + Vercel 환경변수. **키를 잃으면 암호화된 주민번호 복구 불가** → 사용자에게 보관 안내
+- `next.config.ts` 에 `outputFileTracingIncludes` 로 `assets/contracts/**` 포함(서버가 양식·글꼴을 읽음) → 배포 후 실제 생성 확인
+- 근로자 본인 확인에 기기 ID(employee_devices) 확인 추가 — 사용자 설명 완료, 반대 없으면 진행
+- 테스트 계약서 6건 정리 SQL(트리거 잠시 끄고 삭제) — 사용자에게 전달함
+
+**알아둘 것**
+- pdf-lib 에서 나눔고딕을 subset 으로 넣으면 한글이 빈칸이 됨 → `subset: false` (PDF 약 0.8MB)
+- 양식 좌표는 `app/lib/contracts/templates.ts` 한 곳. 원본 PDF 지문이 다르면 생성 거부
+- 서명 완료 행은 트리거가 막으므로 테스트 데이터는 SQL Editor 에서 트리거를 잠시 끄고 지워야 함
