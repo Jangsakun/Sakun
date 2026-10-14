@@ -267,6 +267,8 @@ const JANGSAGGUN_SCHEDULE_GROUP_OPTIONS = [
   { value: "몽글솜", label: "몽글솜" },
   { value: "택배", label: "택배" },
   { value: "자수", label: "자수" },
+  { value: "꽃메이커", label: "꽃메이커" },
+  { value: "알메이커", label: "알메이커" },
 ];
 
 const HEMOZ_SCHEDULE_GROUP_OPTIONS = [

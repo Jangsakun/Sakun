@@ -92,6 +92,8 @@ type RoleGroupKey =
   | "monggeul"
   | "delivery"
   | "embroidery"
+  | "flowerMaker"
+  | "alMaker"
   | "night"
   | "carrot"
   | "unassigned"
@@ -149,6 +151,26 @@ const ROLE_GROUPS: RoleGroupConfig[] = [
     bg: "#f0fdf4",
     chipBg: "#dcfce7",
     chipColor: "#166534",
+  },
+  {
+    key: "flowerMaker",
+    title: "꽃메이커",
+    subtitle: "꽃메이커 담당",
+    values: ["꽃메이커"],
+    accent: "#ca8a04",
+    bg: "#fefce8",
+    chipBg: "#fef9c3",
+    chipColor: "#854d0e",
+  },
+  {
+    key: "alMaker",
+    title: "알메이커",
+    subtitle: "알메이커 담당",
+    values: ["알메이커"],
+    accent: "#0d9488",
+    bg: "#f0fdfa",
+    chipBg: "#ccfbf1",
+    chipColor: "#115e59",
   },
   {
     key: "night",

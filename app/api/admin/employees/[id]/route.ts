@@ -171,6 +171,8 @@ export async function PATCH(
           "몽글솜",
           "택배",
           "자수",
+          "꽃메이커",
+          "알메이커",
         ];
       }
 
