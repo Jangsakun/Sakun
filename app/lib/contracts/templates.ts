@@ -242,6 +242,16 @@ const HEMOZ_TEMPLATES: Record<string, ContractTemplate> = {
   },
 };
 
+// v1 은 소재지가 장사꾼 주소로 잘못 인쇄돼 있어 사용자가 고친 양식(2026-10-14 19:02).
+// 바뀐 것은 소재지 글자뿐이고 다른 글자 776개 위치가 같으므로 칸 위치는 v1 과 같습니다.
+// v1 은 이미 만들어진 서명대기 계약서가 쓰므로 남겨 둡니다(DB 에서 v1 은 비활성).
+HEMOZ_TEMPLATES.hemoz_11m_v2 = {
+  ...HEMOZ_TEMPLATES.hemoz_11m_v1,
+  code: "hemoz_11m_v2",
+  file: "assets/contracts/templates/hemoz_11m_v2.pdf",
+  sha256: "793b70e53a69603d62c37400ce2372acc75c5a541c2f7c2ed8dd2728a4aacf79",
+};
+
 export const CONTRACT_TEMPLATES: Record<string, ContractTemplate> = {
   ...JANGSAKUN_TEMPLATES,
   ...HEMOZ_TEMPLATES,

@@ -122,7 +122,7 @@ const samples: Sample[] = [
   },
   {
     file: "6_헤모즈_11개월_샘플.pdf",
-    template: "hemoz_11m_v1",
+    template: "hemoz_11m_v2",
     today: "2026-10-14",
     input: {
       name: "정다은", residentNumber: rrn("990203234567"), phone: "01033338888",
