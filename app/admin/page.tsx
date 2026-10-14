@@ -12,6 +12,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import ScheduleTab from "./components/ScheduleTab";
 import DbSizeTab from "./components/DbSizeTab";
+import EContractTab from "./components/EContractTab";
 import {
   cell,
   downloadXlsx,
@@ -320,7 +321,13 @@ export default function AdminPage() {
   const router = useRouter();
 
   const [tab, setTab] = useState<
-    "attendance" | "employees" | "payroll" | "contracts" | "schedule" | "dbSize"
+    | "attendance"
+    | "employees"
+    | "payroll"
+    | "contracts"
+    | "econtracts"
+    | "schedule"
+    | "dbSize"
   >("attendance");
 
   const [selectedWorkplaces, setSelectedWorkplaces] = useState<WorkplaceName[]>(
@@ -2136,6 +2143,17 @@ export default function AdminPage() {
             }}
           >
             DB 용량
+          </button>
+
+          <button
+            onClick={() => setTab("econtracts")}
+            style={{
+              ...tabButtonStyle,
+              backgroundColor: tab === "econtracts" ? "#111827" : "#f3f4f6",
+              color: tab === "econtracts" ? "#ffffff" : "#111827",
+            }}
+          >
+            전자계약
           </button>
 
           <button
@@ -4016,6 +4034,21 @@ export default function AdminPage() {
             </div>
 
             <DbSizeTab />
+          </section>
+        )}
+
+        {tab === "econtracts" && (
+          <section style={cardStyle}>
+            <div style={sectionHeaderStyle}>
+              <div>
+                <h2 style={sectionTitleStyle}>전자 근로계약서</h2>
+                <p style={sectionDescriptionStyle}>
+                  앱에서 작성·서명한 근로계약서를 확인하고, 서명 대기·무효 처리·연도별 최저시급을 관리합니다.
+                </p>
+              </div>
+            </div>
+
+            <EContractTab />
           </section>
         )}
 
