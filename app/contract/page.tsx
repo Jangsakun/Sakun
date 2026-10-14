@@ -52,6 +52,8 @@ async function post(path: string, body: Record<string, unknown>) {
   return fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), cache: "no-store" });
 }
 
+const PREVIEW_ZOOM = 1.8;
+
 const addDays = (key: string, days: number) => {
   const d = new Date(`${key}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
@@ -78,6 +80,27 @@ export default function ContractPage() {
   const [readToEnd, setReadToEnd] = useState(false);
   const [previewBytes, setPreviewBytes] = useState<Uint8Array | null>(null);
   const previewBoxRef = useRef<HTMLDivElement | null>(null);
+  const [zoomed, setZoomed] = useState(false);
+  const zoomedRef = useRef(false);
+
+  // 휴대폰에서는 계약서 글씨가 작아서 크게 보기(가로로도 움직여 읽기)를 둡니다. 다시 그리지 않고 표시 크기만 바꿉니다.
+  const toggleZoom = () => {
+    const box = previewBoxRef.current;
+    const next = !zoomedRef.current;
+
+    zoomedRef.current = next;
+    setZoomed(next);
+
+    if (!box) return;
+
+    const ratioY = box.scrollHeight ? box.scrollTop / box.scrollHeight : 0;
+
+    box.querySelectorAll("canvas").forEach((c) => {
+      (c as HTMLCanvasElement).style.width = next ? `${PREVIEW_ZOOM * 100}%` : "100%";
+    });
+    box.scrollTop = ratioY * box.scrollHeight;
+    box.scrollLeft = 0;
+  };
 
   // 서명
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -212,12 +235,14 @@ export default function ContractPage() {
           const page = await doc.getPage(i);
           const width = Math.min(box.clientWidth - 16 || 360, 820);
           const base = page.getViewport({ scale: 1 });
-          const scale = (width / base.width) * Math.max(window.devicePixelRatio || 1, 1.5);
+          // "크게 보기"(PREVIEW_ZOOM 배)에서도 흐리지 않게 그 배율까지 감안해 그립니다. 휴대폰 메모리 때문에 화면 배율은 2배까지만.
+          const scale = (width / base.width) * Math.min(Math.max(window.devicePixelRatio || 1, 1.5), 2) * PREVIEW_ZOOM;
           const viewport = page.getViewport({ scale });
           const canvas = document.createElement("canvas");
           canvas.width = viewport.width;
           canvas.height = viewport.height;
-          canvas.style.width = "100%";
+          canvas.style.width = zoomedRef.current ? `${PREVIEW_ZOOM * 100}%` : "100%";
+          canvas.style.maxWidth = "none";
           canvas.style.display = "block";
           canvas.style.marginBottom = "8px";
           canvas.style.background = "#ffffff";
@@ -386,7 +411,7 @@ export default function ContractPage() {
             서명한 계약서는 아래 버튼이나 앱의 &ldquo;내 계약서&rdquo;에서 언제든 다시 받을 수 있습니다.
           </p>
           <div className="flex flex-col gap-2">
-            <button className={btnPrimary} onClick={() => signedId && download(signedId)}>계약서 내려받기 (PDF)</button>
+            <button className={btnBig} onClick={() => signedId && download(signedId)}>계약서 내려받기 (PDF)</button>
             <button className={btnGhost} onClick={() => router.push("/")}>출퇴근 화면으로</button>
           </div>
         </div>
@@ -512,12 +537,12 @@ export default function ContractPage() {
             </Field>
           )}
 
-          <button className={btnPrimary} disabled={busy || clientErrors.length > 0} onClick={openPreview}>
+          <button className={btnBig} disabled={busy || clientErrors.length > 0} onClick={openPreview}>
             {busy ? "확인 중..." : clientErrors.length > 0 ? `고칠 칸 ${clientErrors.length}개` : "계약서 미리보기"}
           </button>
           <button
             type="button"
-            className="text-sm font-bold text-gray-500 underline"
+            className="py-2 text-sm font-bold text-gray-500 underline"
             onClick={() => {
               // 출근을 막지 않기로 했으므로(2026-10-14) 나중에 작성할 수 있게 합니다. 30분간 다시 안 띄움.
               try {
@@ -533,21 +558,27 @@ export default function ContractPage() {
 
       {step === "preview" && (
         <div className="flex flex-col gap-3">
-          <p className="text-sm text-gray-700">계약서를 <b>끝까지</b> 읽어주세요. 끝까지 내려야 서명할 수 있습니다.</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm text-gray-700">계약서를 <b>끝까지</b> 내려서 읽어주세요.</p>
+            <button type="button" className="h-10 shrink-0 rounded-xl border border-gray-300 bg-white px-3 text-sm font-bold text-gray-700" onClick={toggleZoom}>
+              {zoomed ? "화면에 맞추기" : "🔍 크게 보기"}
+            </button>
+          </div>
+          {/* 휴대폰 주소창·하단 버튼까지 한 화면에 들어오게 화면 높이(dvh)에서 위아래 몫을 뺍니다. */}
           <div
             ref={previewBoxRef}
             onScroll={checkScrolledToEnd}
-            className="h-[60vh] overflow-y-auto rounded-xl border border-gray-200 bg-gray-100 p-2"
+            className="h-[calc(100dvh-260px)] min-h-[300px] overflow-auto overscroll-contain rounded-xl border border-gray-200 bg-gray-100 p-1.5"
           />
           {warningCodes.length > 0 && (
             <label className="flex items-start gap-2 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">
-              <input type="checkbox" className="mt-1" checked={warningAck} onChange={(e) => acknowledgeWarning(e.target.checked)} />
+              <input type="checkbox" className="mt-0.5 h-5 w-5 shrink-0" checked={warningAck} onChange={(e) => acknowledgeWarning(e.target.checked)} />
               <span>주민등록번호를 다시 확인해 주세요. 번호가 맞다면 체크하고 진행하세요. (2020년 10월 이후 발급·변경된 번호는 안내가 뜰 수 있습니다)</span>
             </label>
           )}
-          <div className="flex gap-2">
+          <div className={bottomBar}>
             <button className={btnGhost} onClick={() => setStep("form")}>고치기</button>
-            <button className={btnPrimary} disabled={!readToEnd || !warningAck} onClick={() => setStep("sign")}>
+            <button className={btnPrimary + " flex-1"} disabled={!readToEnd || !warningAck} onClick={() => setStep("sign")}>
               {readToEnd ? "다음: 서명하기" : "끝까지 읽어주세요"}
             </button>
           </div>
@@ -562,13 +593,13 @@ export default function ContractPage() {
             {!hasSignature && <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-gray-300">여기에 서명</span>}
           </div>
           <button className={btnGhost} onClick={clearSignature}>다시 쓰기</button>
-          <label className="flex items-center gap-2 text-sm font-bold">
-            <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
+          <label className="flex items-center gap-3 rounded-xl bg-gray-50 px-3 py-3 text-[15px] font-bold">
+            <input type="checkbox" className="h-5 w-5 shrink-0" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
             위 내용에 동의하며 서명합니다
           </label>
-          <div className="flex gap-2">
+          <div className={bottomBar}>
             <button className={btnGhost} onClick={() => setStep("preview")}>뒤로</button>
-            <button className={btnPrimary} disabled={busy || !hasSignature || !consent} onClick={submitSignature}>
+            <button className={btnPrimary + " flex-1"} disabled={busy || !hasSignature || !consent} onClick={submitSignature}>
               {busy ? "서명 처리 중..." : "서명 확정"}
             </button>
           </div>
@@ -584,15 +615,15 @@ function stepLabel(step: Step) {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="min-h-screen bg-[#f5f5f7] text-black px-4 py-6 [color-scheme:light]">
-      <div className="mx-auto w-full max-w-[560px] rounded-[28px] bg-white px-5 py-6 shadow">{children}</div>
+    <main className="min-h-dvh overflow-x-hidden bg-[#f5f5f7] text-black px-2 py-3 sm:px-4 sm:py-6 [color-scheme:light]">
+      <div className="mx-auto w-full max-w-[560px] rounded-[24px] bg-white px-4 py-5 shadow sm:px-5 sm:py-6">{children}</div>
     </main>
   );
 }
 
 function Field({ label, errors = [], hint, children }: { label: string; errors?: Issue[]; hint?: string; children: React.ReactNode }) {
   return (
-    <div>
+    <div className="min-w-0">
       <label className="mb-1 block text-sm font-extrabold text-gray-800">{label}</label>
       {children}
       {hint && errors.length === 0 && <p className="mt-1 text-xs text-gray-500">{hint}</p>}
@@ -615,6 +646,12 @@ function ReadOnly({ label, value, errors = [] }: { label: string; value: string;
   );
 }
 
-const inputCls = "h-12 w-full rounded-xl border border-gray-300 bg-white px-3 text-[16px] text-black outline-none focus:border-black disabled:bg-gray-100 disabled:text-gray-500";
-const btnPrimary = "h-12 flex-1 rounded-xl bg-black px-4 text-[15px] font-extrabold text-white disabled:bg-gray-300";
-const btnGhost = "h-12 rounded-xl border border-gray-300 bg-white px-4 text-[15px] font-bold text-gray-700";
+// 아이폰 사파리는 날짜·시간 칸이 너비를 무시하고 옆으로 삐져나오므로 appearance-none + min-w-0 + 왼쪽 정렬.
+const inputCls =
+  "block h-12 w-full min-w-0 appearance-none rounded-xl border border-gray-300 bg-white px-3 text-left text-[16px] text-black outline-none focus:border-black disabled:bg-gray-100 disabled:text-gray-500 [&::-webkit-date-and-time-value]:text-left";
+// 세로로 쌓는 곳에서 flex-1 을 주면 높이가 글자 높이로 눌리므로, 가로 줄에서만 " flex-1" 을 붙여 씁니다.
+const btnPrimary = "h-12 shrink-0 rounded-xl bg-black px-4 text-[15px] font-extrabold text-white disabled:bg-gray-300";
+const btnBig = "h-14 w-full shrink-0 rounded-2xl bg-black px-4 text-[17px] font-extrabold text-white disabled:bg-gray-300";
+const btnGhost = "h-12 shrink-0 rounded-xl border border-gray-300 bg-white px-4 text-[15px] font-bold text-gray-700";
+// 미리보기·서명 단계의 하단 버튼은 화면 아래에 붙여 둡니다(긴 화면에서도 안 잘리게).
+const bottomBar = "sticky bottom-0 z-10 -mx-4 flex gap-2 border-t border-gray-100 bg-white px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom))] sm:-mx-5 sm:px-5";

@@ -69,8 +69,8 @@ export default function MyContractsPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#f5f5f7] text-black px-4 py-6 [color-scheme:light]">
-      <div className="mx-auto w-full max-w-[560px] rounded-[28px] bg-white px-5 py-6 shadow">
+    <main className="min-h-dvh overflow-x-hidden bg-[#f5f5f7] text-black px-2 py-3 sm:px-4 sm:py-6 [color-scheme:light]">
+      <div className="mx-auto w-full max-w-[560px] rounded-[24px] bg-white px-4 py-5 shadow sm:px-5 sm:py-6">
         <h1 className="mb-4 text-xl font-extrabold">내 계약서</h1>
 
         {message && <p className="mb-4 text-sm font-bold text-red-600">{message}</p>}
