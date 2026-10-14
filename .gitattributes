@@ -1,0 +1,7 @@
+# 계약서 양식·글꼴·직인은 바이트가 하나라도 바뀌면 지문(SHA-256)이 달라져
+# 서버가 계약서 생성을 거부합니다. 줄바꿈 자동 변환을 절대 하지 않도록 바이너리로 고정합니다.
+*.pdf binary
+*.ttf binary
+*.otf binary
+*.png binary
+*.jpg binary
