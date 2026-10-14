@@ -19,9 +19,10 @@
 | BISEO `0039_attendance_audit_segment_type.sql` | ✅ 2026-10-02 BISEO DB(zrvjflemurvvdnqwclyb)에 적용 |
 | `20260928100000_attendance_pay_override.sql` | ✅ 2026-09-28 실행 완료 — 세전급여 직접 지정 |
 | `20260930100000_employment_contract_renewal.sql` | ✅ 2026-10-01 실행 완료 — 11개월 갱신·첫입사일·갱신 기록 |
-| `20261001100000_audit_tables_append_only.sql` | ⏳ **미실행** (2026-10-14 확인) — 갱신 기록·출퇴근 감사 테이블이 아직 서버 키로 수정·삭제 가능. 실행하면 막힘. 테스트 갱신 기록 10줄 정리 SQL 도 같이 줘야 함 |
+| `20261001100000_audit_tables_append_only.sql` | ⏳ **미실행** (2026-10-14 확인) — 갱신 기록·출퇴근 감사 테이블이 아직 서버 키로 수정·삭제 가능. 실행하면 막힘. 테스트 갱신 기록 10줄(`갱신테스트A~K`, id 1~11 중 7 제외, 2098년 이후 날짜) 정리 SQL 도 같이 줘야 함 — 실제 직원 갱신 기록은 아직 0건 |
 | BISEO `0038_contract_alert_window_30d.sql` | ⏳ **미실행** — 실행 후에 `contract-alerts.ts` 의 `CONTRACT_ALERT_MAX_DAYS` 를 7→30 으로. **순서 반대면 알림 저장 전체 실패** (0036 이 days_remaining 1~7 로 막음) |
 | `20261014100000_employment_contracts.sql` | ✅ 2026-10-14 실행 완료 — 전자 근로계약서 테이블 6개 + 비공개 버킷 |
+| `20261014200000_hemoz_contracts.sql` | ⏳ **미실행** — 헤모즈 명의·양식·근무지 연결. 실행하는 순간부터 헤모즈 신규 가입자에게 계약서 화면이 뜸(코드는 `8051d0d` 로 먼저 배포) |
 
 둘 다 반영돼 관리자 화면 "DB 용량" 탭과 출퇴근 수정 이력이 정상 동작한다(실측 확인).
 
