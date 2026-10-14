@@ -93,14 +93,20 @@ export default function RegisterDevicePage() {
         localStorage.setItem("employee", JSON.stringify(data.employee));
         setIsSuccess(true);
 
+        // 신규 가입자 중 근로계약서 대상은 계약서 작성 화면으로 바로 보냅니다.
+        // 재등록코드 재가입(reconnected)은 기존 계약 그대로라 보내지 않습니다.
+        const goToContract = !data.reconnected && data.contractRequired === true;
+
         if (data.reconnected) {
           setMessage("기기 재연결 완료!");
+        } else if (goToContract) {
+          setMessage("등록 완료! 근로계약서 작성 화면으로 이동합니다.");
         } else {
           setMessage("등록 완료!");
         }
 
         setTimeout(() => {
-          router.push("/");
+          router.push(goToContract ? "/contract" : "/");
         }, 1400);
       } else {
         setMessage(data.message || "등록 실패");

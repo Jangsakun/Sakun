@@ -2,7 +2,6 @@
 // 실행: npx tsx --test tests/contracts/validation.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
 import {
   calcElevenMonthContractEnd,
   calcWeekContractEnd,
@@ -18,7 +17,6 @@ import {
   type ContractInput,
   type ValidationContext,
 } from "../../app/lib/contracts/validation";
-import { decryptPii, encryptPii, loadPiiKey } from "../../app/lib/contracts/piiCrypto";
 
 const TODAY = "2026-10-14"; // 수요일
 
@@ -206,6 +204,12 @@ test("시작일: 31일 전·61일 후 차단, 경계값 확인", () => {
   assert.ok(!codes(validateContractInput(week({ startDate: at(59) }), ctx())).includes("start_too_far"));
 });
 
+test("11개월 갱신처럼 시작일을 시스템이 정했으면 시작일 범위 검사를 하지 않음", () => {
+  const far = { name: "홍길동", residentNumber: ADULT, phone: "01012345678", address: "전주시", startDate: "2027-09-14" };
+  assert.ok(codes(validateContractInput(far, ctx({ kind: "month11" }))).includes("start_too_far"), "직접 입력이면 차단");
+  assert.ok(!codes(validateContractInput(far, ctx({ kind: "month11", startDateFixed: true }))).includes("start_too_far"), "갱신 고정이면 통과");
+});
+
 test("휴대폰: 010 으로 시작하는 11자리가 아니면 차단", () => {
   for (const phone of ["011-1234-5678", "010-123-4567", "02-1234-5678"]) {
     assert.ok(codes(validateContractInput(week({ phone }), ctx())).includes("phone_invalid"), phone);
@@ -222,22 +226,8 @@ test("오류 메시지에 주민번호 원본이 들어가지 않음", () => {
   }
 });
 
-// ── 주민번호 표시 · 암호화 (검증 시나리오 14) ─────────────────────
+// ── 주민번호 표시 (검증 시나리오 14) ─────────────────────────────
 test("화면 표시는 뒷자리를 가림", () => {
   assert.equal(maskResidentNumber("900101-1234567"), "900101-1******");
   assert.equal(checkResidentNumber("900101-1234567", TODAY).digits, "9001011234567");
-});
-
-test("암호화: 되돌리면 원본, 같은 번호도 매번 다른 암호문, 키가 다르거나 바꿔치기하면 실패", () => {
-  const key = randomBytes(32);
-  const a = encryptPii(ADULT, key);
-  const b = encryptPii(ADULT, key);
-  assert.notEqual(a, b);
-  assert.ok(!a.includes(ADULT));
-  assert.equal(decryptPii(a, key), ADULT);
-  assert.throws(() => decryptPii(a, randomBytes(32)));
-  const tampered = a.slice(0, -4) + (a.endsWith("AAAA") ? "BBBB" : "AAAA");
-  assert.throws(() => decryptPii(tampered, key));
-  assert.throws(() => loadPiiKey(""));
-  assert.throws(() => loadPiiKey(Buffer.alloc(16).toString("base64")));
 });

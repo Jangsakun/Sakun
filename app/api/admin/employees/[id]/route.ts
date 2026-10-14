@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { createPendingContract } from "@/app/lib/contracts/lifecycle";
+import { contractHistory, previousInput } from "@/app/lib/contracts/worker";
 
 export async function PATCH(
   request: Request,
@@ -403,6 +405,19 @@ export async function PATCH(
       }
     }
 
+    // 고용구분 당근 → 고정 전환을 알아보려면 바꾸기 전 값이 필요합니다.
+    let previousEmploymentType: string | null = null;
+
+    if (updatePayload.employment_type === "fixed") {
+      const { data: before } = await supabase
+        .from("employees")
+        .select("employment_type")
+        .eq("id", id)
+        .maybeSingle();
+
+      previousEmploymentType = before?.employment_type ?? null;
+    }
+
     const { error } = await supabase
       .from("employees")
       .update(updatePayload)
@@ -419,10 +434,33 @@ export async function PATCH(
       );
     }
 
+    // 당근 → 고정: 전자 근로계약서를 쓰는 근로자면 11개월 계약서를 새로 작성하게 합니다.
+    // 기존 1주 계약은 새 계약에 서명할 때 종료 처리됩니다.
+    // 계약서 기록이 없는 기존 직원은 대상이 아닙니다(2026-10-14 결정).
+    let contractRequested = false;
+
+    if (previousEmploymentType === "carrot" && updatePayload.employment_type === "fixed") {
+      const history = await contractHistory(supabase, Number(id));
+
+      if (history.length > 0) {
+        const pending = await createPendingContract(supabase, request, {
+          employeeId: Number(id),
+          triggerReason: "type_change",
+          prefill: previousInput(history),
+          actor: "admin-ui",
+        });
+
+        contractRequested = pending.ok;
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      message: "직원 정보가 수정되었습니다.",
+      message: contractRequested
+        ? "직원 정보가 수정되었습니다. 근로자가 다음에 앱을 열면 11개월 근로계약서 작성 화면이 뜹니다."
+        : "직원 정보가 수정되었습니다.",
       updated: updatePayload,
+      contractRequested,
     });
   } catch (error) {
     const message =

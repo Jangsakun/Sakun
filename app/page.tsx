@@ -589,6 +589,20 @@ function applySubmittedScheduleToWeek(
   });
 }
 
+// 전자 근로계약서: 근로자가 계약서 화면에서 "나중에 작성"을 누르면 30분 동안은 앱을 열어도
+// 계약서 화면으로 다시 보내지 않습니다(출근을 막지 않기로 했기 때문 — 2026-10-14).
+const CONTRACT_DEFER_KEY = "econtract_deferred_at";
+const CONTRACT_DEFER_MS = 30 * 60 * 1000;
+
+function isContractDeferred() {
+  try {
+    const at = Number(sessionStorage.getItem(CONTRACT_DEFER_KEY) || 0);
+    return at > 0 && Date.now() - at < CONTRACT_DEFER_MS;
+  } catch {
+    return false;
+  }
+}
+
 export default function Home() {
   const router = useRouter();
 
@@ -1005,6 +1019,15 @@ export default function Home() {
           setEmployee(connectedEmployee);
           fetchTodayAttendance(connectedEmployee);
           fetchWorkerContract(connectedEmployee);
+
+          // 전자 근로계약서: 작성할 계약서가 있으면 계약서 화면을 먼저 보여 줍니다.
+          // 근로자가 "나중에 작성"을 누른 뒤 30분 동안은 다시 보내지 않습니다.
+          if (!isContractDeferred()) {
+            checkContractRequirement(connectedEmployee, false).then((needed) => {
+              if (needed) router.push("/contract");
+            });
+          }
+
           return;
         }
 
@@ -1215,6 +1238,28 @@ export default function Home() {
     ).length;
   }, [weeklySchedule]);
 
+  // 전자 근로계약서 — 서명할 계약서가 있는지. 확인에 실패해도 출퇴근은 그대로 됩니다.
+  const checkContractRequirement = async (current: Employee, onCheckIn: boolean) => {
+    try {
+      const response = await fetch("/api/worker/econtract/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({
+          name: current.name,
+          birthDate: current.birthDate,
+          phoneLast4: current.phoneLast4,
+          onCheckIn,
+        }),
+      });
+      const data = await response.json();
+
+      return data.success === true && data.required === true;
+    } catch {
+      return false;
+    }
+  };
+
   const sendAttendance = async (
     type: AttendanceAction,
     segment: SegmentType = mainSegment
@@ -1240,6 +1285,21 @@ export default function Home() {
       alert(flow.message);
       setMessage(flow.message);
       return;
+    }
+
+    // 전자 근로계약서: 작성할 계약서가 있으면 출근 전에 먼저 안내합니다.
+    // 출근을 막지는 않습니다(2026-10-14 결정) — [취소]를 누르면 출근만 기록합니다.
+    // 당근 근로자의 1주 계약이 끝났으면 여기서 새 1주 계약서가 준비됩니다.
+    if (type === "check-in") {
+      const contractNeeded = await checkContractRequirement(employee, true);
+
+      if (
+        contractNeeded &&
+        window.confirm("작성할 근로계약서가 있습니다.\n지금 작성하시겠어요?\n\n[취소]를 누르면 출근만 기록합니다.")
+      ) {
+        router.push("/contract");
+        return;
+      }
     }
 
     // 시급+도급 직원이 시급 출근 없이 도급 출근하는 날
@@ -2076,6 +2136,15 @@ export default function Home() {
             <div style={payrollDescStyle}>
               실시간 주단위 급여 / 날짜별 조회 / 주급 명세서 확인
             </div>
+          </div>
+          <div style={payrollArrowStyle}>›</div>
+        </Link>
+
+        <Link href="/contract/mine" style={{ ...payrollLinkStyle, marginTop: "10px", border: "1px solid #e5e7eb", background: "#ffffff" }}>
+          <div style={{ ...payrollIconStyle, backgroundColor: "#f3f4f6" }}>📄</div>
+          <div style={payrollTextWrapStyle}>
+            <div style={payrollTitleStyle}>내 계약서</div>
+            <div style={payrollDescStyle}>서명한 근로계약서를 언제든 다시 받을 수 있습니다</div>
           </div>
           <div style={payrollArrowStyle}>›</div>
         </Link>

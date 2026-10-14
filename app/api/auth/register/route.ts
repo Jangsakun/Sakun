@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { createPendingContract } from "@/app/lib/contracts/lifecycle";
+import { serviceClient } from "@/app/lib/contracts/server";
 
 function maskResidentNumber(value: string) {
   const digits = value.replace(/[^0-9]/g, "");
@@ -540,6 +542,26 @@ export async function POST(request: Request) {
       );
     }
 
+    // 신규 가입자는 근로계약서를 작성해야 합니다(재등록코드 재가입은 위에서 이미 끝나 여기 오지 않음).
+    // 계약서 대상이 아니면(헤모즈, 도급) 만들지 않습니다.
+    // 계약서 준비가 실패해도 가입은 성공으로 둡니다 — 기존 가입 흐름을 바꾸지 않기 위해서입니다.
+    let contractRequired = false;
+    const contractDb = serviceClient();
+
+    if (contractDb) {
+      const pending = await createPendingContract(contractDb, request, {
+        employeeId: data.id,
+        triggerReason: "signup",
+        actor: "worker",
+      });
+
+      contractRequired = pending.ok;
+
+      if (!pending.ok && !/대상이 아닙니다/.test(pending.reason)) {
+        console.error("[register] 근로계약서 준비 실패:", pending.reason);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       message: "등록 성공",
@@ -557,6 +579,7 @@ export async function POST(request: Request) {
         employmentType: data.employment_type,
       },
       reconnected: false,
+      contractRequired,
     });
   } catch (error) {
     return NextResponse.json(

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getRequestMeta } from "@/app/lib/attendanceAudit";
 import { calcRenewalDates } from "@/app/lib/contractRenewal";
+import { createPendingContract } from "@/app/lib/contracts/lifecycle";
+import { contractHistory, previousInput } from "@/app/lib/contracts/worker";
 
 /**
  * 근로계약 11개월 갱신.
@@ -169,8 +171,28 @@ export async function POST(
       );
     }
 
+    // 전자 근로계약서를 쓰는 근로자면 새 11개월 계약서를 작성하게 합니다.
+    // 시작일은 직전 만료일 다음 날로 고정되고, 직전 계약 입력값을 미리 채웁니다.
+    // 계약서 기록이 없는 기존 직원은 대상이 아닙니다(2026-10-14 결정).
+    let contractRequested = false;
+    const history = await contractHistory(supabase, employeeId);
+
+    if (history.length > 0 && result.new_start && result.new_end) {
+      const pending = await createPendingContract(supabase, request, {
+        employeeId,
+        triggerReason: "renewal",
+        prefill: previousInput(history),
+        startDate: result.new_start,
+        endDate: result.new_end,
+        actor: "admin-ui",
+      });
+
+      contractRequested = pending.ok;
+    }
+
     return NextResponse.json({
       success: true,
+      contractRequested,
       historyId: result.history_id,
       employeeName: result.employee_name,
       previousStart: result.previous_start ?? null,

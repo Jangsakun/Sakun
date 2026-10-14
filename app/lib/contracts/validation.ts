@@ -53,6 +53,12 @@ export type ValidationContext = {
   printedHourlyWage: number;
   /** 직원 정보에 등록된 시급 */
   employeeHourlyWage: number | null;
+  /**
+   * 시작일을 시스템이 정한 경우(11개월 갱신 = 직전 만료일 다음 날).
+   * 시작일 범위 검사(-30일~+60일)는 근로자의 오입력을 막으려는 것이므로 이때는 하지 않습니다.
+   * 관리자가 만료 두 달 전에 갱신을 누르면 시작일이 60일 넘게 뒤라 서명이 막히기 때문입니다.
+   */
+  startDateFixed?: boolean;
 };
 
 export type Issue = {
@@ -142,7 +148,7 @@ export function validateContractInput(
     add("startDate", "start_invalid", "계약 시작일이 올바른 날짜가 아닙니다.");
   }
 
-  if (startOk) {
+  if (startOk && !ctx.startDateFixed) {
     const diff = daysBetween(ctx.today, input.startDate);
 
     if (diff <= -START_PAST_LIMIT_DAYS) {
