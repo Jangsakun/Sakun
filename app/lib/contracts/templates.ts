@@ -111,7 +111,7 @@ const weekColumns = Object.fromEntries(
   ])
 ) as Record<WorkDay, WeekColumn>;
 
-export const CONTRACT_TEMPLATES: Record<string, ContractTemplate> = {
+const JANGSAKUN_TEMPLATES: Record<string, ContractTemplate> = {
   jangsakun_week_v1: {
     code: "jangsakun_week_v1",
     entityCode: "jangsakun",
@@ -200,6 +200,51 @@ export const CONTRACT_TEMPLATES: Record<string, ContractTemplate> = {
       seal: { page: 1, cx: 256.5, cy: 119.0, width: 98, height: 72 },
     },
   },
+};
+
+// 헤모즈 양식(2026-10-14 사용자 제공). 장사꾼 양식과 회사명·소재지만 다르고 나머지 글자 위치는 같습니다
+// (원본 PDF 글자 위치를 뽑아 비교: 1주 420/420, 11개월 753/781 일치).
+// 다른 점은 11개월 첫 문단 "주식회사 헤모즈(이하 갑)과 [성명](이하 을)" 줄이 7pt 왼쪽으로 당겨진 것뿐입니다.
+// 헤모즈 직인 PNG(320x320)는 여백이 거의 없으므로 상자 50pt → 원 약 46pt(장사꾼과 같은 크기).
+const HEMOZ_SEAL_SIZE = { width: 50, height: 50 };
+const jangsakunWeek = JANGSAKUN_TEMPLATES.jangsakun_week_v1;
+const jangsakun11m = JANGSAKUN_TEMPLATES.jangsakun_11m_v1;
+
+const HEMOZ_TEMPLATES: Record<string, ContractTemplate> = {
+  hemoz_week_v1: {
+    ...jangsakunWeek,
+    code: "hemoz_week_v1",
+    entityCode: "hemoz",
+    title: "헤모즈 일용직 근로계약서(1주)",
+    file: "assets/contracts/templates/hemoz_week_v1.pdf",
+    sha256: "44b836710486541333c2eefcf21a8a11d5bd44efc2440468164c405c391b9d48",
+    images: {
+      signatures: jangsakunWeek.images.signatures,
+      seal: { ...jangsakunWeek.images.seal, ...HEMOZ_SEAL_SIZE },
+    },
+  },
+
+  hemoz_11m_v1: {
+    ...jangsakun11m,
+    code: "hemoz_11m_v1",
+    entityCode: "hemoz",
+    title: "헤모즈 근로계약서(11개월)",
+    file: "assets/contracts/templates/hemoz_11m_v1.pdf",
+    sha256: "92eadbe9f2a2589cd6d0f785b9b95bf48d58274c39ce4f27f004abd210993132",
+    text: {
+      ...jangsakun11m.text,
+      introName: { ...jangsakun11m.text.introName, x: 295 },
+    },
+    images: {
+      signatures: jangsakun11m.images.signatures,
+      seal: { ...jangsakun11m.images.seal, ...HEMOZ_SEAL_SIZE },
+    },
+  },
+};
+
+export const CONTRACT_TEMPLATES: Record<string, ContractTemplate> = {
+  ...JANGSAKUN_TEMPLATES,
+  ...HEMOZ_TEMPLATES,
 };
 
 export function getTemplate(code: string): ContractTemplate | null {

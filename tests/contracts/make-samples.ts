@@ -51,7 +51,10 @@ function fakeSignaturePng() {
 }
 
 const font = fs.readFileSync(path.join(ROOT, "assets/contracts/fonts/NanumGothic-Regular.ttf"));
-const seal = fs.readFileSync(path.join(ROOT, "assets/contracts/seals/jangsakun.png"));
+const seals: Record<string, Buffer> = {
+  jangsakun: fs.readFileSync(path.join(ROOT, "assets/contracts/seals/jangsakun.png")),
+  hemoz: fs.readFileSync(path.join(ROOT, "assets/contracts/seals/hemoz.png")),
+};
 const signature = fakeSignaturePng();
 
 // 검증번호가 맞는 가짜 번호
@@ -106,11 +109,34 @@ const samples: Sample[] = [
       startDate: "2027-01-04",
     },
   },
+  {
+    file: "5_헤모즈_1주_샘플.pdf",
+    template: "hemoz_week_v1",
+    today: "2026-10-14",
+    input: {
+      name: "최수진", residentNumber: rrn("970611234567"), phone: "010-4444-7777",
+      address: "전북특별자치도 전주시 완산구 효자로 225, 302동 1201호",
+      startDate: "2026-10-14", workDays: ["mon", "tue", "thu", "sat"],
+      workStart: "10:00", workEnd: "17:30", breakStart: "12:30", breakEnd: "13:30", note: "포장",
+    },
+  },
+  {
+    file: "6_헤모즈_11개월_샘플.pdf",
+    template: "hemoz_11m_v1",
+    today: "2026-10-14",
+    input: {
+      name: "정다은", residentNumber: rrn("990203234567"), phone: "01033338888",
+      address: "전북특별자치도 전주시 완산구 홍산로 10",
+      startDate: "2026-10-14", serviceScopeOther: "검수 및 출고 보조",
+    },
+  },
 ];
 
 async function main() {
 for (const s of samples) {
   const template = getTemplate(s.template)!;
+  const templateBytes = fs.readFileSync(path.join(ROOT, template.file));
+  if (sha256Hex(templateBytes) !== template.sha256) throw new Error(`${s.file}: 양식 PDF 지문이 필드맵과 다릅니다`);
   const v = validateContractInput(s.input, {
     kind: template.kind,
     today: s.today,
@@ -122,7 +148,7 @@ for (const s of samples) {
 
   const pdf = await renderContractPdf({
     template,
-    templateBytes: fs.readFileSync(path.join(ROOT, template.file)),
+    templateBytes,
     fontBytes: font,
     values: {
       name: s.input.name,
@@ -142,7 +168,7 @@ for (const s of samples) {
       serviceScopeOther: s.input.serviceScopeOther,
     },
     signaturePng: signature,
-    sealPng: seal,
+    sealPng: seals[template.entityCode],
     signedAt: new Date(`${s.today}T10:00:00+09:00`),
   });
 
