@@ -174,6 +174,32 @@ export default function EContractTab() {
     }
   };
 
+  // 서명대기만 삭제(테스트 정리용). 서명된 계약서는 지우지 않고 무효 처리합니다.
+  const deleteContract = async (row: ContractRow) => {
+    if (row.status !== "pending") return;
+
+    const ok = window.confirm(
+      `${row.employee_name} 님 ${KIND_LABEL[row.kind]} 서명대기 계약서를 삭제합니다.\n` +
+        "삭제하면 되돌릴 수 없고, 이 근로자에게는 계약서 작성 화면이 더 이상 뜨지 않습니다.\n" +
+        "(실제 근로자라면 삭제 대신 그대로 두세요.)\n\n삭제할까요?"
+    );
+
+    if (!ok) return;
+
+    try {
+      setBusyId(row.id);
+      const res = await fetch(`/api/admin/econtracts/${row.id}`, { method: "DELETE" });
+      const json = await res.json();
+      alert(json.message || (json.success ? "삭제했습니다." : "삭제 실패"));
+      await load();
+    } catch (error) {
+      console.error(error);
+      alert("삭제 중 오류 발생");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const saveWage = async () => {
     try {
       setWageSaving(true);
@@ -241,9 +267,14 @@ export default function EContractTab() {
                     <td style={tdStyle}>{TRIGGER_LABEL[row.trigger_reason] ?? row.trigger_reason}</td>
                     <td style={tdStyle}>{formatDateTime(row.created_at)}</td>
                     <td style={tdStyle}>
-                      <button style={dangerButtonStyle} disabled={busyId === row.id} onClick={() => voidContract(row)}>
-                        무효
-                      </button>
+                      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                        <button style={dangerButtonStyle} disabled={busyId === row.id} onClick={() => voidContract(row)}>
+                          무효
+                        </button>
+                        <button style={deleteButtonStyle} disabled={busyId === row.id} onClick={() => deleteContract(row)}>
+                          삭제
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -335,6 +366,11 @@ export default function EContractTab() {
                             무효
                           </button>
                         )}
+                        {row.status === "pending" && (
+                          <button style={deleteButtonStyle} disabled={busyId === row.id} onClick={() => deleteContract(row)}>
+                            삭제
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -399,4 +435,5 @@ const subTextStyle: CSSProperties = { marginTop: "3px", fontSize: "11px", color:
 const badgeStyle: CSSProperties = { display: "inline-flex", padding: "3px 8px", borderRadius: "999px", fontSize: "12px", fontWeight: 800 };
 const ghostButtonStyle: CSSProperties = { height: "30px", padding: "0 10px", borderRadius: "8px", border: "1px solid #d1d5db", background: "#ffffff", color: "#374151", fontSize: "12px", fontWeight: 700, cursor: "pointer" };
 const dangerButtonStyle: CSSProperties = { ...ghostButtonStyle, borderColor: "#fecaca", background: "#fef2f2", color: "#b91c1c" };
+const deleteButtonStyle: CSSProperties = { ...ghostButtonStyle, borderColor: "#b91c1c", background: "#b91c1c", color: "#ffffff" };
 const solidButtonStyle: CSSProperties = { height: "36px", padding: "0 16px", borderRadius: "10px", border: "none", background: "#111827", color: "#ffffff", fontSize: "13px", fontWeight: 800, cursor: "pointer" };
