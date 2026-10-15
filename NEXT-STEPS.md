@@ -195,3 +195,24 @@ BISEO(`Desktop/biseo/web/lib/attendance/`)의 `confirm.ts` → `mutate.ts` 가
 - pdf-lib 에서 나눔고딕을 subset 으로 넣으면 한글이 빈칸이 됨 → `subset: false` (PDF 약 0.8MB)
 - 양식 좌표는 `app/lib/contracts/templates.ts` 한 곳. 원본 PDF 지문이 다르면 생성 거부
 - 서명 완료 행은 트리거가 막으므로 테스트 데이터는 SQL Editor 에서 트리거를 잠시 끄고 지워야 함
+
+**헤모즈 적용 (2026-10-14~15)**
+- 헤모즈 신규 가입자도 적용(명의 주식회사 헤모즈, 직인 `assets/contracts/seals/hemoz.png` ← public/stamp1.png). 기존 헤모즈 직원은 그대로
+- 11개월 양식 v1 은 소재지가 장사꾼 주소로 잘못 인쇄 → 사용자 정정본 v2(`hemoz_11m_v2`). v2 SQL 실행 여부는 위 표 확인
+- 관리자 전자계약 탭 "삭제" 버튼: 서명대기만(DB 함수 `delete_pending_contract`). 서명본은 삭제 경로를 만들지 않음(2026-10-14 사용자 원칙)
+
+**사용자 확인 대기 (2026-10-15)**
+- 서명 완료 테스트 1건(계약 id 58, `cnsdldu`) 삭제 SQL 전달함 → 실행 확인되면 저장소 파일 2개 삭제: `272/58/contract-332cf474e4981ab8.pdf`, `272/58/signature-087eba5320a1ebb7.png`
+- 테스트 서명대기 2건(계약테스트헤모즈당근·고정): 삭제 버튼 SQL 실행 후 사용자가 화면에서 삭제
+
+---
+
+## 뿌리오 문자 API 연동 — 0단계 조사만 함 (2026-10-15, 코드 없음)
+
+- 뿌리오 API(https://www.ppurio.com/send-api/guide): **기업회원만**, 연동 신청 승인 후 인증키 발급,
+  **발송 서버 IP 사전 등록 필수**(연동 > 연동신청관리). 토큰 `POST https://message.ppurio.com/v1/token`(Basic 인증, 24시간 유효)
+  → 발송 `POST /v1/message` (필수: account, messageType, content, from, duplicateFlag, targetCount, targets, refKey)
+- 요금: SMS 8.8~27.5원, LMS 26.4~50원(구간별)
+- npm `ppurio`(비공식)는 옛 API(`send_utf8_json.php`)라 쓰지 않음
+- **걸림돌: Vercel Hobby 는 고정 IP 없음** → ① Vercel 유료 고정 IP(플랜·가격 확인 필요) ② 고정 IP 중계 서버 ③ IP 등록 없는 다른 문자 서비스
+- 사용자에게 물어본 것(답 대기): 무엇을 보낼지(계약서 요청·만료 안내 / 서명 완료 알림 / 재연결 코드 / 급여명세서 / `뿌리오 엑셀.csv` 단체문자 자동화), 문자 vs 알림톡, 뿌리오 계정 상태(기업회원·연동 신청·발신번호), IP 해결 방식
