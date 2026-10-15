@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { findWeekStreaks, isAdminRequest, serviceClient } from "@/app/lib/contracts/server";
+import { CONTRACT_LINK_PURPOSE } from "@/app/lib/contracts/downloadLink";
 
 /**
  * 관리자 "전자계약" 화면 데이터.
@@ -18,7 +19,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: false, message: "환경변수 없음" }, { status: 500 });
   }
 
-  const [contracts, wages] = await Promise.all([
+  const [contracts, wages, smsRows, linkRows] = await Promise.all([
     supabase
       .from("employment_contracts")
       .select(
@@ -32,6 +33,18 @@ export async function GET(request: Request) {
       .order("id", { ascending: false })
       .range(0, 4999),
     supabase.from("minimum_wages").select("year, hourly_wage, note, updated_at").order("year", { ascending: false }),
+    // 서명본 링크 문자 상태(계약서별 최신 1건). 문자 마이그레이션 전이면 오류 → 빈 값으로 둡니다.
+    supabase
+      .from("sms_outbox")
+      .select("id, ref_id, status, result_code, result_message, to_phone_masked, dry_run, created_at, sent_at")
+      .eq("purpose", CONTRACT_LINK_PURPOSE)
+      .order("id", { ascending: false })
+      .range(0, 9999),
+    supabase
+      .from("contract_download_links")
+      .select("contract_id, expires_at, locked_at, revoked_at, failed_attempts, last_used_at")
+      .order("id", { ascending: false })
+      .range(0, 9999),
   ]);
 
   if (contracts.error) {
@@ -51,9 +64,26 @@ export async function GET(request: Request) {
     end_date: string | null;
   }[];
 
+  const latestSms = new Map<number, unknown>();
+  for (const sms of smsRows.error ? [] : smsRows.data ?? []) {
+    if (sms.ref_id != null && !latestSms.has(sms.ref_id)) latestSms.set(sms.ref_id, sms);
+  }
+
+  const latestLink = new Map<number, unknown>();
+  for (const link of linkRows.error ? [] : linkRows.data ?? []) {
+    if (!latestLink.has(link.contract_id)) latestLink.set(link.contract_id, link);
+  }
+
+  const withSms = (rows as unknown as { id: number }[]).map((row) => ({
+    ...row,
+    sms: latestSms.get(row.id) ?? null,
+    link: latestLink.get(row.id) ?? null,
+  }));
+
   return NextResponse.json({
     success: true,
-    contracts: rows,
+    smsReady: !smsRows.error,
+    contracts: withSms,
     pending: rows.filter((r) => r.status === "pending"),
     weekStreaks: findWeekStreaks(rows),
     minimumWages: wages.data ?? [],

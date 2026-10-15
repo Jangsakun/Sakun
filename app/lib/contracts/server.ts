@@ -32,7 +32,12 @@ export type ContractEventType =
   | "signed"
   | "pdf_downloaded"
   | "voided"
-  | "ended";
+  | "ended"
+  | "sms_queued"
+  | "sms_queue_failed"
+  | "link_verify_failed"
+  | "link_locked"
+  | "link_downloaded";
 
 /**
  * 증거 기록을 남깁니다. 주민번호(원본·가린 값 모두)를 detail 에 넣지 마세요.

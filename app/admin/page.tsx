@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import ScheduleTab from "./components/ScheduleTab";
 import DbSizeTab from "./components/DbSizeTab";
 import EContractTab from "./components/EContractTab";
+import SmsWorkerBanner from "./components/SmsWorkerBanner";
 import {
   cell,
   downloadXlsx,
@@ -2047,6 +2048,8 @@ export default function AdminPage() {
             </button>
           </div>
         </header>
+
+        <SmsWorkerBanner />
 
         <section style={summaryGridStyle}>
           <SummaryCard

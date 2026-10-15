@@ -6,6 +6,7 @@ import { CONTRACT_FONT_PATH, readAsset } from "@/app/lib/contracts/assets";
 import { CONTRACT_BUCKET, logContractEvent } from "@/app/lib/contracts/server";
 import { maskResidentNumber } from "@/app/lib/contracts/residentNumber";
 import { getRequestMeta } from "@/app/lib/attendanceAudit";
+import { queueContractLinkSms } from "@/app/lib/contracts/downloadLink";
 
 /**
  * 서명 확정.
@@ -18,6 +19,7 @@ import { getRequestMeta } from "@/app/lib/attendanceAudit";
  *   5) 서명대기 → 서명완료 (서명 시점 입력값 전체를 스냅샷으로)
  *   6) 겹치는 이전 계약(예: 당근→고정 전환 전의 1주 계약)은 종료 처리
  *   7) 증거 기록
+ *   8) 서명본 다운로드 링크 문자를 대기열에 넣기(실패해도 서명은 유지)
  */
 
 const MAX_SIGNATURE_BYTES = 500 * 1024;
@@ -258,12 +260,24 @@ export async function POST(request: Request) {
 
     if (!logged) console.error(`[econtract] 계약 ${contractId} 서명 기록 저장 실패`);
 
+    // 8) 서명본 다운로드 링크 문자(대기열에 넣기만). 실패해도 서명은 그대로 유지하고,
+    //    관리자 화면 "문자 재발송"으로 다시 보낼 수 있습니다.
+    let smsQueued = false;
+
+    try {
+      const sms = await queueContractLinkSms(supabase, request, contractId, "auto");
+      smsQueued = sms.ok;
+    } catch (error) {
+      console.error(`[econtract] 계약 ${contractId} 문자 대기열 실패:`, error instanceof Error ? error.name : "unknown");
+    }
+
     return NextResponse.json({
       success: true,
       contractId,
       documentSha256: pdfSha,
       startDate: input.startDate,
       endDate: renderValues.endDate,
+      smsQueued,
       message: "서명이 완료되었습니다.",
     });
   });

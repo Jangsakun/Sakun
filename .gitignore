@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# 문자 워커: 설정 예시는 올리고, 실제 설정·로그는 올리지 않음
+!sms-worker/.env.example
+sms-worker/logs/

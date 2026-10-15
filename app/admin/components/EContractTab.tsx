@@ -26,6 +26,27 @@ type ContractRow = {
   resident_number_masked: string | null;
   entity: { business_name: string } | null;
   template: { code: string; title: string } | null;
+  sms?: SmsInfo | null;
+  link?: LinkInfo | null;
+};
+
+type SmsInfo = {
+  id: number;
+  status: "queued" | "sending" | "sent" | "failed" | "unknown" | "cancelled";
+  result_code: string | null;
+  result_message: string | null;
+  to_phone_masked: string;
+  dry_run: boolean;
+  created_at: string;
+  sent_at: string | null;
+};
+
+type LinkInfo = {
+  expires_at: string;
+  locked_at: string | null;
+  revoked_at: string | null;
+  failed_attempts: number;
+  last_used_at: string | null;
 };
 
 type WeekStreak = { employeeId: number; employeeName: string; count: number; from: string; to: string };
@@ -38,7 +59,29 @@ type ApiResponse = {
   pending?: ContractRow[];
   weekStreaks?: WeekStreak[];
   minimumWages?: MinimumWage[];
+  smsReady?: boolean;
 };
+
+const SMS_LABEL: Record<SmsInfo["status"], { text: string; color: string; backgroundColor: string }> = {
+  queued: { text: "발송 대기", color: "#1e40af", backgroundColor: "#dbeafe" },
+  sending: { text: "발송 중", color: "#1e40af", backgroundColor: "#dbeafe" },
+  sent: { text: "발송 완료", color: "#166534", backgroundColor: "#dcfce7" },
+  failed: { text: "발송 실패", color: "#b91c1c", backgroundColor: "#fee2e2" },
+  unknown: { text: "확인 필요", color: "#92400e", backgroundColor: "#fef3c7" },
+  cancelled: { text: "취소됨", color: "#475569", backgroundColor: "#f1f5f9" },
+};
+
+function smsSubText(sms: SmsInfo, link: LinkInfo | null | undefined) {
+  const parts = [sms.to_phone_masked];
+
+  if (sms.dry_run) parts.push("모의 발송(실제 안 나감)");
+  if (sms.status === "failed" || sms.status === "unknown") parts.push(sms.result_message || sms.result_code || "");
+  if (link?.locked_at) parts.push("링크 잠김(5회 틀림)");
+  else if (link && !link.revoked_at && Date.parse(link.expires_at) < Date.now()) parts.push("링크 만료");
+  else if (link?.last_used_at) parts.push("내려받음");
+
+  return parts.filter(Boolean).join(" · ");
+}
 
 const STATUS_LABEL: Record<ContractRow["status"], string> = {
   pending: "서명 대기",
@@ -200,6 +243,36 @@ export default function EContractTab() {
     }
   };
 
+  // 서명본 다운로드 링크 문자 재발송. 먼저 받는 번호(가린 값)를 보여주고 확인받습니다.
+  const resendLink = async (row: ContractRow) => {
+    try {
+      setBusyId(row.id);
+      const target = await (await fetch(`/api/admin/econtracts/${row.id}/resend-link`, { cache: "no-store" })).json();
+
+      if (!target.success) {
+        alert(target.message || "받는 번호를 확인할 수 없습니다.");
+        return;
+      }
+
+      const ok = window.confirm(
+        `${row.employee_name} 님에게 서명본 다운로드 링크 문자를 다시 보냅니다.\n받는 번호: ${target.phoneMasked}\n\n` +
+          "새 링크(30일 유효)가 만들어지고, 이전에 보낸 링크는 더 이상 열리지 않습니다.\n보낼까요?"
+      );
+
+      if (!ok) return;
+
+      const res = await fetch(`/api/admin/econtracts/${row.id}/resend-link`, { method: "POST" });
+      const json = await res.json();
+      alert(json.message || (json.success ? "재발송을 요청했습니다." : "재발송 실패"));
+      await load();
+    } catch (error) {
+      console.error(error);
+      alert("재발송 중 오류 발생");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const saveWage = async () => {
     try {
       setWageSaving(true);
@@ -330,6 +403,7 @@ export default function EContractTab() {
                   <th style={thStyle}>계약기간</th>
                   <th style={thStyle}>상태</th>
                   <th style={thStyle}>서명 시각</th>
+                  {data?.smsReady && <th style={thStyle}>서명본 문자</th>}
                   <th style={thStyle}>관리</th>
                 </tr>
               </thead>
@@ -349,6 +423,22 @@ export default function EContractTab() {
                       {row.status === "void" && row.void_reason && <div style={subTextStyle}>사유: {row.void_reason}</div>}
                     </td>
                     <td style={tdStyle}>{formatDateTime(row.signed_at)}</td>
+                    {data?.smsReady && (
+                      <td style={tdStyle}>
+                        {row.sms ? (
+                          <>
+                            <span style={{ ...badgeStyle, color: SMS_LABEL[row.sms.status].color, backgroundColor: SMS_LABEL[row.sms.status].backgroundColor }}>
+                              {SMS_LABEL[row.sms.status].text}
+                            </span>
+                            <div style={subTextStyle}>{smsSubText(row.sms, row.link)}</div>
+                          </>
+                        ) : row.signed_pdf_sha256 ? (
+                          <span style={subTextStyle}>보낸 적 없음</span>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+                    )}
                     <td style={tdStyle}>
                       <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
                         {row.signed_pdf_sha256 && (
@@ -359,6 +449,11 @@ export default function EContractTab() {
                             <button style={ghostButtonStyle} disabled={busyId === row.id} onClick={() => openPdf(row, true)}>
                               내려받기
                             </button>
+                            {data?.smsReady && (row.status === "signed" || row.status === "ended") && (
+                              <button style={ghostButtonStyle} disabled={busyId === row.id} onClick={() => resendLink(row)}>
+                                문자 재발송
+                              </button>
+                            )}
                           </>
                         )}
                         {(row.status === "pending" || row.status === "signed") && (
