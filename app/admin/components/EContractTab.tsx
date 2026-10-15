@@ -80,7 +80,7 @@ function smsSubText(sms: SmsInfo, link: LinkInfo | null | undefined) {
   else if (link && !link.revoked_at && Date.parse(link.expires_at) < Date.now()) parts.push("링크 만료");
   else if (link?.last_used_at) parts.push("내려받음");
 
-  return parts.filter(Boolean).join(" · ");
+  return parts.filter(Boolean);
 }
 
 const STATUS_LABEL: Record<ContractRow["status"], string> = {
@@ -411,18 +411,18 @@ export default function EContractTab() {
                 {contracts.map((row) => (
                   <tr key={row.id}>
                     <td style={tdStyle}>{row.employee_name}</td>
-                    <td style={tdStyle}>{row.resident_number_masked || "-"}</td>
+                    <td style={nowrapTdStyle}>{row.resident_number_masked || "-"}</td>
                     <td style={tdStyle}>
                       <span style={{ ...badgeStyle, ...getWorkplaceBadgeColor(row.workplace_name) }}>{row.workplace_name}</span>
                     </td>
-                    <td style={tdStyle}>{row.entity?.business_name ?? "-"}</td>
+                    <td style={nowrapTdStyle}>{row.entity?.business_name ?? "-"}</td>
                     <td style={tdStyle}>{KIND_LABEL[row.kind]}</td>
-                    <td style={tdStyle}>{formatPeriod(row)}</td>
+                    <td style={nowrapTdStyle}>{formatPeriod(row)}</td>
                     <td style={tdStyle}>
                       <span style={{ ...badgeStyle, ...STATUS_COLOR[row.status] }}>{STATUS_LABEL[row.status]}</span>
                       {row.status === "void" && row.void_reason && <div style={subTextStyle}>사유: {row.void_reason}</div>}
                     </td>
-                    <td style={tdStyle}>{formatDateTime(row.signed_at)}</td>
+                    <td style={nowrapTdStyle}>{formatDateTime(row.signed_at)}</td>
                     {data?.smsReady && (
                       <td style={tdStyle}>
                         {row.sms ? (
@@ -430,7 +430,11 @@ export default function EContractTab() {
                             <span style={{ ...badgeStyle, color: SMS_LABEL[row.sms.status].color, backgroundColor: SMS_LABEL[row.sms.status].backgroundColor }}>
                               {SMS_LABEL[row.sms.status].text}
                             </span>
-                            <div style={subTextStyle}>{smsSubText(row.sms, row.link)}</div>
+                            {smsSubText(row.sms, row.link).map((text) => (
+                              <div key={text} style={{ ...subTextStyle, whiteSpace: "nowrap" }}>
+                                {text}
+                              </div>
+                            ))}
                           </>
                         ) : row.signed_pdf_sha256 ? (
                           <span style={subTextStyle}>보낸 적 없음</span>
@@ -440,7 +444,7 @@ export default function EContractTab() {
                       </td>
                     )}
                     <td style={tdStyle}>
-                      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", gap: "6px", flexWrap: "nowrap" }}>
                         {row.signed_pdf_sha256 && (
                           <>
                             <button style={ghostButtonStyle} disabled={busyId === row.id} onClick={() => openPdf(row, false)}>
@@ -523,12 +527,13 @@ const warnBoxStyle: CSSProperties = { padding: "14px 16px", borderRadius: "12px"
 const toolbarStyle: CSSProperties = { display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "10px" };
 const inputStyle: CSSProperties = { height: "36px", padding: "0 10px", borderRadius: "10px", border: "1px solid #d1d5db", fontSize: "13px", color: "#111827", background: "#ffffff" };
 const tableWrapStyle: CSSProperties = { overflowX: "auto" };
-const tableStyle: CSSProperties = { width: "100%", minWidth: "760px", borderCollapse: "collapse", fontSize: "13px" };
+const tableStyle: CSSProperties = { width: "100%", minWidth: "1080px", borderCollapse: "collapse", fontSize: "13px" };
 const thStyle: CSSProperties = { textAlign: "left", padding: "8px 10px", borderBottom: "1px solid #e5e7eb", color: "#6b7280", fontWeight: 800, whiteSpace: "nowrap" };
 const tdStyle: CSSProperties = { padding: "8px 10px", borderBottom: "1px solid #f1f5f9", color: "#111827", verticalAlign: "middle" };
+const nowrapTdStyle: CSSProperties = { ...tdStyle, whiteSpace: "nowrap" };
 const subTextStyle: CSSProperties = { marginTop: "3px", fontSize: "11px", color: "#6b7280" };
-const badgeStyle: CSSProperties = { display: "inline-flex", padding: "3px 8px", borderRadius: "999px", fontSize: "12px", fontWeight: 800 };
-const ghostButtonStyle: CSSProperties = { height: "30px", padding: "0 10px", borderRadius: "8px", border: "1px solid #d1d5db", background: "#ffffff", color: "#374151", fontSize: "12px", fontWeight: 700, cursor: "pointer" };
+const badgeStyle: CSSProperties = { display: "inline-flex", padding: "3px 8px", borderRadius: "999px", fontSize: "12px", fontWeight: 800, whiteSpace: "nowrap" };
+const ghostButtonStyle: CSSProperties = { height: "30px", padding: "0 10px", borderRadius: "8px", border: "1px solid #d1d5db", background: "#ffffff", color: "#374151", fontSize: "12px", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" };
 const dangerButtonStyle: CSSProperties = { ...ghostButtonStyle, borderColor: "#fecaca", background: "#fef2f2", color: "#b91c1c" };
 const deleteButtonStyle: CSSProperties = { ...ghostButtonStyle, borderColor: "#b91c1c", background: "#b91c1c", color: "#ffffff" };
 const solidButtonStyle: CSSProperties = { height: "36px", padding: "0 16px", borderRadius: "10px", border: "none", background: "#111827", color: "#ffffff", fontSize: "13px", fontWeight: 800, cursor: "pointer" };
