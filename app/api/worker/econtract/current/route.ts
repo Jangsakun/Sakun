@@ -6,6 +6,18 @@ import { maskResidentNumber } from "@/app/lib/contracts/residentNumber";
 import { getTemplate } from "@/app/lib/contracts/templates";
 
 /**
+ * 사업장별 근무시간 기본값(2026-10-15 사용자 지정). 직전 계약서에 적은 값이 있으면 그 값이 우선입니다.
+ * 빈칸("")은 근로자가 직접 입력합니다. 목록에 없는 사업장은 헤모즈·깨소금과 같이 휴게시간만 채웁니다.
+ */
+const WORK_TIME_DEFAULTS: Record<string, { workStart: string; workEnd: string; breakStart: string; breakEnd: string }> = {
+  장사꾼: { workStart: "09:30", workEnd: "18:00", breakStart: "12:30", breakEnd: "13:30" },
+  로엔티크: { workStart: "09:00", workEnd: "18:00", breakStart: "12:30", breakEnd: "13:30" },
+  헤모즈: { workStart: "", workEnd: "", breakStart: "12:30", breakEnd: "13:30" },
+  깨소금: { workStart: "", workEnd: "", breakStart: "12:30", breakEnd: "13:30" },
+};
+const WORK_TIME_FALLBACK = { workStart: "", workEnd: "", breakStart: "12:30", breakEnd: "13:30" };
+
+/**
  * 작성할 계약서(서명대기) 내용과 미리 채울 값.
  *
  * 주민번호는 가린 값으로만 보냅니다. 근로자가 그대로 두면 서버가 DB 값을 씁니다.
@@ -46,6 +58,8 @@ export async function POST(request: Request) {
     for (const y of [thisYear - 1, thisYear, thisYear + 1]) minimumWages[y] = minimumWage(y);
 
     const fixedStartDate = contract.trigger_reason === "renewal" ? contract.start_date : null;
+    const workplace = employee.workplace_name || "장사꾼";
+    const timeDefaults = WORK_TIME_DEFAULTS[workplace] ?? WORK_TIME_FALLBACK;
 
     await logContractEvent(supabase, request, {
       contractId: contract.id,
@@ -67,7 +81,7 @@ export async function POST(request: Request) {
         fixedStartDate,
         today: todayKst(),
         entity: contract.entity,
-        workplace: employee.workplace_name || "장사꾼",
+        workplace,
         prefill: {
           name: str(prefill.name) || employee.name,
           residentNumber,
@@ -77,10 +91,10 @@ export async function POST(request: Request) {
           address: str(prefill.address),
           startDate: fixedStartDate || str(prefill.startDate) || todayKst(),
           workDays: Array.isArray(prefill.workDays) ? prefill.workDays : ["mon", "tue", "wed", "thu", "fri"],
-          workStart: str(prefill.workStart) || "09:00",
-          workEnd: str(prefill.workEnd) || "18:00",
-          breakStart: str(prefill.breakStart) || "12:00",
-          breakEnd: str(prefill.breakEnd) || "13:00",
+          workStart: str(prefill.workStart) || timeDefaults.workStart,
+          workEnd: str(prefill.workEnd) || timeDefaults.workEnd,
+          breakStart: str(prefill.breakStart) || timeDefaults.breakStart,
+          breakEnd: str(prefill.breakEnd) || timeDefaults.breakEnd,
           note: str(prefill.note),
           serviceScopeOther: str(prefill.serviceScopeOther),
         },
