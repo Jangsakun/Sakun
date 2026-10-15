@@ -208,7 +208,14 @@ BISEO(`Desktop/biseo/web/lib/attendance/`)의 `confirm.ts` → `mutate.ts` 가
 
 ---
 
-## 뿌리오 문자 연동 — 서명본 다운로드 링크 LMS (2026-10-15, 1~4단계 구현·검증 완료, 미커밋·미배포)
+## 뿌리오 문자 연동 — 서명본 다운로드 링크 LMS (2026-10-15 ✅ 운영 가동, 실발송 검증 완료)
+
+- **2026-10-15 운영 반영 완료**: SQL 실행, 배포(`174777e`, UI `29beb30`), Vercel `SMS_WORKER_SECRET`, 사무실 PC 작업 스케줄러 `SakunSmsWorker`(SYSTEM) 등록,
+  절전 끔, `SMS_DRY_RUN=0`. 모의 발송(테스트 계약서) → 본인 번호 실발송(#3, 뿌리오 1000) → 링크·생년월일·PDF 내려받기까지 사용자 확인
+- 겪은 일: 뿌리오 연동 IP 등록 직후 토큰 발급이 3003(invalid ip, userIp 221.159.47.151)으로 거부 → 뿌리오 사이트에서 IP 설정 재확인 후 해결, 워커는 5분 뒤 자동 복구
+- 일반(비관리자) 창에서는 `Get-ScheduledTask SakunSmsWorker` 가 안 보임(SYSTEM 작업) — 정상. 로그는 notepad 로 열기(PS 5.1 Get-Content 는 한글 깨짐)
+- ⚠️ **별건 보안 구멍(미처리)**: 관리자 API 인증이 쿠키 `admin_auth=ok` 고정값이라 누구나 쿠키만 넣으면 통과(2026-10-15 실측). 사용자에게 보고함, 수정 여부 결정 대기
+- (아래는 구현 당시 기록)
 
 - 구조: 근태 앱은 `sms_outbox` 에 적기만 → 사무실 PC `sms-worker/`(Node, 의존성 없음)가 `/api/internal/sms/claim`·`report` 로 가져가 뿌리오 발송.
   워커 PC에는 Supabase 키 없음(`SMS_WORKER_SECRET` 만). 설치·전원설정·문제해결: **[sms-worker/README.md](sms-worker/README.md)**
