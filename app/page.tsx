@@ -229,6 +229,15 @@ function getCheckoutAvailability(date = new Date()): CheckoutAvailability {
     };
   }
 
+  // 22:00 이후에는 언제든 퇴근 가능(10분 단위로 기록). DB 함수 attendance_checkout_block_reason 과 같은 규칙.
+  if (hour >= 22) {
+    return {
+      enabled: true,
+      notice: "오후 10시 이후 퇴근은 10분 단위로 기록됩니다.",
+      nextAvailableLabel: "",
+    };
+  }
+
   const isOpenWindow =
     (minute >= 0 && minute <= 10) || (minute >= 30 && minute <= 40);
 
@@ -349,6 +358,11 @@ function normalizeDisplayCheckOut(value: string) {
   const dateKey = getSeoulDateKey(source);
   const { hour, minute, totalMinutes } = getSeoulHourMinute(source);
   const checkoutStartMinutes = 12 * 60 + 30;
+
+  // 22:00 이후: 10분 단위 내림 (DB 함수 attendance_normalize_check_out 과 같은 규칙)
+  if (hour >= 22) {
+    return createSeoulDateTime(dateKey, hour, Math.floor(minute / 10) * 10);
+  }
 
   if (totalMinutes >= checkoutStartMinutes) {
     if (minute <= 10) {
