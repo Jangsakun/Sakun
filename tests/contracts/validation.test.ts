@@ -80,6 +80,22 @@ test("1주 종료일: 월~금 시작은 그 주 금요일, 토·일 시작은 �
   for (const [start, end, note] of cases) assert.equal(calcWeekContractEnd(start), end, note);
 });
 
+test("장사꾼 1주 계약: 토요일 시작이면 토요일 하루 (2026-10-16)", () => {
+  assert.equal(calcWeekContractEnd("2026-10-17", "장사꾼"), "2026-10-17", "토 시작 → 당일");
+  assert.equal(calcWeekContractEnd("2026-10-18", "장사꾼"), "2026-10-23", "일 시작 → 다음 주 금(그대로)");
+  assert.equal(calcWeekContractEnd("2026-10-14", "장사꾼"), "2026-10-16", "수 시작 → 그 주 금(그대로)");
+  assert.equal(calcWeekContractEnd("2026-10-17", "헤모즈"), "2026-10-23", "헤모즈 토 시작 → 다음 주 금(그대로)");
+  assert.equal(calcWeekContractEnd("2026-10-17"), "2026-10-23", "사업장 없으면 기존 규칙");
+
+  const sat = { ...week(), startDate: "2026-10-17" };
+  const jang = { ...ctx(), workplace: "장사꾼" };
+  const okSat = validateContractInput({ ...sat, workDays: ["sat"] }, jang);
+  assert.equal(okSat.derived.endDate, "2026-10-17");
+  assert.ok(!okSat.errors.some((e) => e.code === "saturday_only"));
+  assert.ok(validateContractInput({ ...sat, workDays: ["mon", "sat"] }, jang).errors.some((e) => e.code === "saturday_only"));
+  assert.ok(!validateContractInput({ ...sat, workDays: ["mon", "sat"] }, { ...ctx(), workplace: "헤모즈" }).errors.some((e) => e.code === "saturday_only"));
+});
+
 test("11개월 종료일은 기존 갱신 버튼과 같은 계산", () => {
   assert.equal(calcElevenMonthContractEnd("2026-10-01"), "2027-08-31");
   assert.equal(calcElevenMonthContractEnd("2026-03-31"), "2027-02-28");

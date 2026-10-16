@@ -178,5 +178,6 @@ export function validationContext(
     printedHourlyWage,
     employeeHourlyWage: employee.hourly_wage ?? null,
     startDateFixed,
+    workplace: employee.workplace_name || "장사꾼",
   };
 }

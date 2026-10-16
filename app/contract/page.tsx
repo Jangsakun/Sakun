@@ -12,7 +12,7 @@ import {
   type Issue,
   type WorkDay,
 } from "@/app/lib/contracts/validation";
-import { calcContractEnd } from "@/app/lib/contracts/period";
+import { calcContractEnd, isSaturdayOnlyWeek } from "@/app/lib/contracts/period";
 
 // 근로자 앱 — 근로계약서 작성·서명.
 //   ① 작성(입력 즉시 검사) → ② 미리보기(끝까지 스크롤) → ③ 서명 → ④ 완료(내려받기)
@@ -157,6 +157,7 @@ export default function ContractPage() {
       printedHourlyWage: contract.printedHourlyWage,
       employeeHourlyWage: contract.employeeHourlyWage,
       startDateFixed: Boolean(contract.fixedStartDate),
+      workplace: contract.workplace,
     });
   }, [contract, input]);
 
@@ -166,7 +167,7 @@ export default function ContractPage() {
   const allErrors = [...clientErrors, ...serverIssues.filter((s) => !clientErrors.some((c) => c.code === s.code && c.field === s.field))];
   const errorFor = (field: string) => allErrors.filter((e) => e.field === field);
 
-  const endDate = input?.startDate ? calcContractEnd(contract?.kind ?? "month11", input.startDate) : null;
+  const endDate = input?.startDate ? calcContractEnd(contract?.kind ?? "month11", input.startDate, contract?.workplace) : null;
 
   const update = (patch: Partial<ContractInput>) => {
     setInput((prev) => (prev ? { ...prev, ...patch } : prev));
@@ -482,7 +483,18 @@ export default function ContractPage() {
               min={addDays(contract.today, -29)}
               max={addDays(contract.today, 59)}
               disabled={Boolean(contract.fixedStartDate)}
-              onChange={(e) => update({ startDate: e.target.value })}
+              onChange={(e) => {
+                const startDate = e.target.value;
+
+                // 장사꾼 1주 계약: 토요일 시작이면 토요일 하루 계약 → 근무 요일도 토요일로 맞춥니다.
+                if (isWeek && isSaturdayOnlyWeek(startDate, contract.workplace)) {
+                  update({ startDate, workDays: ["sat"] });
+                } else if (isWeek && isSaturdayOnlyWeek(input.startDate, contract.workplace)) {
+                  update({ startDate, workDays: ["mon", "tue", "wed", "thu", "fri"] });
+                } else {
+                  update({ startDate });
+                }
+              }}
             />
           </Field>
           <ReadOnly label="계약 종료일 (자동)" value={endDate ?? "-"} />

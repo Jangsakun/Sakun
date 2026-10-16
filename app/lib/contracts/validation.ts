@@ -1,6 +1,7 @@
 import {
   calcContractEnd,
   daysBetween,
+  isSaturdayOnlyWeek,
   parseDateKey,
   type ContractKind,
 } from "./period";
@@ -59,6 +60,8 @@ export type ValidationContext = {
    * 관리자가 만료 두 달 전에 갱신을 누르면 시작일이 60일 넘게 뒤라 서명이 막히기 때문입니다.
    */
   startDateFixed?: boolean;
+  /** 직원 소속 사업장. 장사꾼 1주 계약은 토요일 시작이면 토요일 하루 계약(isSaturdayOnlyWeek) */
+  workplace?: string | null;
 };
 
 export type Issue = {
@@ -158,7 +161,7 @@ export function validateContractInput(
     }
   }
 
-  const endDate = startOk ? calcContractEnd(ctx.kind, input.startDate) : null;
+  const endDate = startOk ? calcContractEnd(ctx.kind, input.startDate, ctx.workplace) : null;
 
   // 2. 최저임금 — 계약서에 적히는 시급은 양식에 인쇄된 금액입니다.
   if (startOk) {
@@ -220,6 +223,8 @@ export function validateContractInput(
 
     if (days.length === 0) {
       add("workDays", "no_work_days", "근무 요일을 하나 이상 선택해주세요.");
+    } else if (startOk && isSaturdayOnlyWeek(input.startDate, ctx.workplace) && (days.length !== 1 || days[0] !== "sat")) {
+      add("workDays", "saturday_only", "토요일에 시작하는 계약은 토요일 하루 계약입니다. 근무 요일은 토요일만 선택해주세요.");
     }
 
     const start = minutesOf(input.workStart);

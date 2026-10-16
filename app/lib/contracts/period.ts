@@ -37,15 +37,28 @@ export function daysBetween(a: string, b: string): number {
 }
 
 /**
+ * 토요일 하루 계약인지 (2026-10-16 사용자 요청).
+ * 장사꾼 1주(당근) 계약서는 시작일이 토요일이면 그 토요일 하루로 끝납니다. 다른 사업장은 해당 없음.
+ */
+export function isSaturdayOnlyWeek(start: string, workplace: string | null | undefined): boolean {
+  const date = parseDateKey(start);
+
+  // 호출하는 쪽이 사업장 빈값을 "장사꾼"으로 바꿔서 넘깁니다(worker.ts, current API). 사업장 없이 부르면 해당 없음.
+  return Boolean(date) && workplace === "장사꾼" && getISODay(date!) === 6;
+}
+
+/**
  * 1주 계약 종료일.
  *   주의 기준: 월요일 시작 ~ 일요일 끝
  *   월~금 시작 → 그 주 금요일 (금요일 시작이면 당일)
  *   토·일 시작 → 다음 주 금요일
+ *   단, 장사꾼 토요일 시작 → 그 토요일 하루 (isSaturdayOnlyWeek)
  */
-export function calcWeekContractEnd(start: string): string | null {
+export function calcWeekContractEnd(start: string, workplace?: string | null): string | null {
   const date = parseDateKey(start);
 
   if (!date) return null;
+  if (isSaturdayOnlyWeek(start, workplace)) return start;
 
   const isoDay = getISODay(date); // 1=월 … 7=일
   const daysToFriday = isoDay <= 5 ? 5 - isoDay : 12 - isoDay;
@@ -65,9 +78,9 @@ export function calcElevenMonthContractEnd(start: string): string | null {
   return calcRenewalDates(formatDateKey(addDays(date, -1)))?.newEnd ?? null;
 }
 
-export function calcContractEnd(kind: ContractKind, start: string) {
+export function calcContractEnd(kind: ContractKind, start: string, workplace?: string | null) {
   return kind === "week"
-    ? calcWeekContractEnd(start)
+    ? calcWeekContractEnd(start, workplace)
     : calcElevenMonthContractEnd(start);
 }
 
