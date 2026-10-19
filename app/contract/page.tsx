@@ -408,13 +408,20 @@ export default function ContractPage() {
         <div className="text-center py-6">
           <div className="text-4xl mb-3">✅</div>
           <h2 className="text-xl font-extrabold mb-2">근로계약서 서명이 완료되었습니다</h2>
-          <p className="text-gray-600 text-sm mb-6">
-            서명한 계약서는 아래 버튼이나 앱의 &ldquo;내 계약서&rdquo;에서 언제든 다시 받을 수 있습니다.
-          </p>
-          <div className="flex flex-col gap-2">
-            <button className={btnBig} onClick={() => signedId && download(signedId)}>계약서 내려받기 (PDF)</button>
-            <button className={btnGhost} onClick={() => router.push("/")}>출퇴근 화면으로</button>
+          {/* 2026-10-17 서명 후 PDF 를 받다 출근을 안 찍은 사례가 많아, 출근을 먼저 안내합니다. */}
+          <div className="mb-5 rounded-2xl border-2 border-red-500 bg-red-50 px-4 py-3 text-left">
+            <p className="text-[15px] font-extrabold text-red-700">⚠️ 아직 출근이 기록되지 않았습니다</p>
+            <p className="mt-1 text-sm leading-6 text-red-700">
+              아래 <b>&ldquo;출근하러 가기&rdquo;</b>를 눌러 출퇴근 화면에서 <b>출근 버튼</b>을 꼭 눌러주세요.
+            </p>
           </div>
+          <div className="flex flex-col gap-2">
+            <button className={btnBig} onClick={() => router.push("/")}>출근하러 가기</button>
+            <button className={btnGhost} onClick={() => signedId && download(signedId)}>계약서 내려받기 (PDF)</button>
+          </div>
+          <p className="mt-4 text-xs leading-5 text-gray-500">
+            서명한 계약서는 문자로 받은 링크나 앱의 &ldquo;내 계약서&rdquo;에서 언제든 다시 받을 수 있습니다.
+          </p>
         </div>
       </Shell>
     );

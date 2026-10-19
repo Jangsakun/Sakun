@@ -1426,6 +1426,22 @@ export default function Home() {
           errorMessage = "위치 요청 시간이 초과되었습니다.";
         }
 
+        // 서버까지 오지 못한 실패도 원인 확인용으로 남깁니다(attendance_failures). 실패해도 무시.
+        fetch("/api/attendance/failure", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          keepalive: true,
+          body: JSON.stringify({
+            name: employee.name,
+            birthDate: employee.birthDate,
+            phoneLast4: employee.phoneLast4,
+            recordType: type === "check-in" ? "check_in" : "check_out",
+            segment,
+            geoErrorCode: error.code,
+            message: errorMessage,
+          }),
+        }).catch(() => {});
+
         alert(errorMessage);
         setMessage(errorMessage);
         setIsLoading(false);

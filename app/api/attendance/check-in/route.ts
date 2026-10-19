@@ -3,6 +3,7 @@ import { recordAttendance, resolveRequestedSegment } from "@/app/lib/attendanceS
 import { toContractType } from "@/app/lib/contractType";
 import { createClient } from "@supabase/supabase-js";
 import { getDistanceInMeters } from "@/app/lib/geo";
+import { withAttendanceFailureLog } from "@/app/lib/attendanceFailureLog";
 
 const WORKPLACES = [
   {
@@ -47,7 +48,12 @@ function getNearestWorkplaceDistance(parsedLat: number, parsedLng: number) {
   });
 }
 
+// 실패 응답은 attendance_failures 에 기록합니다(2026-10-19). 출퇴근 로직은 아래 handleCheckIn 그대로.
 export async function POST(request: Request) {
+  return withAttendanceFailureLog(request, "check_in", getNearestWorkplaceDistance, handleCheckIn);
+}
+
+async function handleCheckIn(request: Request) {
   try {
     const body = await request.json();
     // checkedAt 은 받지 않습니다. 저장 시각은 DB 시각(now())입니다.
