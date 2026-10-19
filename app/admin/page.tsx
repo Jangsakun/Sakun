@@ -857,6 +857,10 @@ export default function AdminPage() {
     return map;
   }, [employees]);
 
+  // 출퇴근 기록·급여관리에서 당근 근로자 표시(2026-10-19). 직원 목록의 고용구분을 씁니다.
+  const isCarrotEmployeeId = (employeeId: number | string) =>
+    employeeMap.get(Number(employeeId))?.employment_type === "carrot";
+
 
   const filteredRecords = useMemo(() => {
     return records
@@ -1825,6 +1829,7 @@ export default function AdminPage() {
     const headers = [
       "이름",
       "근무지",
+      "구분",
       "주민번호",
       "은행",
       "계좌번호",
@@ -1845,6 +1850,7 @@ export default function AdminPage() {
       return [
         cell(row.employeeName),
         cell(workplaceName),
+        cell(isCarrotEmployeeId(row.employeeId) ? "당근" : "고정"),
         // \uc8fc\ubbfc\ubc88\ud638\u00b7\uacc4\uc88c\ubc88\ud638\ub294 \uc55e\uc790\ub9ac 0 \uc774 \uc0ac\ub77c\uc9c0\uc9c0 \uc54a\ub3c4\ub85d \ud14d\uc2a4\ud2b8 \uc140\ub85c \uace0\uc815\ud569\ub2c8\ub2e4.
         textCell(employee?.resident_number || "-"),
         cell(employee?.bank_name || "-"),
@@ -1889,6 +1895,7 @@ export default function AdminPage() {
     const headers = [
       "이름",
       "근무지",
+      "구분",
       "주민번호",
       "은행",
       "계좌번호",
@@ -1904,6 +1911,7 @@ export default function AdminPage() {
     const rows = grouped.map((row) => [
       cell(row.employeeName),
       cell(row.workplaceName),
+      cell(isCarrotEmployeeId(row.employeeId) ? "당근" : "고정"),
       // \uc8fc\ubbfc\ubc88\ud638\u00b7\uacc4\uc88c\ubc88\ud638\ub294 \uc55e\uc790\ub9ac 0 \uc774 \uc0ac\ub77c\uc9c0\uc9c0 \uc54a\ub3c4\ub85d \ud14d\uc2a4\ud2b8 \uc140\ub85c \uace0\uc815\ud569\ub2c8\ub2e4.
       textCell(row.residentNumber),
       cell(row.bankName),
@@ -2558,6 +2566,7 @@ export default function AdminPage() {
                         <tr key={row.key}>
                           <td style={tdStyle}>
                             <span style={nameTextStyle}>{row.employeeName}</span>
+                            {isCarrotEmployeeId(row.employeeId) && <span style={carrotBadgeStyle}>당근</span>}
                           </td>
 
                           <td style={tdStyle}>{row.residentPrefix || "-"}</td>
@@ -3624,6 +3633,7 @@ export default function AdminPage() {
                         <tr key={`${row.employeeId}-${row.weekStart}-${index}`}>
                           <td style={tdStyle}>
                             <span style={nameTextStyle}>{row.employeeName}</span>
+                            {isCarrotEmployeeId(row.employeeId) && <span style={carrotBadgeStyle}>당근</span>}
                           </td>
                           <td style={tdStyle}>
                             <span
@@ -4240,6 +4250,13 @@ const empBadgeStyle: CSSProperties = {
   fontSize: "11px",
   fontWeight: 700,
   whiteSpace: "nowrap",
+};
+
+const carrotBadgeStyle: CSSProperties = {
+  ...empBadgeStyle,
+  marginLeft: "6px",
+  backgroundColor: "#ffedd5",
+  color: "#c2410c",
 };
 
 const empReconnectNoteStyle: CSSProperties = {

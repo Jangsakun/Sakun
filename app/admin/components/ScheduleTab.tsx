@@ -496,15 +496,18 @@ function getEmployeesForRoleAndDate({
   group,
   date,
   selectedDate,
+  isWalkIn,
 }: {
   employees: EmployeeItem[];
   group: RoleGroupConfig;
   date: string;
   selectedDate: string;
+  /** 스케줄상 그날 출근이 아닌데(미제출·출근 안함) 실제로 출근한 사람 → 역할그룹 칸으로 옮김 */
+  isWalkIn?: (employee: EmployeeItem, date: string) => boolean;
 }) {
   return employees
     .filter((employee) => {
-      if (!isEmployeeAvailableOnDate(employee, date, selectedDate)) {
+      if (!isEmployeeAvailableOnDate(employee, date, selectedDate) && !isWalkIn?.(employee, date)) {
         return false;
       }
 
@@ -540,17 +543,20 @@ function getEmployeesForHemozGroupAndDate({
   group,
   date,
   selectedDate,
+  isWalkIn,
 }: {
   employees: EmployeeItem[];
   group: RoleGroupConfig;
   date: string;
   selectedDate: string;
+  /** 스케줄상 그날 출근이 아닌데(미제출·출근 안함) 실제로 출근한 사람 → 역할그룹 칸으로 옮김 */
+  isWalkIn?: (employee: EmployeeItem, date: string) => boolean;
 }) {
   const targetShift: ShiftType = group.key === "hemozOpen" ? "open" : "day";
 
   return employees
     .filter((employee) => {
-      if (!isEmployeeAvailableOnDate(employee, date, selectedDate)) {
+      if (!isEmployeeAvailableOnDate(employee, date, selectedDate) && !isWalkIn?.(employee, date)) {
         return false;
       }
 
@@ -567,24 +573,39 @@ function getEmployeesForHemozGroupAndDate({
     .sort((a, b) => a.name.localeCompare(b.name, "ko"));
 }
 
-function getNotSubmittedEmployeesForDate(employees: EmployeeItem[]) {
-  return employees.sort((a, b) => a.name.localeCompare(b.name, "ko"));
+// 당근 근로자는 스케줄을 내지 않는 일용직이라 미제출 칸에 넣지 않습니다(출근한 날 "당근" 칸에만 보임).
+// 그날 출근한 미제출자는 역할그룹 칸으로 옮겨졌으므로 그날 미제출 칸에서는 뺍니다.
+function getNotSubmittedEmployeesForDate(
+  employees: EmployeeItem[],
+  date: string,
+  isWalkIn: (employee: EmployeeItem, date: string) => boolean
+) {
+  return employees
+    .filter((employee) => !isCarrotEmployee(employee) && !isWalkIn(employee, date))
+    .sort((a, b) => a.name.localeCompare(b.name, "ko"));
 }
 
 function getUnavailableEmployeesForDate({
   employees,
   notSubmittedEmployees,
   date,
+  isWalkIn,
 }: {
   employees: EmployeeItem[];
   notSubmittedEmployees: EmployeeItem[];
   date: string;
+  isWalkIn: (employee: EmployeeItem, date: string) => boolean;
 }) {
   const notSubmittedKeys = new Set(notSubmittedEmployees.map((employee) => getEmployeeKey(employee)));
 
   return employees
     .filter((employee) => {
       if (notSubmittedKeys.has(getEmployeeKey(employee))) {
+        return false;
+      }
+
+      // "출근 안함"으로 냈지만 실제로 출근했으면 역할그룹 칸으로 옮겨졌으므로 여기서 뺍니다.
+      if (isWalkIn(employee, date)) {
         return false;
       }
 
@@ -765,6 +786,11 @@ export default function ScheduleTab() {
       (!!employeeNameKey && checkedInKeys.has(employeeNameKey))
     );
   };
+
+  // 스케줄상 그날 출근이 아닌데(미제출 또는 "출근 안함") 실제로 출근한 사람.
+  // 기존 스케줄 로직은 그대로 두고, 이런 사람만 그날 역할그룹 칸에 표시합니다(2026-10-19). 화면 표시만 바뀝니다.
+  const isWalkInOnDate = (employee: EmployeeItem, date: string) =>
+    !isEmployeeAvailableOnDate(employee, date, date) && isEmployeeCheckedInOnDate(employee, date);
 
   const handleChangeWorkplace = (nextWorkplace: WorkplaceName) => {
     setSelectedWorkplace(nextWorkplace);
@@ -1241,6 +1267,7 @@ export default function ScheduleTab() {
                             group,
                             date: day.value,
                             selectedDate,
+                            isWalkIn: isWalkInOnDate,
                           })
                         : group.key === "night"
                           ? allEmployees
@@ -1260,6 +1287,7 @@ export default function ScheduleTab() {
                               group,
                               date: day.value,
                               selectedDate,
+                              isWalkIn: isWalkInOnDate,
                             });
                     return (
                       <td
@@ -1377,6 +1405,7 @@ export default function ScheduleTab() {
                     employees: allEmployees,
                     notSubmittedEmployees: data?.notSubmitted || [],
                     date: day.value,
+                    isWalkIn: isWalkInOnDate,
                   });
                   return (
                     <td
@@ -1489,7 +1518,7 @@ export default function ScheduleTab() {
                 </td>
 
                 {days.map((day) => {
-                  const employees = getNotSubmittedEmployeesForDate([...(data?.notSubmitted || [])]);
+                  const employees = getNotSubmittedEmployeesForDate([...(data?.notSubmitted || [])], day.value, isWalkInOnDate);
                   return (
                     <td
                       key={`not-submitted-${day.value}`}
