@@ -70,7 +70,9 @@ export async function POST(request: Request) {
     }
 
     const reconnectCode = generateReconnectCode(6);
-    const expiresAtDate = new Date(Date.now() + 1000 * 60 * 10);
+    // 유효시간 없음(2026-10-20 사용자 결정, 이전 10분). 만료 시각 칸은 "발급된 코드가 살아 있음" 표시와
+    // 등록 쪽 만료 검사에 그대로 쓰이므로 먼 미래로 둡니다. 1회 사용 후 삭제·재발급 시 덮어쓰기는 그대로.
+    const expiresAtDate = new Date("9999-12-31T23:59:59Z");
     const expiresAt = expiresAtDate.toISOString();
 
     const { error: updateError } = await supabase
