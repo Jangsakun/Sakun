@@ -1867,7 +1867,7 @@ export default function AdminPage() {
     });
 
     downloadXlsx({
-      fileName: `payroll_${startDate}_${endDate}.xlsx`,
+      fileName: `payroll_${startDate}_${endDate}_출력${formatPrintedDateKst()}.xlsx`,
       columns: headers.map((header) => ({ header })),
       rows,
     }).catch((error) => {
@@ -1926,7 +1926,7 @@ export default function AdminPage() {
     ]);
 
     downloadXlsx({
-      fileName: `payroll_summary_${startDate}_${endDate}.xlsx`,
+      fileName: `payroll_summary_${startDate}_${endDate}_출력${formatPrintedDateKst()}.xlsx`,
       columns: headers.map((header) => ({ header })),
       rows,
     }).catch((error) => {
@@ -4242,6 +4242,16 @@ const empStickyRightStyle: CSSProperties = {
   backgroundColor: "#ffffff",
   boxShadow: "-6px 0 8px -6px rgba(15, 23, 42, 0.12)",
 };
+
+/** 급여 엑셀 파일 이름의 출력날짜 — 다운로드한 날(한국 시간) 'YYYY-MM-DD' */
+function formatPrintedDateKst(date = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
 
 const empBadgeStyle: CSSProperties = {
   display: "inline-block",
