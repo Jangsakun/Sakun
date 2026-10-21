@@ -216,6 +216,37 @@ function formatTimeLabel(hour: number, minute: number) {
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
+/**
+ * 출퇴근 위치 받기 (2026-10-21).
+ *   1차: 정밀 GPS, 최대 25초 (이전 10초 — 실내·구형 폰에서 시간 초과가 잦았음)
+ *   2차: 1차가 시간 초과/위치 확인 불가면 와이파이·통신망 위치로 한 번 더(최대 15초, 30초 이내 위치 재사용 허용)
+ *   위치 권한 거부는 다시 시도해도 같으므로 바로 실패.
+ * 2차 위치는 오차가 클 수 있지만, 정확도 기준(120m)은 서버가 그대로 검사합니다.
+ */
+function getPositionWithFallback(
+  onFallback: () => void,
+  onSuccess: (position: GeolocationPosition) => void,
+  onError: (error: GeolocationPositionError) => void
+) {
+  navigator.geolocation.getCurrentPosition(
+    onSuccess,
+    (error) => {
+      if (error.code === error.PERMISSION_DENIED) {
+        onError(error);
+        return;
+      }
+
+      onFallback();
+      navigator.geolocation.getCurrentPosition(onSuccess, onError, {
+        enableHighAccuracy: false,
+        timeout: 15000,
+        maximumAge: 30000,
+      });
+    },
+    { enableHighAccuracy: true, timeout: 25000, maximumAge: 0 }
+  );
+}
+
 function getCheckoutAvailability(date = new Date()): CheckoutAvailability {
   const { hour, minute } = getKstParts(date);
   const totalMinutes = hour * 60 + minute;
@@ -1344,9 +1375,10 @@ export default function Home() {
     const actionLabel = `${isHybrid && segment === "piece" ? "도급 " : ""}${
       type === "check-in" ? "출근" : "퇴근"
     }`;
-    setMessage(`${actionLabel} 처리 중...`);
+    setMessage(`${actionLabel} 처리 중... (위치 확인 중, 최대 40초)`);
 
-    navigator.geolocation.getCurrentPosition(
+    getPositionWithFallback(
+      () => setMessage(`${actionLabel} 처리 중... (GPS가 늦어 다른 방법으로 위치 확인 중)`),
       async (position) => {
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
@@ -1445,11 +1477,6 @@ export default function Home() {
         alert(errorMessage);
         setMessage(errorMessage);
         setIsLoading(false);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0,
       }
     );
   };
