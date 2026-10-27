@@ -386,6 +386,13 @@ function normalizeDisplayCheckIn(value: string) {
   const start1800Window = 17 * 60 + 50;
   const end1800Window = 18 * 60 + 10;
 
+  // 토·일 10:00 전 출근 → 10:00 (DB 함수 attendance_normalize_check_in 과 같은 규칙, 2026-10-27)
+  const weekday = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Seoul", weekday: "short" }).format(source);
+
+  if ((weekday === "Sat" || weekday === "Sun") && totalMinutes < 10 * 60) {
+    return createSeoulDateTime(dateKey, 10, 0);
+  }
+
   if (totalMinutes >= start0900Window && totalMinutes <= end0910Window) {
     return createSeoulDateTime(dateKey, 9, 0);
   }
