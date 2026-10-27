@@ -32,11 +32,14 @@ revoke all on table public.weekly_allowance_status_changes from anon, authentica
 grant select, insert on public.weekly_allowance_status_changes to service_role;
 grant usage, select on sequence public.weekly_allowance_status_changes_id_seq to service_role;
 
--- 이력 표가 생기기 전에 바꾼 건: 한나라(306) 10/27 비대상 → 대상 (10/19~25 주는 비대상으로 이체 완료)
+-- 이력 표가 생기기 전에 바꾼 건 (10/27 비대상 → 대상, 10/19~25 주는 비대상으로 이체 완료)
+--   한나라(306, 로엔티크), 김원석(287, 헤모즈), 김시윤(288, 헤모즈)
 insert into public.weekly_allowance_status_changes (employee_id, old_status, new_status, effective_week_start)
-select 306, '비대상', '대상', date '2026-10-26'
+select v.id, '비대상', '대상', date '2026-10-26'
+  from (values (306::bigint), (287::bigint), (288::bigint)) as v(id)
  where not exists (
-   select 1 from public.weekly_allowance_status_changes where employee_id = 306 and effective_week_start = date '2026-10-26'
+   select 1 from public.weekly_allowance_status_changes c
+    where c.employee_id = v.id and c.effective_week_start = date '2026-10-26'
  );
 
 commit;
