@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createPendingContract } from "@/app/lib/contracts/lifecycle";
 import { contractHistory, previousInput } from "@/app/lib/contracts/worker";
+import { logContractEvent } from "@/app/lib/contracts/server";
 
 export async function PATCH(
   request: Request,
@@ -443,6 +444,29 @@ export async function PATCH(
       const history = await contractHistory(supabase, Number(id));
 
       if (history.length > 0) {
+        // 서명 안 한 1주 계약서가 남아 있으면 무효 처리합니다(2026-10-27). 그대로 두면 createPendingContract 가
+        // 그 서명대기를 돌려줘서 11개월 계약서가 만들어지지 않고 1주 계약서가 뜹니다.
+        const staleWeek = history.filter((c) => c.status === "pending" && c.kind === "week");
+
+        for (const stale of staleWeek) {
+          const { data: voided } = await supabase
+            .from("employment_contracts")
+            .update({ status: "void", void_reason: "당근→고정 전환으로 1주 계약서 대신 11개월 계약서 작성", voided_at: new Date().toISOString() })
+            .eq("id", stale.id)
+            .eq("status", "pending")
+            .select("id");
+
+          if (voided && voided.length > 0) {
+            await logContractEvent(supabase, request, {
+              contractId: stale.id,
+              employeeId: Number(id),
+              eventType: "voided",
+              actor: "admin-ui",
+              detail: { reason: "type_change", previousStatus: "pending" },
+            });
+          }
+        }
+
         const pending = await createPendingContract(supabase, request, {
           employeeId: Number(id),
           triggerReason: "type_change",
