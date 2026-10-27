@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 function getOrCreateDeviceId() {
@@ -23,7 +23,16 @@ export default function RegisterDevicePage() {
   const [bankName, setBankName] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [workplaceName, setWorkplaceName] = useState("장사꾼");
-  const [employmentType, setEmploymentType] = useState("fixed");
+  // 고용형태는 근로자가 고르지 않고 가입 주소로 정합니다(2026-10-27).
+  //   sakun.kr/register-device?type=carrot → 당근 / 그 밖의 주소 → 고정
+  // 당근 공고에는 당근 전용 주소만 걸어 둡니다.
+  const [employmentType, setEmploymentType] = useState<"fixed" | "carrot">("fixed");
+  const isCarrotSignup = employmentType === "carrot";
+
+  useEffect(() => {
+    const type = new URLSearchParams(window.location.search).get("type");
+    setEmploymentType(type === "carrot" ? "carrot" : "fixed");
+  }, []);
   const [reconnectCode, setReconnectCode] = useState("");
   const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
 
@@ -131,7 +140,14 @@ export default function RegisterDevicePage() {
             ← 뒤로가기
           </button>
 
-          <h1 className="text-2xl font-bold text-black">회원 등록</h1>
+          <h1 className="text-2xl font-bold text-black">
+            {isCarrotSignup ? "당근 단기 근무 가입" : "직원 가입"}
+          </h1>
+          <p className="mt-2 text-sm text-gray-500">
+            {isCarrotSignup
+              ? "당근 공고를 보고 오신 단기 근무자용 가입 화면입니다."
+              : "고정 근무 직원용 가입 화면입니다. 당근 공고를 보고 오셨다면 공고에 있는 가입 링크로 다시 들어와 주세요."}
+          </p>
 
           {isSuccess ? (
             <div className="py-10 text-center text-green-600">
@@ -199,19 +215,8 @@ export default function RegisterDevicePage() {
   <option value="로엔티크">로엔티크</option>
 </select>
                 </div>
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-gray-800">
-                    고용 형태 선택
-                  </label>
-
-                  <select
-                    value={employmentType}
-                    onChange={(e) => setEmploymentType(e.target.value)}
-                    className={inputClassName}
-                  >
-                    <option value="fixed">고정</option>
-                    <option value="carrot">당근</option>
-                  </select>
+                <div className="rounded border border-gray-200 bg-gray-50 px-3 py-3 text-sm text-gray-700">
+                  고용 형태: <b className="text-black">{isCarrotSignup ? "당근(단기)" : "고정"}</b>
                 </div>
 
                 <input
