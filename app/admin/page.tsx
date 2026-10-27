@@ -367,6 +367,8 @@ export default function AdminPage() {
   const [payrollLoading, setPayrollLoading] = useState(false);
   // 급여 표 세후 급여 정렬. 머리글을 누를 때마다 높은순 → 낮은순 → 이름순(기본).
   const [netPaySort, setNetPaySort] = useState<"desc" | "asc" | null>(null);
+  // 은행제출용 제외 직원 목록 펼침 여부(기본 접힘)
+  const [bankExcludedOpen, setBankExcludedOpen] = useState(false);
   const [payrollMessage, setPayrollMessage] = useState("");
 
   const [editingEmployeeId, setEditingEmployeeId] = useState<number | null>(
@@ -3517,10 +3519,33 @@ export default function AdminPage() {
 
               {bankTransfer.excluded.length > 0 && (
                 <div style={bankTransferWarnStyle}>
-                  <strong>
-                    {bankTransfer.excluded.length}명 제외됨 — 이 직원은 급여가
-                    이체되지 않습니다
-                  </strong>
+                  <button
+                    type="button"
+                    onClick={() => setBankExcludedOpen((prev) => !prev)}
+                    aria-expanded={bankExcludedOpen}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      width: "100%",
+                      padding: 0,
+                      border: "none",
+                      background: "none",
+                      color: "inherit",
+                      font: "inherit",
+                      textAlign: "left",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <strong>
+                      {bankTransfer.excluded.length}명 제외됨 — 이 직원은 급여가
+                      이체되지 않습니다
+                    </strong>
+                    <span style={{ marginLeft: "auto", fontSize: "12px", fontWeight: 700, whiteSpace: "nowrap" }}>
+                      {bankExcludedOpen ? "접기 ▲" : "펼치기 ▼"}
+                    </span>
+                  </button>
+                  {bankExcludedOpen && (
                   <ul style={bankTransferWarnListStyle}>
                     {bankTransfer.excluded.map((item, index) => (
                       <li key={`${item.employeeName}-${index}`}>
@@ -3529,6 +3554,7 @@ export default function AdminPage() {
                       </li>
                     ))}
                   </ul>
+                  )}
                   <div style={bankTransferWarnHelpStyle}>
                     직원 관리에서 은행명·계좌번호를 채우면 다음 다운로드부터
                     포함됩니다.
