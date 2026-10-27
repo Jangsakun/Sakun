@@ -4,6 +4,11 @@ import { loadPayOverrides, payOverrideKey } from "@/app/lib/payOverride";
 import { getDailyWage, isPieceContract } from "@/app/lib/contractType";
 import { calcDayPay } from "@/app/lib/dayPay";
 import { attendanceWorkDateKey, overnightRangeEnd } from "@/app/lib/workTime";
+import {
+  allowanceStatusForWeek,
+  loadAllowanceStatusChanges,
+  mondayOfDateKey,
+} from "@/app/lib/weeklyAllowanceHistory";
 
 function createSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -357,8 +362,13 @@ export async function POST(request: NextRequest) {
         };
       });
 
-    const weeklyAllowanceStatus =
-      employee.weekly_allowance_status || "검토필요";
+    // 그 주에 적용되던 주휴수당 상태(바꾼 주부터 적용, 관리자 급여와 같은 규칙)
+    const allowanceChanges = await loadAllowanceStatusChanges(supabase, [Number(employee.id)]);
+    const weeklyAllowanceStatus = allowanceStatusForWeek(
+      employee.weekly_allowance_status || "검토필요",
+      allowanceChanges.get(Number(employee.id)),
+      mondayOfDateKey(startDate)
+    );
 
     const totalHours = totalMinutes / 60;
     const averageHourlyWage =

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { currentWeekStartKst } from "@/app/lib/weeklyAllowanceHistory";
 import { createClient } from "@supabase/supabase-js";
 import { prepareFixedContractAfterTypeChange } from "@/app/lib/contracts/typeChange";
 
@@ -404,6 +405,27 @@ export async function PATCH(
       }
     }
 
+    // 주휴수당 상태 변경 이력: 바꾸기 전 상태를 읽어 둡니다(바꾼 주부터 적용, 지난주 이체분은 그대로).
+    let allowanceChange: { oldStatus: string; newStatus: string } | null = null;
+
+    if (typeof updatePayload.weekly_allowance_status === "string") {
+      const { data: before } = await supabase
+        .from("employees")
+        .select("weekly_allowance_status, employment_type")
+        .eq("id", id)
+        .maybeSingle();
+
+      // 저장값이 비어 있으면 화면에 보이던 기본값(직원 목록 API 와 같은 규칙)
+      const oldStatus =
+        String(before?.weekly_allowance_status || "").trim() ||
+        (before?.employment_type === "carrot" ? "비대상" : "대상");
+      const newStatus = String(updatePayload.weekly_allowance_status).trim();
+
+      if (before && newStatus && oldStatus !== newStatus) {
+        allowanceChange = { oldStatus, newStatus };
+      }
+    }
+
     // 고용구분 당근 → 고정 전환을 알아보려면 바꾸기 전 값이 필요합니다.
     let previousEmploymentType: string | null = null;
 
@@ -431,6 +453,21 @@ export async function PATCH(
         },
         { status: 500 }
       );
+    }
+
+    if (allowanceChange) {
+      const { error: historyError } = await supabase
+        .from("weekly_allowance_status_changes")
+        .insert({
+          employee_id: Number(id),
+          old_status: allowanceChange.oldStatus,
+          new_status: allowanceChange.newStatus,
+          effective_week_start: currentWeekStartKst(),
+        });
+
+      if (historyError) {
+        console.error("[employees] 주휴수당 변경 이력 저장 실패:", historyError.message);
+      }
     }
 
     // 당근 → 고정: 전자 근로계약서를 쓰는 근로자면 11개월 계약서를 새로 작성하게 합니다.

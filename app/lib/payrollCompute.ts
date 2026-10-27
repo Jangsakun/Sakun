@@ -13,6 +13,10 @@ import {
 } from "@/app/lib/contractType";
 import { calcDayPay } from "@/app/lib/dayPay";
 import { attendanceWorkDateKey, overnightRangeEnd } from "@/app/lib/workTime";
+import {
+  allowanceStatusForWeek,
+  loadAllowanceStatusChanges,
+} from "@/app/lib/weeklyAllowanceHistory";
 
 /** PostgREST 한 번에 받을 수 있는 최대 행 수. */
 const PAGE_SIZE = 1000;
@@ -501,6 +505,20 @@ export async function computeWeeklyPayroll({
       if (row.pieceMissingCheckOut) weekly[key].pieceMissingDates.push(row.date);
       if (row.hourlyMissingCheckOut)
         weekly[key].missingCheckOutDates.push(row.date);
+    }
+
+    // 주휴수당 상태는 그 주에 적용되던 값으로(바꾼 주부터 적용, 이미 이체한 지난주는 그대로).
+    const allowanceChanges = await loadAllowanceStatusChanges(
+      supabase,
+      Object.values(weekly).map((w) => Number(w.employeeId))
+    );
+
+    for (const w of Object.values(weekly)) {
+      w.weeklyAllowanceStatus = allowanceStatusForWeek(
+        w.weeklyAllowanceStatus,
+        allowanceChanges.get(Number(w.employeeId)),
+        w.weekStart
+      );
     }
 
     const result: PayrollWeekResult[] = Object.values(weekly).map((w) => {
