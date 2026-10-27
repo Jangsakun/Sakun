@@ -218,9 +218,22 @@ export function buildBankTransferRows({
   return { rows, excluded, chunks };
 }
 
-/** 급여이체_YYYYMM_1.xlsx — 기간 시작월 기준. */
-export function buildTransferFileName(startDate: string, index: number) {
-  const yyyymm = String(startDate || "").slice(0, 7).replace("-", "");
+/**
+ * 선택근무지_시작일~종료일_다운로드날짜.xlsx (2026-10-27 사용자 요청)
+ *   예) 장사꾼_2026-10-19~2026-10-25_2026-10-27.xlsx
+ *   근무지 미선택 = "전체", 여러 개 = "장사꾼+헤모즈".
+ *   파일이 여러 개로 나뉠 때만 끝에 _1, _2 를 붙입니다.
+ */
+export function buildTransferFileName(options: {
+  workplaces: string[];
+  startDate: string;
+  endDate: string;
+  downloadDate: string;
+  index: number;
+  fileCount: number;
+}) {
+  const place = options.workplaces.length > 0 ? options.workplaces.join("+") : "전체";
+  const part = options.fileCount > 1 ? `_${options.index + 1}` : "";
 
-  return `급여이체_${yyyymm}_${index + 1}.xlsx`;
+  return `${place}_${options.startDate}~${options.endDate}_${options.downloadDate}${part}.xlsx`;
 }

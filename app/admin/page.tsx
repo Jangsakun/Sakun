@@ -2025,7 +2025,14 @@ export default function AdminPage() {
         ]);
 
         await downloadXlsxNoHeader({
-          fileName: buildTransferFileName(startDate, index),
+          fileName: buildTransferFileName({
+            workplaces: selectedWorkplaces,
+            startDate,
+            endDate,
+            downloadDate: formatPrintedDateKst(),
+            index,
+            fileCount: chunks.length,
+          }),
           rows: sheetRows,
           columnWidths: [14, 22, 14, 14, 18],
         });
