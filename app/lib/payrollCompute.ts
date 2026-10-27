@@ -12,6 +12,7 @@ import {
   toContractType,
 } from "@/app/lib/contractType";
 import { calcDayPay } from "@/app/lib/dayPay";
+import { attendanceWorkDateKey, overnightRangeEnd } from "@/app/lib/workTime";
 
 /** PostgREST 한 번에 받을 수 있는 최대 행 수. */
 const PAGE_SIZE = 1000;
@@ -264,7 +265,8 @@ export async function computeWeeklyPayroll({
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     const startUtc = `${startDate}T00:00:00+09:00`;
-    const endUtc = `${endDate}T23:59:59.999+09:00`;
+    // 마지막 날 야간 근무의 다음날 새벽 퇴근까지 받습니다(2026-10-27). 근무일로 묶을 때 기간 밖은 뺍니다.
+    const endUtc = overnightRangeEnd(endDate);
 
     // 총 건수를 먼저 받아 페이지 수를 정하고, 페이지를 동시에 요청합니다.
     // 순차 while 루프였을 때는 왕복 지연이 페이지 수만큼 곱해졌습니다
@@ -359,7 +361,11 @@ export async function computeWeeklyPayroll({
     const grouped: Record<string, AttendanceRecord[]> = {};
 
     for (const record of filtered) {
-      const kstDate = formatKST(new Date(record.checked_at));
+      // 근무일 기준(새벽 06:00 전 퇴근은 전날 근무).
+      const kstDate = attendanceWorkDateKey(record);
+
+      if (kstDate < startDate || kstDate > endDate) continue;
+
       const key = `${record.employee_id}_${kstDate}`;
 
       if (!grouped[key]) {
@@ -385,7 +391,7 @@ export async function computeWeeklyPayroll({
       const weeklyAllowanceStatus =
         employee?.weekly_allowance_status || "검토필요";
 
-      const date = formatKST(new Date(items[0].checked_at));
+      const date = attendanceWorkDateKey(items[0]);
 
       const override = payOverrides.get(payOverrideKey(employeeId, date));
 

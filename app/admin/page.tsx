@@ -36,6 +36,11 @@ import {
 } from "@/app/lib/contractType";
 import { calcDayPay } from "@/app/lib/dayPay";
 import {
+  OVERNIGHT_CHECKOUT_CUTOFF_HOUR,
+  addDaysToDateKey,
+  attendanceWorkDateKey,
+} from "@/app/lib/workTime";
+import {
   ROWS_PER_FILE,
   buildBankTransferRows,
   buildTransferFileName,
@@ -748,8 +753,13 @@ export default function AdminPage() {
         return;
       }
 
-      if (row.checkOutTime && row.checkOutTime < row.checkInTime) {
-        alert(`${rowNo}번째 줄: 퇴근시간이 출근시간보다 빠릅니다.`);
+      // 새벽 06:00 전 퇴근은 다음날 새벽 퇴근(야간 근무)으로 저장됩니다.
+      if (
+        row.checkOutTime &&
+        row.checkOutTime < row.checkInTime &&
+        !isOvernightCheckOutTime(row.checkOutTime)
+      ) {
+        alert(`${rowNo}번째 줄: 퇴근시간이 출근시간보다 빠릅니다. (야간 근무는 새벽 06:00 전 퇴근만 다음날로 처리)`);
         return;
       }
     }
@@ -922,7 +932,8 @@ export default function AdminPage() {
     const grouped = new Map<string, AdminRecord[]>();
 
     filteredRecords.forEach((record) => {
-      const dateKey = toSeoulDateKey(record.checked_at);
+      // 근무일 기준(새벽 06:00 전 퇴근은 전날 야간 근무).
+      const dateKey = attendanceWorkDateKey(record);
       const key = `${record.employee_id}_${dateKey}`;
 
       if (!grouped.has(key)) {
@@ -943,7 +954,7 @@ export default function AdminPage() {
       const employeeName = sorted[0].employees?.name || "알 수 없음";
       const employeeId = sorted[0].employee_id;
       const workplaceName = sorted[0].employees?.workplace_name || "장사꾼";
-      const date = toSeoulDateKey(sorted[0].checked_at);
+      const date = attendanceWorkDateKey(sorted[0]);
 
       // 근무시간은 급여 API 와 같은 모듈(app/lib/workTime.ts)로 계산합니다.
       const employee = employeeMap.get(employeeId);
@@ -1519,10 +1530,12 @@ export default function AdminPage() {
     }
 
     // 같은 날짜의 시각(HH:MM)끼리라 문자열 비교로 충분합니다.
+    // 새벽 06:00 전 퇴근은 다음날 새벽 퇴근(야간 근무)이라 비교에서 뺍니다.
     if (
       editPieceCheckInTime &&
       editPieceCheckOutTime &&
-      editPieceCheckOutTime < editPieceCheckInTime
+      editPieceCheckOutTime < editPieceCheckInTime &&
+      !isOvernightCheckOutTime(editPieceCheckOutTime)
     ) {
       alert("도급 퇴근 시간은 도급 출근 시간보다 빠를 수 없습니다.");
       return;
@@ -1531,9 +1544,10 @@ export default function AdminPage() {
     if (
       editCheckInTime &&
       editCheckOutTime &&
-      editCheckOutTime < editCheckInTime
+      editCheckOutTime < editCheckInTime &&
+      !isOvernightCheckOutTime(editCheckOutTime)
     ) {
-      alert("퇴근 시간은 출근 시간보다 빠를 수 없습니다.");
+      alert("퇴근 시간은 출근 시간보다 빠를 수 없습니다. (야간 근무는 새벽 06:00 전 퇴근만 다음날로 처리)");
       return;
     }
 
@@ -1591,7 +1605,7 @@ export default function AdminPage() {
             employeeName: row.employeeName,
             date: row.date,
             checkInTime: combineDateTime(row.date, editCheckInTime) || null,
-            checkOutTime: combineDateTime(row.date, editCheckOutTime) || null,
+            checkOutTime: combineCheckOutDateTime(row.date, editCheckOutTime) || null,
             segment: "hourly",
           }),
         });
@@ -1619,7 +1633,7 @@ export default function AdminPage() {
             employeeName: row.employeeName,
             date: row.date,
             checkInTime: combineDateTime(row.date, editPieceCheckInTime) || null,
-            checkOutTime: combineDateTime(row.date, editPieceCheckOutTime) || null,
+            checkOutTime: combineCheckOutDateTime(row.date, editPieceCheckOutTime) || null,
             segment: "piece",
           }),
         });
@@ -2359,6 +2373,11 @@ export default function AdminPage() {
                     }
                     style={manualFieldStyle}
                   />
+                  {row.checkOutTime && isOvernightCheckOutTime(row.checkOutTime) ? (
+                    <div style={{ fontSize: "11px", color: "#7c3aed", marginTop: "2px" }}>
+                      다음날 새벽 퇴근
+                    </div>
+                  ) : null}
                 </td>
 
                 <td style={manualTdStyle}>
@@ -4604,7 +4623,11 @@ function formatCheckInTime(value: string | null) {
 
 function formatCheckOutTime(value: string | null) {
   if (!value) return "-";
-  return formatTime(value);
+  // 야간 근무의 다음날 새벽 퇴근은 "다음날"을 붙여 보여줍니다.
+  const nextDay =
+    attendanceWorkDateKey({ record_type: "check_out", checked_at: value }) !==
+    toSeoulDateKey(value);
+  return nextDay ? `다음날 ${formatTime(value)}` : formatTime(value);
 }
 
 function formatDate(value: string) {
@@ -4671,6 +4694,19 @@ function toKstTimeValue(value: string | null) {
 // 줄의 날짜(YYYY-MM-DD)와 시각(HH:MM)을 합쳐 API 가 받는 "YYYY-MM-DDTHH:MM" 로 만듭니다.
 function combineDateTime(date: string, time: string) {
   return time ? `${date}T${time}` : "";
+}
+
+/** 'HH:MM' 이 새벽 06:00 전인지 — 야간 근무의 다음날 새벽 퇴근 */
+function isOvernightCheckOutTime(time: string) {
+  return Number(time.slice(0, 2)) < OVERNIGHT_CHECKOUT_CUTOFF_HOUR;
+}
+
+/** 퇴근 시각. 새벽 06:00 전이면 근무일 다음날로 붙입니다(야간 근무). */
+function combineCheckOutDateTime(date: string, time: string) {
+  if (!time) return "";
+  return isOvernightCheckOutTime(time)
+    ? `${addDaysToDateKey(date, 1)}T${time}`
+    : `${date}T${time}`;
 }
 
 function getMaskedResidentNumber(

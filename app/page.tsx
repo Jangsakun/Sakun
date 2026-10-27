@@ -4,7 +4,7 @@ import { Noto_Sans_KR } from "next/font/google";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { calcDayWork, toKstDateKey } from "@/app/lib/workTime";
+import { attendanceWorkDateKey, calcDayWork } from "@/app/lib/workTime";
 import {
   checkAttendanceAction,
   defaultSegmentFor,
@@ -270,6 +270,15 @@ function getCheckoutAvailability(date = new Date()): CheckoutAvailability {
   const totalMinutes = hour * 60 + minute;
   const checkoutStartMinutes = 12 * 60 + 30;
 
+  // 야간 근무(2026-10-27): 새벽 06:00 전에는 언제든 퇴근 가능(10분 단위로 기록). DB 함수와 같은 규칙.
+  if (hour < 6) {
+    return {
+      enabled: true,
+      notice: "야간 근무 퇴근은 10분 단위로 기록됩니다.",
+      nextAvailableLabel: "",
+    };
+  }
+
   if (totalMinutes < checkoutStartMinutes) {
     return {
       enabled: false,
@@ -415,8 +424,8 @@ function normalizeDisplayCheckOut(value: string) {
   const { hour, minute, totalMinutes } = getSeoulHourMinute(source);
   const checkoutStartMinutes = 12 * 60 + 30;
 
-  // 22:00 이후: 10분 단위 내림 (DB 함수 attendance_normalize_check_out 과 같은 규칙)
-  if (hour >= 22) {
+  // 22:00 이후, 새벽 06:00 전(야간 근무): 10분 단위 내림 (DB 함수 attendance_normalize_check_out 과 같은 규칙)
+  if (hour >= 22 || hour < 6) {
     return createSeoulDateTime(dateKey, hour, Math.floor(minute / 10) * 10);
   }
 
@@ -1261,7 +1270,7 @@ export default function Home() {
     if (firstCheckIn && lastCheckOut) {
       totalWorkMinutes =
         mainSegment === "hourly"
-          ? calcDayWork(toKstDateKey(firstCheckIn.checked_at), mainRecords)
+          ? calcDayWork(attendanceWorkDateKey(firstCheckIn), mainRecords)
               .workedMinutes
           : getElapsedMinutes(firstCheckIn.checked_at, lastCheckOut.checked_at);
     }

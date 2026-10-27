@@ -18,6 +18,7 @@ import {
   calcHourlyPay,
   isCheckInType,
   isCheckOutType,
+  isOpenWorkDate,
   toKstDateKey,
   type DayWorkResult,
 } from "./workTime";
@@ -96,7 +97,7 @@ export function calcPieceDay<T extends PayRecord>(
 
   if (!checkOut) {
     const dateKey = options.dateKey ?? toKstDateKey(checkIn.checked_at);
-    const isToday = !!options.now && toKstDateKey(options.now) === dateKey;
+    const isToday = !!options.now && isOpenWorkDate(dateKey, options.now);
 
     return { ...empty, inProgress: isToday, missingCheckOut: !isToday };
   }

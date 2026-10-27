@@ -8,6 +8,23 @@ import {
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { logAttendanceChanges } from "@/app/lib/attendanceAudit";
 import { loadPayOverrides } from "@/app/lib/payOverride";
+import {
+  OVERNIGHT_CHECKOUT_CUTOFF_HOUR,
+  addDaysToDateKey,
+  attendanceWorkDateKey,
+  overnightRangeEnd,
+} from "@/app/lib/workTime";
+
+/**
+ * 수동 입력 퇴근 시각. 새벽 06:00 전 퇴근은 출근 다음날 새벽(야간 근무, 2026-10-27).
+ * 예) 19일 21:00 출근 + 02:00 퇴근 → 20일 02:00 에 저장, 급여·기록 화면에서는 19일 근무.
+ */
+function manualCheckOutAt(date: string, time: string) {
+  const overnight = Number(time.slice(0, 2)) < OVERNIGHT_CHECKOUT_CUTOFF_HOUR;
+  return new Date(
+    `${overnight ? addDaysToDateKey(date, 1) : date}T${time}:00+09:00`
+  );
+}
 
 const ALLOWED_WORKPLACES = ["장사꾼", "헤모즈", "깨소금", "로엔티크"];
 
@@ -176,9 +193,8 @@ export async function POST(request: Request) {
       `${startDate}T00:00:00+09:00`
     ).toISOString();
 
-    const endUtc = new Date(
-      `${endDate}T23:59:59.999+09:00`
-    ).toISOString();
+    // 마지막 날 야간 근무의 다음날 새벽 퇴근까지 받고, 아래에서 근무일이 기간 밖인 기록은 뺍니다.
+    const endUtc = new Date(overnightRangeEnd(endDate)).toISOString();
 
     // Supabase 는 한 번에 최대 1000건만 돌려줍니다.
     // 나눠 받지 않으면 한 달 조회 시 앞 2주(약 1000건)만 오고,
@@ -254,13 +270,19 @@ export async function POST(request: Request) {
       );
     }
 
-    const data = pages.flatMap((page) => page.data || []);
+    const fetched = pages.flatMap((page) => page.data || []);
+
+    // 근무일 기준으로 기간 안의 기록만(첫날 새벽 퇴근 = 전날 근무, 다음날 새벽 퇴근 = 마지막 날 근무).
+    const data = fetched.filter((record) => {
+      const workDate = attendanceWorkDateKey(record);
+      return workDate >= startDate && workDate <= endDate;
+    });
 
     // 받는 사이에 기록이 추가·삭제되면 건수가 어긋날 수 있습니다.
     // 모자라게 받았는데 정상처럼 보여주는 것이 제일 위험하므로 로그를 남깁니다.
-    if (data.length < totalCount) {
+    if (fetched.length < totalCount) {
       console.error(
-        `[admin-attendance] 받은 기록(${data.length})이 전체 건수(${totalCount})보다 적습니다: ${startDate}~${endDate}`
+        `[admin-attendance] 받은 기록(${fetched.length})이 전체 건수(${totalCount})보다 적습니다: ${startDate}~${endDate}`
       );
     }
 
@@ -443,7 +465,7 @@ async function handleEntryRows(
     let checkOutAt: Date | null = null;
 
     if (entry.checkOutTime) {
-      checkOutAt = new Date(`${entry.date}T${entry.checkOutTime}:00+09:00`);
+      checkOutAt = manualCheckOutAt(entry.date, entry.checkOutTime);
 
       if (Number.isNaN(checkOutAt.getTime())) {
         push("퇴근시간이 올바르지 않습니다.");
@@ -451,7 +473,7 @@ async function handleEntryRows(
       }
 
       if (checkOutAt.getTime() < checkInAt.getTime()) {
-        push("퇴근시간이 출근시간보다 빠릅니다.");
+        push("퇴근시간이 출근시간보다 빠릅니다. (야간 근무는 새벽 06:00 전 퇴근만 다음날로 처리)");
         continue;
       }
     }
@@ -476,16 +498,20 @@ async function handleEntryRows(
     // 같은 날 같은 구간 기록이 이미 있으면 건너뜁니다.
     // 중복으로 넣으면 그 날 급여가 이중 계산됩니다(DB 중복 불가 제약도 막음).
     // 시급+도급 직원은 시급 기록이 있는 날에도 도급 기록은 추가할 수 있습니다.
+    // 근무일 기준: 그 날 새벽의 전날 야간 퇴근은 빼고, 다음날 새벽 퇴근은 넣습니다.
     const { data: existing } = await supabase
       .from("attendance_records")
-      .select("id")
+      .select("id, record_type, checked_at")
       .eq("employee_id", entry.employeeId)
       .eq("segment_type", segment)
       .gte("checked_at", `${entry.date}T00:00:00+09:00`)
-      .lte("checked_at", `${entry.date}T23:59:59.999+09:00`)
-      .limit(1);
+      .lte("checked_at", overnightRangeEnd(entry.date));
 
-    if ((existing || []).length > 0) {
+    if (
+      (existing || []).some(
+        (row) => attendanceWorkDateKey(row) === entry.date
+      )
+    ) {
       push(
         segment === "piece"
           ? "이미 그 날 도급 기록이 있어 건너뜀"
@@ -815,9 +841,7 @@ export async function PUT(request: Request) {
     }
 
     if (checkOutTime) {
-      const sampleCheckOut = new Date(
-        `${targetDates[0]}T${checkOutTime}:00+09:00`
-      );
+      const sampleCheckOut = manualCheckOutAt(targetDates[0], checkOutTime);
 
       if (Number.isNaN(sampleCheckOut.getTime())) {
         return NextResponse.json(
@@ -834,7 +858,7 @@ export async function PUT(request: Request) {
           {
             success: false,
             message:
-              "퇴근시간은 출근시간보다 빠를 수 없습니다.",
+              "퇴근시간은 출근시간보다 빠를 수 없습니다. (야간 근무는 새벽 06:00 전 퇴근만 다음날로 처리)",
           },
           { status: 400 }
         );
@@ -957,7 +981,7 @@ export async function PUT(request: Request) {
     const results: PerEmployeeResult[] = [];
 
     const rangeStartUtc = `${targetDates[0]}T00:00:00+09:00`;
-    const rangeEndUtc = `${targetDates[targetDates.length - 1]}T23:59:59.999+09:00`;
+    const rangeEndUtc = overnightRangeEnd(targetDates[targetDates.length - 1]);
 
     // 직원마다 시급 스냅샷이 다를 수 있어 한 명씩, 날짜별로 처리합니다.
     // 한 건이 실패해도 나머지는 계속 진행하고 결과를 전부 돌려줍니다.
@@ -972,14 +996,14 @@ export async function PUT(request: Request) {
         // 날짜마다 조회하면 왕복이 날짜 수만큼 늘어납니다.
         const { data: existing } = await supabase
           .from("attendance_records")
-          .select("checked_at")
+          .select("record_type, checked_at")
           .eq("employee_id", employee.id)
           .gte("checked_at", rangeStartUtc)
           .lte("checked_at", rangeEndUtc);
 
         const existingDates = new Set(
-          ((existing || []) as { checked_at: string }[]).map((row) =>
-            getKstDateKey(new Date(row.checked_at))
+          ((existing || []) as { record_type: string; checked_at: string }[]).map(
+            (row) => attendanceWorkDateKey(row)
           )
         );
 
@@ -999,7 +1023,7 @@ export async function PUT(request: Request) {
           );
 
           const checkOutAt = checkOutTime
-            ? new Date(`${targetDate}T${checkOutTime}:00+09:00`)
+            ? manualCheckOutAt(targetDate, checkOutTime)
             : null;
 
           // 수동으로 과거 날짜를 추가할 때 현재 시급을 무조건 쓰지 않고,

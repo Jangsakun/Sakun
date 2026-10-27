@@ -90,6 +90,64 @@ export function toKstDateKey(value: Date | string) {
   }).format(date);
 }
 
+// ── 야간 근무 (2026-10-27) ─────────────────────────────────────────
+// 19일 21:00 출근 → 20일 02:00 퇴근처럼 자정을 넘기는 근무.
+// 새벽 06:00(KST) 전 "퇴근" 기록은 전날 근무의 퇴근으로 봅니다(출근 기록은 찍힌 날 그대로).
+// DB 함수 attendance_work_date(20261027400000_overnight_shift.sql)와 같은 규칙입니다.
+// 한쪽을 바꾸면 다른 쪽도 같이 바꿉니다.
+export const OVERNIGHT_CHECKOUT_CUTOFF_HOUR = 6;
+
+function getKstHour(date: Date) {
+  return Number(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Seoul",
+      hour: "2-digit",
+      hourCycle: "h23",
+    }).format(date)
+  );
+}
+
+/** 'YYYY-MM-DD' 에 days 일을 더한 날짜 */
+export function addDaysToDateKey(dateKey: string, days: number) {
+  const date = new Date(`${dateKey}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+/** 기록이 속한 근무일(KST). 새벽 06:00 전 퇴근은 전날. */
+export function attendanceWorkDateKey(record: AttendanceLike) {
+  const at = new Date(record.checked_at);
+  const dateKey = toKstDateKey(at);
+
+  if (
+    isCheckOutType(record.record_type) &&
+    getKstHour(at) < OVERNIGHT_CHECKOUT_CUTOFF_HOUR
+  ) {
+    return addDaysToDateKey(dateKey, -1);
+  }
+
+  return dateKey;
+}
+
+/** 지금 아직 끝나지 않았을 수 있는 근무일인지 — 오늘, 또는 새벽 06:00 전이면 어제(야간 근무 중). */
+export function isOpenWorkDate(dateKey: string, now: Date) {
+  const today = toKstDateKey(now);
+
+  if (dateKey === today) return true;
+
+  return (
+    getKstHour(now) < OVERNIGHT_CHECKOUT_CUTOFF_HOUR &&
+    dateKey === addDaysToDateKey(today, -1)
+  );
+}
+
+/** 기간 조회 끝 시각. 마지막 날 야간 근무의 다음날 새벽 퇴근까지 포함합니다. */
+export function overnightRangeEnd(endDate: string) {
+  return `${addDaysToDateKey(endDate, 1)}T${String(
+    OVERNIGHT_CHECKOUT_CUTOFF_HOUR - 1
+  ).padStart(2, "0")}:59:59.999+09:00`;
+}
+
 export function getWorkTimeRule(dateKey: string): WorkTimeRule {
   return dateKey >= WORK_TIME_RULE_START_DATE ? "v2" : "legacy";
 }
@@ -271,7 +329,7 @@ export function calcDayWork<T extends AttendanceLike>(
   }
 
   if (!checkOut) {
-    const isToday = options.now && toKstDateKey(options.now) === dateKey;
+    const isToday = options.now && isOpenWorkDate(dateKey, options.now);
 
     if (isToday) {
       if (options.estimate === false) {

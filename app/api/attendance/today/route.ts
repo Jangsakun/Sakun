@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { toContractType } from "@/app/lib/contractType";
+import {
+  addDaysToDateKey,
+  attendanceWorkDateKey,
+  isOpenWorkDate,
+  toKstDateKey,
+} from "@/app/lib/workTime";
 
 export async function POST(request: Request) {
   try {
@@ -44,13 +50,16 @@ export async function POST(request: Request) {
     }
 
     const now = new Date();
-    const kstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-    const dateOnly = kstNow.toISOString().slice(0, 10);
+    const dateOnly = toKstDateKey(now);
+    const yesterday = addDaysToDateKey(dateOnly, -1);
 
-    const startUtc = new Date(`${dateOnly}T00:00:00+09:00`).toISOString();
+    // 야간 근무(2026-10-27): 새벽 06:00 전 퇴근은 전날 근무입니다.
+    // 어제 00:00 부터 받아 근무일로 나눈 뒤, 새벽에 오늘 근무일 기록이 아직 없으면 어제 근무(야간)를 보여줍니다.
+    // → 19일 21:00 출근한 사람이 20일 01:50 에 앱을 열면 [퇴근] 버튼이 나옵니다.
+    const startUtc = new Date(`${yesterday}T00:00:00+09:00`).toISOString();
     const endUtc = new Date(`${dateOnly}T23:59:59.999+09:00`).toISOString();
 
-    const { data: records, error: recordsError } = await supabase
+    const { data: fetchedRecords, error: recordsError } = await supabase
       .from("attendance_records")
       .select("*")
       .eq("employee_id", employee.id)
@@ -64,6 +73,32 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
+
+    const todayRecords = (fetchedRecords || []).filter(
+      (r) => attendanceWorkDateKey(r) === dateOnly
+    );
+    const yesterdayRecords = (fetchedRecords || []).filter(
+      (r) => attendanceWorkDateKey(r) === yesterday
+    );
+    // 어제 근무가 아직 열려 있거나(출근만 있음) 방금 새벽에 퇴근한 경우만 어제 근무를 보여줍니다.
+    const yesterdayIsNightShift =
+      ["hourly", "piece"].some((segment) => {
+        const ofSegment = yesterdayRecords.filter(
+          (r) => (r.segment_type || "hourly") === segment
+        );
+        return (
+          ofSegment.some((r) => r.record_type === "check_in") &&
+          !ofSegment.some((r) => r.record_type === "check_out")
+        );
+      }) ||
+      yesterdayRecords.some(
+        (r) => r.record_type === "check_out" && toKstDateKey(r.checked_at) === dateOnly
+      );
+    const showYesterday =
+      todayRecords.length === 0 &&
+      yesterdayIsNightShift &&
+      isOpenWorkDate(yesterday, now);
+    const records = showYesterday ? yesterdayRecords : todayRecords;
 
     // checkIn / checkOut 은 시급 구간 기준(기존 응답 형식 유지).
     // 도급 구간은 records 의 segment_type 으로 화면에서 구분합니다.

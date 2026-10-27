@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { loadPayOverrides, payOverrideKey } from "@/app/lib/payOverride";
 import { getDailyWage, isPieceContract } from "@/app/lib/contractType";
 import { calcDayPay } from "@/app/lib/dayPay";
+import { attendanceWorkDateKey, overnightRangeEnd } from "@/app/lib/workTime";
 
 function createSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -159,7 +160,8 @@ export async function POST(request: NextRequest) {
     }
 
     const startDateTime = `${startDate}T00:00:00+09:00`;
-    const endDateTime = `${endDate}T23:59:59+09:00`;
+    // 마지막 날 야간 근무의 다음날 새벽 퇴근까지 받습니다(2026-10-27).
+    const endDateTime = overnightRangeEnd(endDate);
 
     const { data: records, error: recordError } = await supabase
       .from("attendance_records")
@@ -230,7 +232,10 @@ export async function POST(request: NextRequest) {
     const grouped: Record<string, any[]> = {};
 
     (records || []).forEach((record) => {
-      const dateKey = formatDateKeyKst(record.checked_at);
+      // 근무일 기준(새벽 06:00 전 퇴근은 전날 근무). 기간 밖 근무일 기록은 뺍니다.
+      const dateKey = attendanceWorkDateKey(record);
+
+      if (dateKey < startDate || dateKey > endDate) return;
 
       if (!grouped[dateKey]) grouped[dateKey] = [];
       grouped[dateKey].push(record);
