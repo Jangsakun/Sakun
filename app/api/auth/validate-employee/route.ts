@@ -35,7 +35,7 @@ export async function POST(request: Request) {
 
     const { data, error } = await supabase
       .from("employees")
-      .select("id, name")
+      .select("id, name, employment_type")
       .eq("name", name)
       .eq("birth_date", birthDate)
       .eq("phone_last4", phoneLast4)

@@ -36,10 +36,11 @@ type RecordAttendanceInput = {
   employeeId: number;
   recordType: "check_in" | "check_out";
   segment: SegmentType;
-  lat: number;
-  lng: number;
+  // 당근 근로자는 위치 없이 기록합니다(null). attendanceCarrot.ts
+  lat: number | null;
+  lng: number | null;
   accuracy: number | null;
-  distance: number;
+  distance: number | null;
 };
 
 export type RecordAttendanceResult =

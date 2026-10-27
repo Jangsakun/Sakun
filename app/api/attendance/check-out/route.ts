@@ -4,6 +4,7 @@ import { toContractType } from "@/app/lib/contractType";
 import { createClient } from "@supabase/supabase-js";
 import { getDistanceInMeters } from "@/app/lib/geo";
 import { withAttendanceFailureLog } from "@/app/lib/attendanceFailureLog";
+import { recordCarrotWithoutLocation } from "@/app/lib/attendanceCarrot";
 
 const WORKPLACES = [
   {
@@ -58,6 +59,10 @@ async function handleCheckOut(request: Request) {
     const body = await request.json();
     // checkedAt 은 받지 않습니다. 저장 시각은 DB 시각(now())입니다.
     const { name, birthDate, phoneLast4, lat, lng, accuracy } = body;
+
+    // 당근 근로자는 위치 검사 없이 기록합니다(2026-10-27). 당근이 아니면 null → 아래 기존 흐름 그대로.
+    const carrotResponse = await recordCarrotWithoutLocation(body, "check_out");
+    if (carrotResponse) return carrotResponse;
 
     if (
       !name ||

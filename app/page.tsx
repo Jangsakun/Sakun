@@ -72,6 +72,7 @@ type ValidateEmployeeResponse = {
   employee?: {
     id?: string;
     name?: string;
+    employment_type?: string | null;
   };
 };
 
@@ -245,6 +246,23 @@ function getPositionWithFallback(
     },
     { enableHighAccuracy: true, timeout: 25000, maximumAge: 0 }
   );
+}
+
+/** DB 직원 정보 기준 당근 근로자인지. 확인에 실패하면 false(기존처럼 위치를 받음). */
+async function isCarrotWorker(current: { name: string; birthDate: string; phoneLast4: string }) {
+  try {
+    const response = await fetch("/api/auth/validate-employee", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      body: JSON.stringify({ name: current.name, birthDate: current.birthDate, phoneLast4: current.phoneLast4 }),
+    });
+    const data: ValidateEmployeeResponse = await response.json();
+
+    return data.success === true && data.employee?.employment_type === "carrot";
+  } catch {
+    return false;
+  }
 }
 
 function getCheckoutAvailability(date = new Date()): CheckoutAvailability {
@@ -1366,23 +1384,31 @@ export default function Home() {
       return;
     }
 
-    if (!navigator.geolocation) {
-      alert("GPS를 지원하지 않는 브라우저입니다.");
-      return;
-    }
-
     setIsLoading(true);
     const actionLabel = `${isHybrid && segment === "piece" ? "도급 " : ""}${
       type === "check-in" ? "출근" : "퇴근"
     }`;
-    setMessage(`${actionLabel} 처리 중... (위치 확인 중, 최대 40초)`);
 
-    getPositionWithFallback(
-      () => setMessage(`${actionLabel} 처리 중... (GPS가 늦어 다른 방법으로 위치 확인 중)`),
-      async (position) => {
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
-        const accuracy = position.coords.accuracy;
+    // 당근 근로자는 위치를 묻지 않습니다(2026-10-27 사용자 결정).
+    // 당근 여부는 휴대폰 저장값이 아니라 DB 직원 정보로 판단하고, 서버도 같은 기준으로 위치 검사를 건너뜁니다.
+    const skipLocation = await isCarrotWorker(employee);
+
+    if (!skipLocation && !navigator.geolocation) {
+      alert("GPS를 지원하지 않는 브라우저입니다.");
+      setIsLoading(false);
+      return;
+    }
+
+    setMessage(
+      skipLocation
+        ? `${actionLabel} 처리 중...`
+        : `${actionLabel} 처리 중... (위치 확인 중, 최대 40초)`
+    );
+
+    const handlePosition = async (position: GeolocationPosition | null) => {
+        const lat = position ? position.coords.latitude : null;
+        const lng = position ? position.coords.longitude : null;
+        const accuracy = position ? position.coords.accuracy : null;
         const checkedAt = new Date().toISOString();
 
         try {
@@ -1444,7 +1470,16 @@ export default function Home() {
         } finally {
           setIsLoading(false);
         }
-      },
+    };
+
+    if (skipLocation) {
+      await handlePosition(null);
+      return;
+    }
+
+    getPositionWithFallback(
+      () => setMessage(`${actionLabel} 처리 중... (GPS가 늦어 다른 방법으로 위치 확인 중)`),
+      handlePosition,
       (error) => {
         console.error("geolocation error:", error);
 

@@ -217,14 +217,18 @@ export default function EContractTab() {
     }
   };
 
-  // 서명대기만 삭제(테스트 정리용). 서명된 계약서는 지우지 않고 무효 처리합니다.
+  // 서명대기(테스트 정리용)와 무효 계약서(2026-10-27)만 삭제. 서명 완료·종료는 지우지 않고 무효 처리합니다.
   const deleteContract = async (row: ContractRow) => {
-    if (row.status !== "pending") return;
+    if (row.status !== "pending" && row.status !== "void") return;
 
     const ok = window.confirm(
-      `${row.employee_name} 님 ${KIND_LABEL[row.kind]} 서명대기 계약서를 삭제합니다.\n` +
-        "삭제하면 되돌릴 수 없고, 이 근로자에게는 계약서 작성 화면이 더 이상 뜨지 않습니다.\n" +
-        "(실제 근로자라면 삭제 대신 그대로 두세요.)\n\n삭제할까요?"
+      row.status === "void"
+        ? `${row.employee_name} 님 ${KIND_LABEL[row.kind]} 무효 계약서를 삭제합니다.\n` +
+            "서명본 PDF·서명 이미지·서명 증거 기록·문자 기록까지 모두 지워지고 되돌릴 수 없습니다.\n" +
+            "분쟁이 생겼을 때 증거로 쓸 수 없게 됩니다.\n\n삭제할까요?"
+        : `${row.employee_name} 님 ${KIND_LABEL[row.kind]} 서명대기 계약서를 삭제합니다.\n` +
+            "삭제하면 되돌릴 수 없고, 이 근로자에게는 계약서 작성 화면이 더 이상 뜨지 않습니다.\n" +
+            "(실제 근로자라면 삭제 대신 그대로 두세요.)\n\n삭제할까요?"
     );
 
     if (!ok) return;
@@ -465,7 +469,7 @@ export default function EContractTab() {
                             무효
                           </button>
                         )}
-                        {row.status === "pending" && (
+                        {(row.status === "pending" || row.status === "void") && (
                           <button style={deleteButtonStyle} disabled={busyId === row.id} onClick={() => deleteContract(row)}>
                             삭제
                           </button>
