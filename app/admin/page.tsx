@@ -365,6 +365,8 @@ export default function AdminPage() {
 
   const [payrollRows, setPayrollRows] = useState<PayrollRow[]>([]);
   const [payrollLoading, setPayrollLoading] = useState(false);
+  // 급여 표 세후 급여 정렬. 머리글을 누를 때마다 높은순 → 낮은순 → 이름순(기본).
+  const [netPaySort, setNetPaySort] = useState<"desc" | "asc" | null>(null);
   const [payrollMessage, setPayrollMessage] = useState("");
 
   const [editingEmployeeId, setEditingEmployeeId] = useState<number | null>(
@@ -1168,10 +1170,14 @@ export default function AdminPage() {
       target.netPay += row.netPay || 0;
     });
 
-    return Array.from(grouped.values()).sort((a, b) =>
-      a.employeeName.localeCompare(b.employeeName, "ko")
-    );
-  }, [filteredPayrollRows, startDate, endDate]);
+    return Array.from(grouped.values()).sort((a, b) => {
+      if (netPaySort) {
+        const diff = netPaySort === "desc" ? b.netPay - a.netPay : a.netPay - b.netPay;
+        if (diff !== 0) return diff;
+      }
+      return a.employeeName.localeCompare(b.employeeName, "ko");
+    });
+  }, [filteredPayrollRows, startDate, endDate, netPaySort]);
 
   const filteredContractEmployees = useMemo(() => {
     return employees.filter((employee) => {
@@ -3640,7 +3646,20 @@ export default function AdminPage() {
                       <th style={thStyle}>기본급</th>
                       <th style={thStyle}>주휴수당</th>
                       <th style={thStyle}>세전 급여</th>
-                      <th style={thStyle}>세후 급여</th>
+                      <th
+                        style={{ ...thStyle, cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
+                        title="누를 때마다 높은순 → 낮은순 → 이름순"
+                        onClick={() =>
+                          setNetPaySort((prev) =>
+                            prev === null ? "desc" : prev === "desc" ? "asc" : null
+                          )
+                        }
+                      >
+                        세후 급여{" "}
+                        <span style={{ color: netPaySort ? "#059669" : "#94a3b8" }}>
+                          {netPaySort === "desc" ? "▼" : netPaySort === "asc" ? "▲" : "↕"}
+                        </span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
