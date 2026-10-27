@@ -264,15 +264,7 @@ export function validateContractInput(
     if (start !== null && end !== null && end > start) {
       dailyNetMinutes = end - start - breakMinutes;
 
-      // 6. 휴게시간 (근로기준법 제54조)
-      // 휴게를 아예 비워 두면(예: 13:30~20:00) 휴게 없이 근로시간 전체로 계산하고 막지 않습니다(2026-10-27 사용자 요청).
-      if (!hasBreakStart && !hasBreakEnd) {
-        // 휴게 없음
-      } else if (dailyNetMinutes >= 8 * 60 && breakMinutes < 60) {
-        add("breakStart", "break_short_8h", "하루 8시간 이상 근무하면 휴게시간이 1시간 이상이어야 합니다.");
-      } else if (dailyNetMinutes >= 4 * 60 && breakMinutes < 30) {
-        add("breakStart", "break_short_4h", "하루 4시간 이상 근무하면 휴게시간이 30분 이상이어야 합니다.");
-      }
+      // 6. 휴게시간: 길이는 검사하지 않습니다. 적은 만큼 빼고, 비우면 휴게 없이 계산합니다(2026-10-27 사용자 요청).
 
       // 7. 주 52시간
       weeklyNetMinutes = dailyNetMinutes * days.length;

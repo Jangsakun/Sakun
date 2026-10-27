@@ -190,11 +190,12 @@ test("근무시간: 종료 ≤ 시작, 근무요일 0개 차단", () => {
   assert.ok(codes(validateContractInput(week({ workDays: [] }), ctx())).includes("no_work_days"));
 });
 
-test("휴게: 5시간 근무+20분, 9시간 근무+40분 차단", () => {
+test("휴게: 길이와 상관없이 막지 않음", () => {
   let r = validateContractInput(week({ workStart: "09:00", workEnd: "14:00", breakStart: "12:00", breakEnd: "12:20" }), ctx());
-  assert.ok(codes(r).includes("break_short_4h"), "5시간 + 20분");
-  r = validateContractInput(week({ workStart: "09:00", workEnd: "18:00", breakStart: "12:00", breakEnd: "12:40" }), ctx());
-  assert.ok(codes(r).includes("break_short_8h"), "9시간 + 40분");
+  assert.deepEqual(r.errors, [], "5시간 + 20분");
+  r = validateContractInput(week({ workStart: "09:30", workEnd: "18:00", breakStart: "12:00", breakEnd: "12:30" }), ctx());
+  assert.deepEqual(r.errors, [], "8.5시간 + 30분");
+  assert.equal(r.derived.dailyNetMinutes, 480, "9:30~18:00 휴게 30분 = 8시간");
   r = validateContractInput(week({ workStart: "09:00", workEnd: "12:30", breakStart: "", breakEnd: "" }), ctx());
   assert.deepEqual(r.errors, [], "4시간 미만은 휴게 없어도 통과");
   r = validateContractInput(week({ workStart: "13:30", workEnd: "20:00", breakStart: "", breakEnd: "" }), ctx());

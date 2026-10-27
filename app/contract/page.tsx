@@ -176,7 +176,16 @@ export default function ContractPage() {
   const endDate = input?.startDate ? calcContractEnd(contract?.kind ?? "month11", input.startDate, contract?.workplace) : null;
 
   const update = (patch: Partial<ContractInput>) => {
-    setInput((prev) => (prev ? { ...prev, ...patch } : prev));
+    setInput((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, ...patch };
+      // 근무시간을 09:30~18:00 으로 맞추면 휴게 12:30~13:30 을 채웁니다(2026-10-27 사용자 요청). 이후 지우는 건 자유.
+      if (("workStart" in patch || "workEnd" in patch) && next.workStart === "09:30" && next.workEnd === "18:00") {
+        next.breakStart = "12:30";
+        next.breakEnd = "13:30";
+      }
+      return next;
+    });
     setServerIssues([]);
 
     if (!startedRef.current && contract && identity) {
