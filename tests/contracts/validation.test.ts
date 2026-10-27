@@ -197,6 +197,9 @@ test("휴게: 5시간 근무+20분, 9시간 근무+40분 차단", () => {
   assert.ok(codes(r).includes("break_short_8h"), "9시간 + 40분");
   r = validateContractInput(week({ workStart: "09:00", workEnd: "12:30", breakStart: "", breakEnd: "" }), ctx());
   assert.deepEqual(r.errors, [], "4시간 미만은 휴게 없어도 통과");
+  r = validateContractInput(week({ workStart: "13:30", workEnd: "20:00", breakStart: "", breakEnd: "" }), ctx());
+  assert.deepEqual(r.errors, [], "휴게 빈칸이면 통과");
+  assert.equal(r.derived.dailyNetMinutes, 390, "휴게 빈칸 13:30~20:00 = 6.5시간");
 });
 
 test("주 52시간: 53시간 차단 / 52시간 통과", () => {
