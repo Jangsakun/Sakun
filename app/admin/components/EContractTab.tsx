@@ -137,6 +137,47 @@ export default function EContractTab() {
   const [wageNote, setWageNote] = useState("");
   const [wageSaving, setWageSaving] = useState(false);
 
+  // 현장 직원 PIN (당근 1주 → 고정 11개월 현장 전환용, 2026-10-27). PIN 자체는 서버에서 내려오지 않습니다.
+  const [fieldPin, setFieldPin] = useState<{ ready: boolean; configured: boolean; updatedAt: string | null } | null>(null);
+  const [fieldPinInput, setFieldPinInput] = useState("");
+  const [fieldPinSaving, setFieldPinSaving] = useState(false);
+
+  const loadFieldPin = useCallback(async () => {
+    try {
+      const json = await (await fetch("/api/admin/field-pin", { cache: "no-store" })).json();
+      if (json.success) setFieldPin({ ready: json.ready, configured: json.configured, updatedAt: json.updatedAt ?? null });
+    } catch {
+      // 상태만 못 보여줄 뿐 다른 기능에는 영향 없음
+    }
+  }, []);
+
+  useEffect(() => {
+    loadFieldPin();
+  }, [loadFieldPin]);
+
+  const saveFieldPin = async () => {
+    try {
+      setFieldPinSaving(true);
+      const res = await fetch("/api/admin/field-pin", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: fieldPinInput }),
+      });
+      const json = await res.json();
+      alert(json.message || (json.success ? "저장했습니다." : "저장 실패"));
+
+      if (json.success) {
+        setFieldPinInput("");
+        await loadFieldPin();
+      }
+    } catch (error) {
+      console.error(error);
+      alert("PIN 저장 중 오류 발생");
+    } finally {
+      setFieldPinSaving(false);
+    }
+  };
+
   const load = useCallback(async () => {
     try {
       setLoading(true);
@@ -483,6 +524,33 @@ export default function EContractTab() {
           </div>
         )}
       </section>
+
+      {fieldPin?.ready && (
+        <section>
+          <h3 style={sectionTitleStyle}>현장 직원 PIN</h3>
+          <p style={hintStyle}>
+            근로자의 1주(당근) 계약서 화면 아래 &ldquo;고정(11개월)으로 전환 — 현장 직원용&rdquo;에서 이 PIN 을 넣으면, 그 자리에서 고용구분이 고정으로 바뀌고
+            11개월 계약서 작성으로 넘어갑니다. PIN 으로는 이 전환만 할 수 있습니다. 숫자 4~8자리, 바꾸면 이전 PIN 은 바로 못 씁니다.
+          </p>
+          <div style={{ ...hintStyle, color: fieldPin.configured ? "#166534" : "#b91c1c", fontWeight: 800 }}>
+            {fieldPin.configured ? `설정됨 (마지막 변경 ${formatDateTime(fieldPin.updatedAt)})` : "아직 설정되지 않았습니다 — 설정 전에는 현장 전환이 안 됩니다."}
+          </div>
+          <div style={toolbarStyle}>
+            <input
+              type="password"
+              inputMode="numeric"
+              autoComplete="new-password"
+              value={fieldPinInput}
+              onChange={(e) => setFieldPinInput(e.target.value.replace(/\D/g, "").slice(0, 8))}
+              placeholder={fieldPin.configured ? "새 PIN" : "PIN (숫자 4~8자리)"}
+              style={{ ...inputStyle, width: "160px" }}
+            />
+            <button style={solidButtonStyle} disabled={fieldPinSaving || fieldPinInput.length < 4} onClick={saveFieldPin}>
+              {fieldPinSaving ? "저장 중..." : fieldPin.configured ? "PIN 변경" : "PIN 저장"}
+            </button>
+          </div>
+        </section>
+      )}
 
       <section>
         <h3 style={sectionTitleStyle}>연도별 최저시급</h3>

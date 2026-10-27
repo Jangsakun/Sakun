@@ -37,7 +37,9 @@ export type ContractEventType =
   | "sms_queue_failed"
   | "link_verify_failed"
   | "link_locked"
-  | "link_downloaded";
+  | "link_downloaded"
+  | "field_converted"
+  | "field_pin_failed";
 
 /**
  * 증거 기록을 남깁니다. 주민번호(원본·가린 값 모두)를 detail 에 넣지 마세요.

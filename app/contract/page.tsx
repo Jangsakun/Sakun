@@ -73,6 +73,12 @@ export default function ContractPage() {
   const [notice, setNotice] = useState("");
   const startedRef = useRef(false);
 
+  // 현장 직원 전환(당근 1주 → 고정 11개월, 2026-10-27)
+  const [convertOpen, setConvertOpen] = useState(false);
+  const [convertPin, setConvertPin] = useState("");
+  const [convertMsg, setConvertMsg] = useState("");
+  const [converting, setConverting] = useState(false);
+
   // 미리보기
   const [previewSha, setPreviewSha] = useState("");
   const [warningCodes, setWarningCodes] = useState<string[]>([]);
@@ -321,6 +327,31 @@ export default function ContractPage() {
   const clearSignature = () => {
     padRef.current?.clear();
     setHasSignature(false);
+  };
+
+  // 현장 직원 PIN 으로 당근 → 고정 전환. 성공하면 새 11개월 계약서를 다시 불러오도록 새로고침합니다.
+  const convertToFixed = async () => {
+    if (!contract || !identity) return;
+
+    try {
+      setConverting(true);
+      setConvertMsg("");
+      const res = await post("/api/worker/econtract/convert-to-fixed", { ...identity, contractId: contract.id, pin: convertPin });
+      const json = await res.json();
+
+      if (json.success) {
+        alert(json.message || "11개월 계약서로 바꿨습니다.");
+        window.location.reload();
+        return;
+      }
+
+      setConvertMsg(json.message || "전환하지 못했습니다.");
+      setConvertPin("");
+    } catch {
+      setConvertMsg("서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setConverting(false);
+    }
   };
 
   const submitSignature = async () => {
@@ -572,6 +603,54 @@ export default function ContractPage() {
           >
             나중에 작성하고 출퇴근 화면으로
           </button>
+
+          {/* 현장 직원 전용: PIN 으로 당근(1주) → 고정(11개월) 전환. 근로자 혼자서는 바꿀 수 없습니다. */}
+          {isWeek && (
+            <div className="mt-4 border-t border-gray-100 pt-3">
+              {!convertOpen ? (
+                <button type="button" className="w-full py-2 text-xs font-bold text-gray-400" onClick={() => setConvertOpen(true)}>
+                  고정(11개월)으로 전환 — 현장 직원용
+                </button>
+              ) : (
+                <div className="rounded-xl border border-gray-300 bg-gray-50 p-3">
+                  <p className="mb-2 text-sm font-bold text-gray-800">현장 직원 PIN 을 입력하면 11개월 근로계약서로 바뀝니다.</p>
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      maxLength={8}
+                      value={convertPin}
+                      onChange={(e) => setConvertPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                      placeholder="PIN"
+                      aria-label="현장 직원 PIN"
+                      className={inputCls + " flex-1 tracking-widest"}
+                    />
+                    <button
+                      type="button"
+                      className="h-12 shrink-0 rounded-xl bg-black px-4 text-sm font-extrabold text-white disabled:opacity-40"
+                      disabled={converting || convertPin.length < 4}
+                      onClick={convertToFixed}
+                    >
+                      {converting ? "전환 중..." : "전환"}
+                    </button>
+                  </div>
+                  {convertMsg && <p className="mt-2 text-sm font-bold text-red-600">{convertMsg}</p>}
+                  <button
+                    type="button"
+                    className="mt-2 text-xs text-gray-500 underline"
+                    onClick={() => {
+                      setConvertOpen(false);
+                      setConvertPin("");
+                      setConvertMsg("");
+                    }}
+                  >
+                    닫기
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
