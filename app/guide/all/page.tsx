@@ -38,10 +38,6 @@ const LINKS: { label: string; path: string; note: string; tag?: "carrot" | "fixe
   { label: "출퇴근", path: "/", note: "매일 출근·퇴근, 스케줄 제출" },
   { label: "당근 가입", path: "/register-device?type=carrot", note: "당근 QR에 넣는 주소", tag: "carrot" },
   { label: "고정 직원 가입", path: "/register-device", note: "고정 QR에 넣는 주소 · 재연결 코드 입력도 여기서", tag: "fixed" },
-  { label: "근로계약서 작성", path: "/contract", note: "서명할 계약서가 있을 때 · 당근→고정 전환도 여기서" },
-  { label: "내 계약서", path: "/contract/mine", note: "서명한 계약서 다시 받기" },
-  { label: "급여 조회", path: "/worker/payroll", note: "이름·주민번호로 이번 주 급여, 날짜별, 주급 명세서" },
-  { label: "전체 안내 (이 페이지)", path: "/guide/all", note: "가입부터 급여까지 전체 설명" },
   { label: "당근 안내", path: "/guide", note: "당근 근무자용 짧은 안내", tag: "carrot" },
 ];
 
@@ -204,7 +200,7 @@ export default function AllGuidePage() {
         </Anchor>
 
         <Anchor id="schedule">
-          <Step no={5} title="다음 주 스케줄 제출">
+          <Step no={5} title="다음 주 스케줄 제출 (팔복동 한정)">
             <p>출퇴근 화면 아래 <b>다음 주 스케줄</b>에서 출근 가능한 요일과 주간/야간을 고르고 <b>스케줄 제출하기</b>.</p>
             <ul className="list-disc space-y-1 pl-5 text-sm">
               <li>공휴일은 자동으로 빠집니다.</li>
@@ -265,9 +261,6 @@ export default function AllGuidePage() {
               </Faq>
               <Faq q="출근이나 퇴근을 깜빡했어요">
                 <p>근로자가 직접 고칠 수 없습니다. 날짜와 실제 출퇴근 시간을 사장님께 알려주세요.</p>
-              </Faq>
-              <Faq q="당근으로 가입했는데 고정으로 일하게 됐어요">
-                <p>위 <a href="#convert" className="font-semibold text-orange-600 underline">3. 당근→고정 전환</a>을 현장 직원과 함께 하세요.</p>
               </Faq>
             </div>
           </section>
