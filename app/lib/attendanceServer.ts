@@ -11,6 +11,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { toContractType, type SegmentType } from "./contractType";
 import { defaultSegmentFor } from "./attendanceFlow";
+import { contractGateReject } from "./contracts/attendanceGate";
 
 /**
  * 요청 본문의 segment 값을 해석합니다.
@@ -45,7 +46,7 @@ type RecordAttendanceInput = {
 
 export type RecordAttendanceResult =
   | { ok: true; recordId: number; checkedAt: string }
-  | { ok: false; status: number; message: string };
+  | { ok: false; status: number; message: string; code?: string };
 
 /** DB 함수가 돌려주는 거절 코드 → HTTP 상태 */
 const REJECT_STATUS: Record<string, number> = {
@@ -59,6 +60,11 @@ export async function recordAttendance(
   supabase: SupabaseClient,
   input: RecordAttendanceInput
 ): Promise<RecordAttendanceResult> {
+  // 계약 기간이 끝났으면 기록하지 않습니다(2026-10-30). contracts/attendanceGate.ts
+  const gate = await contractGateReject(input.employeeId, input.recordType);
+
+  if (gate) return { ok: false, ...gate };
+
   const { data, error } = await supabase.rpc("record_attendance", {
     p_employee_id: input.employeeId,
     p_record_type: input.recordType,

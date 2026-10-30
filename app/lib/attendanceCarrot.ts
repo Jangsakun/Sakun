@@ -52,7 +52,7 @@ export async function recordCarrotWithoutLocation(
   });
 
   if (!saved.ok) {
-    return NextResponse.json({ success: false, message: saved.message }, { status: saved.status });
+    return NextResponse.json({ success: false, message: saved.message, code: saved.code }, { status: saved.status });
   }
 
   const piece = segment === "piece" && toContractType(employee.contract_type) === "hybrid" ? "도급 " : "";

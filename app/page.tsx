@@ -37,6 +37,8 @@ type Employee = {
 type AttendanceResponse = {
   success: boolean;
   message: string;
+  /** "contract_expired": 계약 기간이 끝나 기록하지 않음(2026-10-30) */
+  code?: string;
   received?: {
     lat: number;
     lng: number;
@@ -1374,7 +1376,7 @@ export default function Home() {
 
       if (
         contractNeeded &&
-        window.confirm("작성할 근로계약서가 있습니다.\n지금 작성하시겠어요?\n\n[취소]를 누르면 출근만 기록합니다.")
+        window.confirm("작성할 근로계약서가 있습니다.\n지금 작성하시겠어요?\n\n[취소]를 누르면 출근만 기록합니다.\n(계약 기간이 끝났으면 서명 전에는 출근할 수 없습니다.)")
       ) {
         router.push("/contract");
         return;
@@ -1474,6 +1476,12 @@ export default function Home() {
 
           if (data.success) {
             setMessage(data.message || `${actionLabel}이 정상 처리되었습니다.`);
+          } else if (data.code === "contract_expired") {
+            // 계약 기간이 끝났으면 계약서 화면으로 보냅니다. 쓸 계약서가 없으면 그 화면이 관리자 문의를 안내합니다.
+            setMessage(data.message);
+            alert(`${data.message}\n\n근로계약서 화면으로 이동합니다.`);
+            router.push("/contract");
+            return;
           } else {
             setMessage(data.message || "기록 전송에 실패했습니다.");
           }

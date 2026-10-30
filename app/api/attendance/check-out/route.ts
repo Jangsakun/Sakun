@@ -191,7 +191,7 @@ async function handleCheckOut(request: Request) {
 
     if (!saved.ok) {
       return NextResponse.json(
-        { success: false, message: saved.message },
+        { success: false, message: saved.message, code: saved.code },
         { status: saved.status }
       );
     }
