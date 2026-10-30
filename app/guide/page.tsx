@@ -1,47 +1,11 @@
 import type { Metadata } from "next";
-import Image from "next/image";
+import { Phone, Step, type Shot } from "./parts";
 
 // 근로자용 출퇴근 사용 안내 (2026-10-30). 화면 사진은 로컬에서 예시 계정으로 찍은 것(public/guide).
 export const metadata: Metadata = {
   title: "출퇴근 사용 안내",
   description: "당근 단기 근무자를 위한 sakun.kr 가입·출퇴근 안내",
 };
-
-type Shot = { src: string; w: number; h: number; alt: string; crop?: boolean };
-
-function Phone({ shot, caption }: { shot: Shot; caption?: string }) {
-  return (
-    <figure className="mx-auto w-full max-w-[250px]">
-      <div className="overflow-hidden rounded-[28px] border-[6px] border-gray-900 bg-gray-900 shadow-lg">
-        <div className={shot.crop ? "relative aspect-[780/1000] overflow-hidden bg-[#f5f5f7]" : ""}>
-          <Image
-            src={shot.src}
-            alt={shot.alt}
-            width={shot.w}
-            height={shot.h}
-            sizes="250px"
-            className={shot.crop ? "absolute inset-0 h-full w-full object-cover object-center" : "block h-auto w-full"}
-          />
-        </div>
-      </div>
-      {caption && <figcaption className="mt-2 text-center text-xs text-gray-500">{caption}</figcaption>}
-    </figure>
-  );
-}
-
-function Step({ no, title, children }: { no: number; title: string; children: React.ReactNode }) {
-  return (
-    <section className="rounded-3xl bg-white px-5 py-6 shadow-sm">
-      <div className="flex items-center gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-orange-500 text-base font-bold text-white">
-          {no}
-        </span>
-        <h2 className="text-lg font-bold text-gray-900">{title}</h2>
-      </div>
-      <div className="mt-4 space-y-4 text-[15px] leading-relaxed text-gray-700">{children}</div>
-    </section>
-  );
-}
 
 const SHOTS = {
   filled: { src: "/guide/02-signup-filled.png", w: 780, h: 2680, alt: "당근 단기 근무 가입 화면에 정보를 입력한 모습" },
