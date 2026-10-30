@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import {
   calcElevenMonthContractEnd,
   calcWeekContractEnd,
-  contractKindForEmploymentType, allowedWeekContractDays } from "../../app/lib/contracts/period";
+  contractKindForEmploymentType, allowedWeekContractDays, autoBreakFor } from "../../app/lib/contracts/period";
 import {
   ageOn,
   checkResidentNumber,
@@ -107,6 +107,15 @@ test("1주 계약 근무 요일: 계약 기간 안의 월~금만", () => {
   assert.deepEqual(allowedWeekContractDays("2026-10-17", "장사꾼"), ["sat"]);
   assert.deepEqual(allowedWeekContractDays("2026-10-15", "헤모즈"), ["thu", "fri"]);
   assert.deepEqual(allowedWeekContractDays("2026-10-18", "장사꾼"), ["mon", "tue", "wed", "thu", "fri"]);
+});
+
+test("휴게 자동 입력: 세 가지 근무시간만 12:30~13:30", () => {
+  for (const [s1, e1] of [["09:00", "18:00"], ["09:30", "18:00"], ["09:30", "18:30"]]) {
+    assert.deepEqual(autoBreakFor(s1, e1), { breakStart: "12:30", breakEnd: "13:30" }, s1 + "~" + e1);
+  }
+  assert.deepEqual(autoBreakFor("13:30", "20:00"), { breakStart: "", breakEnd: "" });
+  assert.deepEqual(autoBreakFor("09:00", "18:30"), { breakStart: "", breakEnd: "" });
+  assert.deepEqual(autoBreakFor("", ""), { breakStart: "", breakEnd: "" });
 });
 
 test("11개월 종료일은 기존 갱신 버튼과 같은 계산", () => {

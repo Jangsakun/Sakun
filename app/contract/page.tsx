@@ -12,7 +12,7 @@ import {
   type Issue,
   type WorkDay,
 } from "@/app/lib/contracts/validation";
-import { allowedWeekContractDays, calcContractEnd } from "@/app/lib/contracts/period";
+import { allowedWeekContractDays, autoBreakFor, calcContractEnd } from "@/app/lib/contracts/period";
 
 // 근로자 앱 — 근로계약서 작성·서명.
 //   ① 작성(입력 즉시 검사) → ② 미리보기(끝까지 스크롤) → ③ 서명 → ④ 완료(내려받기)
@@ -179,10 +179,10 @@ export default function ContractPage() {
     setInput((prev) => {
       if (!prev) return prev;
       const next = { ...prev, ...patch };
-      // 근무시간을 09:30~18:00 으로 맞추면 휴게 12:30~13:30 을 채웁니다(2026-10-27 사용자 요청). 이후 지우는 건 자유.
-      if (("workStart" in patch || "workEnd" in patch) && next.workStart === "09:30" && next.workEnd === "18:00") {
-        next.breakStart = "12:30";
-        next.breakEnd = "13:30";
+      // 근무시간을 바꾸면 휴게를 다시 정합니다: 09:00~18:00 / 09:30~18:00 / 09:30~18:30 이면 12:30~13:30, 그 밖은 빈칸.
+      // (2026-10-30 사용자 지정) 그 뒤에 휴게를 직접 고치는 건 자유.
+      if ("workStart" in patch || "workEnd" in patch) {
+        Object.assign(next, autoBreakFor(next.workStart ?? "", next.workEnd ?? ""));
       }
       return next;
     });

@@ -4,19 +4,20 @@ import { loadMinimumWages, todayKst } from "@/app/lib/contracts/worker";
 import { logContractEvent } from "@/app/lib/contracts/server";
 import { maskResidentNumber } from "@/app/lib/contracts/residentNumber";
 import { getTemplate } from "@/app/lib/contracts/templates";
-import { allowedWeekContractDays } from "@/app/lib/contracts/period";
+import { allowedWeekContractDays, autoBreakFor } from "@/app/lib/contracts/period";
 
 /**
  * 사업장별 근무시간 기본값(2026-10-15 사용자 지정). 직전 계약서에 적은 값이 있으면 그 값이 우선입니다.
- * 빈칸("")은 근로자가 직접 입력합니다. 목록에 없는 사업장은 헤모즈·깨소금과 같이 휴게시간만 채웁니다.
+ * 빈칸("")은 근로자가 직접 입력합니다. 휴게는 근무시간으로 정합니다(autoBreakFor, 2026-10-30):
+ * 09:00~18:00 / 09:30~18:00 / 09:30~18:30 이면 12:30~13:30, 그 밖은 빈칸.
  */
-const WORK_TIME_DEFAULTS: Record<string, { workStart: string; workEnd: string; breakStart: string; breakEnd: string }> = {
-  장사꾼: { workStart: "09:30", workEnd: "18:00", breakStart: "12:30", breakEnd: "13:30" },
-  로엔티크: { workStart: "09:00", workEnd: "18:00", breakStart: "12:30", breakEnd: "13:30" },
-  헤모즈: { workStart: "", workEnd: "", breakStart: "12:30", breakEnd: "13:30" },
-  깨소금: { workStart: "", workEnd: "", breakStart: "12:30", breakEnd: "13:30" },
+const WORK_TIME_DEFAULTS: Record<string, { workStart: string; workEnd: string }> = {
+  장사꾼: { workStart: "09:30", workEnd: "18:00" },
+  로엔티크: { workStart: "09:00", workEnd: "18:00" },
+  헤모즈: { workStart: "", workEnd: "" },
+  깨소금: { workStart: "", workEnd: "" },
 };
-const WORK_TIME_FALLBACK = { workStart: "", workEnd: "", breakStart: "12:30", breakEnd: "13:30" };
+const WORK_TIME_FALLBACK = { workStart: "", workEnd: "" };
 
 /**
  * 작성할 계약서(서명대기) 내용과 미리 채울 값.
@@ -62,6 +63,8 @@ export async function POST(request: Request) {
     const workplace = employee.workplace_name || "장사꾼";
     const timeDefaults = WORK_TIME_DEFAULTS[workplace] ?? WORK_TIME_FALLBACK;
     const startDate = fixedStartDate || str(prefill.startDate) || todayKst();
+    const workStart = str(prefill.workStart) || timeDefaults.workStart;
+    const workEnd = str(prefill.workEnd) || timeDefaults.workEnd;
 
     await logContractEvent(supabase, request, {
       contractId: contract.id,
@@ -99,10 +102,9 @@ export async function POST(request: Request) {
             const kept = Array.isArray(prefill.workDays) ? (prefill.workDays as string[]).filter((d) => allowed.includes(d)) : [];
             return kept.length > 0 ? kept : allowed;
           })(),
-          workStart: str(prefill.workStart) || timeDefaults.workStart,
-          workEnd: str(prefill.workEnd) || timeDefaults.workEnd,
-          breakStart: str(prefill.breakStart) || timeDefaults.breakStart,
-          breakEnd: str(prefill.breakEnd) || timeDefaults.breakEnd,
+          workStart,
+          workEnd,
+          ...autoBreakFor(workStart, workEnd),
           note: str(prefill.note),
           serviceScopeOther: str(prefill.serviceScopeOther),
         },

@@ -47,6 +47,18 @@ export function isSaturdayOnlyWeek(start: string, workplace: string | null | und
   return Boolean(date) && workplace === "장사꾼" && getISODay(date!) === 6;
 }
 
+/**
+ * 1주 계약 휴게시간 자동 입력(2026-10-30 사용자 지정, 전 사업장).
+ * 근무시간이 09:00~18:00 / 09:30~18:00 / 09:30~18:30 일 때만 12:30~13:30, 그 밖은 빈칸.
+ */
+const AUTO_BREAK_WORK_TIMES = ["09:00~18:00", "09:30~18:00", "09:30~18:30"];
+
+export function autoBreakFor(workStart: string, workEnd: string): { breakStart: string; breakEnd: string } {
+  return AUTO_BREAK_WORK_TIMES.includes(`${workStart}~${workEnd}`)
+    ? { breakStart: "12:30", breakEnd: "13:30" }
+    : { breakStart: "", breakEnd: "" };
+}
+
 const WEEKDAY_KEYS = ["mon", "tue", "wed", "thu", "fri"] as const;
 
 /**
