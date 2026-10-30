@@ -5,8 +5,7 @@ import assert from "node:assert/strict";
 import {
   calcElevenMonthContractEnd,
   calcWeekContractEnd,
-  contractKindForEmploymentType,
-} from "../../app/lib/contracts/period";
+  contractKindForEmploymentType, allowedWeekContractDays } from "../../app/lib/contracts/period";
 import {
   ageOn,
   checkResidentNumber,
@@ -47,7 +46,8 @@ const week = (over: Partial<ContractInput> = {}): ContractInput => ({
   phone: "010-1234-5678",
   address: "전북특별자치도 전주시 덕진구 테스트로 1",
   startDate: TODAY,
-  workDays: ["mon", "tue", "wed", "thu", "fri"],
+  // TODAY 가 수요일이라 계약 기간 안의 요일은 수~금(2026-10-30 근무 요일 제한)
+  workDays: ["wed", "thu", "fri"],
   workStart: "09:00",
   workEnd: "18:00",
   breakStart: "12:00",
@@ -96,6 +96,19 @@ test("장사꾼 1주 계약: 토요일 시작이면 토요일 하루 (2026-10-16
   assert.ok(!validateContractInput({ ...sat, workDays: ["mon", "sat"] }, { ...ctx(), workplace: "헤모즈" }).errors.some((e) => e.code === "saturday_only"));
 });
 
+test("1주 계약 근무 요일: 계약 기간 안의 월~금만", () => {
+  const codesOf = (startDate: string, workDays: string[], workplace = "장사꾼") =>
+    validateContractInput({ ...week(), startDate, workDays: workDays as ContractInput["workDays"] }, { ...ctx(), workplace }).errors.map((e) => e.code);
+  assert.ok(codesOf("2026-10-14", ["mon", "tue", "wed", "thu", "fri"]).includes("day_outside_period"), "수 시작인데 월·화 선택 → 막힘");
+  assert.ok(!codesOf("2026-10-14", ["wed", "thu", "fri"]).includes("day_outside_period"), "수 시작 수~금 → 통과");
+  assert.ok(codesOf("2026-10-12", ["mon", "sat"]).includes("day_outside_period"), "월 시작인데 토 선택 → 막힘");
+  assert.ok(!codesOf("2026-10-12", ["mon", "tue", "wed", "thu", "fri"]).includes("day_outside_period"), "월 시작 월~금 → 통과");
+  assert.ok(codesOf("2026-10-17", ["mon", "sat"], "헤모즈").includes("day_outside_period"), "헤모즈 토 시작(다음 주 월~금 계약) 토 선택 → 막힘");
+  assert.deepEqual(allowedWeekContractDays("2026-10-17", "장사꾼"), ["sat"]);
+  assert.deepEqual(allowedWeekContractDays("2026-10-15", "헤모즈"), ["thu", "fri"]);
+  assert.deepEqual(allowedWeekContractDays("2026-10-18", "장사꾼"), ["mon", "tue", "wed", "thu", "fri"]);
+});
+
 test("11개월 종료일은 기존 갱신 버튼과 같은 계산", () => {
   assert.equal(calcElevenMonthContractEnd("2026-10-01"), "2027-08-31");
   assert.equal(calcElevenMonthContractEnd("2026-03-31"), "2027-02-28");
@@ -110,7 +123,7 @@ test("정상 입력은 통과", () => {
   assert.equal(r.ok, true);
   assert.equal(r.derived.endDate, "2026-10-16");
   assert.equal(r.derived.dailyNetMinutes, 8 * 60);
-  assert.equal(r.derived.weeklyNetMinutes, 40 * 60);
+  assert.equal(r.derived.weeklyNetMinutes, 24 * 60); // 수~금 3일 × 8시간
 });
 
 test("빈칸: 필수 칸이 비면 칸마다 차단", () => {

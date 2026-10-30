@@ -4,7 +4,7 @@ import { loadMinimumWages, todayKst } from "@/app/lib/contracts/worker";
 import { logContractEvent } from "@/app/lib/contracts/server";
 import { maskResidentNumber } from "@/app/lib/contracts/residentNumber";
 import { getTemplate } from "@/app/lib/contracts/templates";
-import { isSaturdayOnlyWeek } from "@/app/lib/contracts/period";
+import { allowedWeekContractDays } from "@/app/lib/contracts/period";
 
 /**
  * 사업장별 근무시간 기본값(2026-10-15 사용자 지정). 직전 계약서에 적은 값이 있으면 그 값이 우선입니다.
@@ -92,12 +92,13 @@ export async function POST(request: Request) {
           phone: str(prefill.phone) || str(employee.phone),
           address: str(prefill.address),
           startDate,
-          workDays:
-            contract.kind === "week" && isSaturdayOnlyWeek(startDate, workplace)
-              ? ["sat"]
-              : Array.isArray(prefill.workDays)
-                ? prefill.workDays
-                : ["mon", "tue", "wed", "thu", "fri"],
+          // 1주 계약: 계약 기간 안의 요일만 미리 채웁니다(직전 계약 요일 중 기간 안의 것, 없으면 기간 안 전부).
+          workDays: (() => {
+            if (contract.kind !== "week") return Array.isArray(prefill.workDays) ? prefill.workDays : [];
+            const allowed = allowedWeekContractDays(startDate, workplace);
+            const kept = Array.isArray(prefill.workDays) ? (prefill.workDays as string[]).filter((d) => allowed.includes(d)) : [];
+            return kept.length > 0 ? kept : allowed;
+          })(),
           workStart: str(prefill.workStart) || timeDefaults.workStart,
           workEnd: str(prefill.workEnd) || timeDefaults.workEnd,
           breakStart: str(prefill.breakStart) || timeDefaults.breakStart,

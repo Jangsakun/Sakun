@@ -12,7 +12,7 @@ import {
   type Issue,
   type WorkDay,
 } from "@/app/lib/contracts/validation";
-import { calcContractEnd, isSaturdayOnlyWeek } from "@/app/lib/contracts/period";
+import { allowedWeekContractDays, calcContractEnd } from "@/app/lib/contracts/period";
 
 // 근로자 앱 — 근로계약서 작성·서명.
 //   ① 작성(입력 즉시 검사) → ② 미리보기(끝까지 스크롤) → ③ 서명 → ④ 완료(내려받기)
@@ -534,10 +534,11 @@ export default function ContractPage() {
                 const startDate = e.target.value;
 
                 // 장사꾼 1주 계약: 토요일 시작이면 토요일 하루 계약 → 근무 요일도 토요일로 맞춥니다.
-                if (isWeek && isSaturdayOnlyWeek(startDate, contract.workplace)) {
-                  update({ startDate, workDays: ["sat"] });
-                } else if (isWeek && isSaturdayOnlyWeek(input.startDate, contract.workplace)) {
-                  update({ startDate, workDays: ["mon", "tue", "wed", "thu", "fri"] });
+                // 1주 계약: 근무 요일은 계약 기간 안의 요일만(장사꾼 토요일 시작이면 토요일만). 기간 밖 요일은 뺍니다.
+                if (isWeek) {
+                  const allowed = allowedWeekContractDays(startDate, contract.workplace);
+                  const kept = (input.workDays ?? []).filter((d) => allowed.includes(d));
+                  update({ startDate, workDays: (kept.length > 0 ? kept : allowed) as WorkDay[] });
                 } else {
                   update({ startDate });
                 }
@@ -550,7 +551,7 @@ export default function ContractPage() {
             <>
               <Field label="근무 요일" errors={errorFor("workDays")}>
                 <div className="flex flex-wrap gap-2">
-                  {WORK_DAYS.map((d) => {
+                  {WORK_DAYS.filter((d) => allowedWeekContractDays(input.startDate, contract.workplace).includes(d)).map((d) => {
                     const on = input.workDays?.includes(d);
                     return (
                       <button

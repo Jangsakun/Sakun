@@ -1,6 +1,7 @@
 import {
   calcContractEnd,
   daysBetween,
+  allowedWeekContractDays,
   isSaturdayOnlyWeek,
   parseDateKey,
   type ContractKind,
@@ -225,6 +226,9 @@ export function validateContractInput(
       add("workDays", "no_work_days", "근무 요일을 하나 이상 선택해주세요.");
     } else if (startOk && isSaturdayOnlyWeek(input.startDate, ctx.workplace) && (days.length !== 1 || days[0] !== "sat")) {
       add("workDays", "saturday_only", "토요일에 시작하는 계약은 토요일 하루 계약입니다. 근무 요일은 토요일만 선택해주세요.");
+    } else if (startOk && days.some((d) => !allowedWeekContractDays(input.startDate, ctx.workplace).includes(d))) {
+      // 계약 기간(시작일 ~ 그 주 금요일) 밖의 요일은 고를 수 없습니다(2026-10-30).
+      add("workDays", "day_outside_period", "계약 기간 안의 요일(시작일부터 금요일까지)만 선택할 수 있습니다.");
     }
 
     const start = minutesOf(input.workStart);

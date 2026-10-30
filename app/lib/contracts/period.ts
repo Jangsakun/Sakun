@@ -47,6 +47,25 @@ export function isSaturdayOnlyWeek(start: string, workplace: string | null | und
   return Boolean(date) && workplace === "장사꾼" && getISODay(date!) === 6;
 }
 
+const WEEKDAY_KEYS = ["mon", "tue", "wed", "thu", "fri"] as const;
+
+/**
+ * 1주 계약에서 고를 수 있는 근무 요일(2026-10-30 사용자 요청: 계약 기간 안의 월~금만).
+ *   장사꾼 토요일 시작 → 토요일만
+ *   월~금 시작 → 시작 요일 ~ 금요일 (예: 수요일 시작 → 수·목·금)
+ *   토·일 시작 → 다음 주 월~금
+ */
+export function allowedWeekContractDays(start: string, workplace?: string | null): string[] {
+  const date = parseDateKey(start);
+
+  if (!date) return [...WEEKDAY_KEYS];
+  if (isSaturdayOnlyWeek(start, workplace)) return ["sat"];
+
+  const isoDay = getISODay(date); // 1=월 … 7=일
+
+  return isoDay <= 5 ? WEEKDAY_KEYS.slice(isoDay - 1) : [...WEEKDAY_KEYS];
+}
+
 /**
  * 1주 계약 종료일.
  *   주의 기준: 월요일 시작 ~ 일요일 끝
