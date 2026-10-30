@@ -60,8 +60,7 @@ export default function RegisterDevicePage() {
         !name ||
         !phone ||
         !residentNumber ||
-        !bankName ||
-        !accountNumber ||
+        // 은행·계좌는 신규 가입만 필수(서버가 확인). 이미 가입한 당근 근무자 재연결은 이름·휴대폰·주민번호만.
         !workplaceName ||
         !employmentType
       ) {

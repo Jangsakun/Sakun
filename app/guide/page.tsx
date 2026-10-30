@@ -73,9 +73,10 @@ export default function GuidePage() {
           </ul>
         </section>
 
-        <Step no={1} title="당근 공고의 링크로 가입하기">
+        <Step no={1} title="QR코드로 가입하기">
           <p>
-            공고에 있는 가입 링크를 누르면 <b>&ldquo;당근 단기 근무 가입&rdquo;</b> 화면이 나옵니다.
+            안내받은 QR코드를 <b>휴대폰 기본 카메라</b>로 찍고, 화면에 뜨는 주소를 누르면 <b>&ldquo;당근 단기 근무 가입&rdquo;</b> 화면이 나옵니다.
+            (카카오톡·네이버 앱의 QR 스캐너보다 기본 카메라를 써 주세요.)
             이름, 휴대폰번호, 주민번호, 은행, 계좌번호를 넣고 근무지를 고른 뒤 동의에 체크하고 <b>등록하기</b>를 누르세요.
           </p>
           <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -129,8 +130,8 @@ export default function GuidePage() {
           <div className="mt-4 space-y-4 text-[15px] leading-relaxed text-gray-700">
             <p>
               다른 브라우저에서 가입했을 때 생깁니다. <b>재연결 코드는 필요 없습니다.</b>
-              가입 화면에 처음 가입할 때와 <b>똑같은 이름·휴대폰번호·주민번호</b>를 넣고(은행·계좌도 입력)
-              <b> 등록하기</b>를 누르면 바로 연결됩니다.
+              가입 화면에 처음 가입할 때와 <b>똑같은 이름·휴대폰번호·주민번호</b>만 넣고
+              <b> 등록하기</b>를 누르면 바로 연결됩니다. 은행·계좌는 비워 두셔도 됩니다.
             </p>
             <Phone shot={SHOTS.reconnect} caption="같은 정보로 다시 입력 → 연결 완료" />
             <p className="text-sm text-gray-500">

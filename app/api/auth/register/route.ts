@@ -358,18 +358,12 @@ export async function POST(request: Request) {
       });
     }
 
-    if (
-      !trimmedName ||
-      !trimmedPhone ||
-      !trimmedResidentNumber ||
-      !trimmedBankName ||
-      !trimmedAccountNumber
-    ) {
+    // 은행·계좌는 신규 가입에서만 확인합니다(아래). 이미 가입한 당근 근무자 재연결은 이름·휴대폰·주민번호만 맞으면 됩니다.
+    if (!trimmedName || !trimmedPhone || !trimmedResidentNumber) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "이름, 휴대폰번호, 주민번호, 은행명, 계좌번호를 모두 입력해주세요.",
+          message: "이름, 휴대폰번호, 주민번호를 모두 입력해주세요.",
         },
         { status: 400 }
       );
@@ -522,6 +516,13 @@ export async function POST(request: Request) {
           },
         },
         { status: 409 }
+      );
+    }
+
+    if (!trimmedBankName || !trimmedAccountNumber) {
+      return NextResponse.json(
+        { success: false, message: "은행명과 계좌번호를 입력해주세요." },
+        { status: 400 }
       );
     }
 
