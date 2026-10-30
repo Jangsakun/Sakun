@@ -201,6 +201,7 @@ export default function AllGuidePage() {
 
         <Anchor id="schedule">
           <Step no={5} title="다음 주 스케줄 제출 (팔복동 한정)">
+            <p><Tag kind="fixed" /> 고정 근무자만 제출합니다. <Tag kind="carrot" /> 당근은 스케줄을 내지 않고, 출근하면 자동으로 반영됩니다.</p>
             <p>출퇴근 화면 아래 <b>다음 주 스케줄</b>에서 출근 가능한 요일과 주간/야간을 고르고 <b>스케줄 제출하기</b>.</p>
             <ul className="list-disc space-y-1 pl-5 text-sm">
               <li>공휴일은 자동으로 빠집니다.</li>

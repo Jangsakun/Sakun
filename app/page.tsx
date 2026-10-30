@@ -32,6 +32,7 @@ type Employee = {
   phoneLast4: string;
   workplaceName?: string;
   workplace_name?: string;
+  employmentType?: string;
 };
 
 type AttendanceResponse = {
@@ -89,6 +90,7 @@ type DeviceStatusResponse = {
     phoneLast4?: string;
     workplaceName?: string;
     workplace_name?: string;
+    employmentType?: string;
   };
 };
 
@@ -1094,6 +1096,7 @@ export default function Home() {
               deviceData.employee.workplace_name ||
               storedEmployee.workplaceName ||
               storedEmployee.workplace_name,
+            employmentType: deviceData.employee.employmentType,
           };
 
           localStorage.setItem("employee", JSON.stringify(connectedEmployee));
@@ -1659,8 +1662,11 @@ export default function Home() {
   const employeeWorkplace = String(
     employee.workplaceName || employee.workplace_name || ""
   ).trim();
+  // 당근은 스케줄을 내지 않습니다. 출근하면 관리자 스케줄 조회에 자동으로 나옵니다(2026-10-30).
   const shouldShowSchedule =
-    employeeWorkplace !== "헤모즈" && employeeWorkplace !== "깨소금";
+    employeeWorkplace !== "헤모즈" &&
+    employeeWorkplace !== "깨소금" &&
+    employee?.employmentType !== "carrot";
 
   const isSchedulePending = scheduleStatus === "pending";
   const todayDateLabel = formatKstHeaderDate(now);

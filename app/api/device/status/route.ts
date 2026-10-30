@@ -41,7 +41,8 @@ export async function POST(request: Request) {
           name,
           birth_date,
           phone_last4,
-          workplace_name
+          workplace_name,
+          employment_type
         )
       `
       )
@@ -84,6 +85,9 @@ export async function POST(request: Request) {
 
         // 혹시 다른 코드가 DB 형식으로 읽는 경우를 위한 값
         workplace_name: employeeData.workplace_name || "장사꾼",
+
+        // 당근이면 근로자 화면에서 스케줄 제출을 숨깁니다(2026-10-30)
+        employmentType: employeeData.employment_type || "fixed",
       },
     });
   } catch (error) {

@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
 
     const { data: employee, error: empError } = await supabase
       .from("employees")
-      .select("id, name, birth_date, phone_last4, gender, is_active")
+      .select("id, name, birth_date, phone_last4, gender, is_active, employment_type")
       .eq("name", trimmedName)
       .eq("birth_date", trimmedBirthDate)
       .eq("phone_last4", trimmedPhoneLast4)
@@ -150,6 +150,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { success: false, message: "직원 정보를 찾을 수 없습니다." },
         { status: 404 }
+      );
+    }
+
+    // 당근은 스케줄을 내지 않습니다. 출근 기록으로 관리자 스케줄 조회에 나옵니다(2026-10-30).
+    if (employee.employment_type === "carrot") {
+      return NextResponse.json(
+        { success: false, message: "당근 근무자는 스케줄을 제출하지 않습니다. 출근하면 자동으로 반영됩니다." },
+        { status: 403 }
       );
     }
 

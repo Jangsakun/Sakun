@@ -132,7 +132,9 @@ export async function GET(request: NextRequest) {
           )
         );
 
-      const scheduleRow = employeeSchedules[0] || null;
+      // 당근은 스케줄을 내지 않습니다(2026-10-30). 예전에 낸 스케줄도 쓰지 않고, 출근 기록으로만 당근 칸에 나옵니다(ScheduleTab 출근자 표시).
+      const scheduleRow =
+        emp.employment_type === "carrot" ? null : employeeSchedules[0] || null;
 
       const weeklySchedule = Array.isArray(scheduleRow?.schedule)
         ? scheduleRow.schedule.map((item: any) => normalizeScheduleItem(item))
@@ -203,7 +205,8 @@ export async function GET(request: NextRequest) {
           total: employees?.length || 0,
           available: available.length,
           unavailable: unavailable.length,
-          notSubmitted: notSubmitted.length,
+          // 당근은 스케줄을 내지 않으므로 미제출 수에서 뺍니다.
+          notSubmitted: notSubmitted.filter((emp) => emp.employment_type !== "carrot").length,
           dayAvailable: available.filter((emp) => emp.shift === "day").length,
           nightAvailable: available.filter((emp) => emp.shift === "night")
             .length,
