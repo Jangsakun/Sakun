@@ -30,7 +30,20 @@ const TOC = [
   ["payroll", "급여·계약서 확인"],
   ["home", "홈 화면 추가"],
   ["faq", "자주 묻는 질문"],
+  ["links", "링크 모음"],
 ] as const;
+
+// 근로자·현장 직원이 쓰는 주소 모음(2026-10-30). 관리자 주소는 넣지 않습니다(사장님만 사용).
+const LINKS: { label: string; path: string; note: string; tag?: "carrot" | "fixed" }[] = [
+  { label: "출퇴근", path: "/", note: "매일 출근·퇴근, 스케줄 제출" },
+  { label: "당근 가입", path: "/register-device?type=carrot", note: "당근 QR에 넣는 주소", tag: "carrot" },
+  { label: "고정 직원 가입", path: "/register-device", note: "고정 QR에 넣는 주소 · 재연결 코드 입력도 여기서", tag: "fixed" },
+  { label: "근로계약서 작성", path: "/contract", note: "서명할 계약서가 있을 때 · 당근→고정 전환도 여기서" },
+  { label: "내 계약서", path: "/contract/mine", note: "서명한 계약서 다시 받기" },
+  { label: "급여 조회", path: "/worker/payroll", note: "이름·주민번호로 이번 주 급여, 날짜별, 주급 명세서" },
+  { label: "전체 안내 (이 페이지)", path: "/guide/all", note: "가입부터 급여까지 전체 설명" },
+  { label: "당근 안내", path: "/guide", note: "당근 근무자용 짧은 안내", tag: "carrot" },
+];
 
 function Anchor({ id, children }: { id: string; children: React.ReactNode }) {
   return (
@@ -257,6 +270,26 @@ export default function AllGuidePage() {
                 <p>위 <a href="#convert" className="font-semibold text-orange-600 underline">3. 당근→고정 전환</a>을 현장 직원과 함께 하세요.</p>
               </Faq>
             </div>
+          </section>
+        </Anchor>
+
+        <Anchor id="links">
+          <section className="rounded-3xl bg-white px-5 py-6 shadow-sm">
+            <h2 className="text-lg font-bold text-gray-900">🔗 링크 모음</h2>
+            <p className="mt-1 text-sm text-gray-500">누르면 바로 열립니다. 길게 누르면 주소를 복사할 수 있습니다.</p>
+            <ul className="mt-4 divide-y divide-gray-100">
+              {LINKS.map((link) => (
+                <li key={link.path} className="py-3">
+                  <a href={link.path} className="block">
+                    <p className="flex items-center gap-2 font-semibold text-gray-900">
+                      {link.label} {link.tag && <Tag kind={link.tag} />}
+                    </p>
+                    <p className="mt-0.5 break-all text-sm font-medium text-orange-600 underline">sakun.kr{link.path === "/" ? "" : link.path}</p>
+                    <p className="mt-0.5 text-xs text-gray-500">{link.note}</p>
+                  </a>
+                </li>
+              ))}
+            </ul>
           </section>
         </Anchor>
 
