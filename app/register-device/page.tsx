@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { isInAppBrowser, isIos, openInDefaultBrowser } from "@/app/lib/inAppBrowser";
 
 function getOrCreateDeviceId() {
   let deviceId = localStorage.getItem("device_id");
@@ -29,9 +30,16 @@ export default function RegisterDevicePage() {
   const [employmentType, setEmploymentType] = useState<"fixed" | "carrot">("fixed");
   const isCarrotSignup = employmentType === "carrot";
 
+  // 앱 안 브라우저(당근·카톡·네이버 등)면 가입 후 폰 기본 브라우저로 넘겨 출퇴근하게 합니다(2026-10-30).
+  const [inApp, setInApp] = useState(false);
+  const [onIos, setOnIos] = useState(false);
+  const [linkUrl, setLinkUrl] = useState("");
+
   useEffect(() => {
     const type = new URLSearchParams(window.location.search).get("type");
     setEmploymentType(type === "carrot" ? "carrot" : "fixed");
+    setInApp(isInAppBrowser());
+    setOnIos(isIos());
   }, []);
   const [reconnectCode, setReconnectCode] = useState("");
   const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
@@ -114,6 +122,16 @@ export default function RegisterDevicePage() {
           setMessage("등록 완료!");
         }
 
+        // 앱 안 브라우저면 여기서 머무르지 않고, 연결표를 붙여 기본 브라우저로 출퇴근 화면을 엽니다.
+        // 계약서는 기본 브라우저의 출퇴근 화면이 이어서 띄웁니다.
+        if (inApp && data.linkToken) {
+          const url = `${window.location.origin}/link?t=${encodeURIComponent(data.linkToken)}`;
+          setLinkUrl(url);
+          setMessage("등록 완료! 아래 버튼을 눌러 출퇴근 화면을 열어주세요.");
+          openInDefaultBrowser(url);
+          return;
+        }
+
         setTimeout(() => {
           router.push(goToContract ? "/contract" : "/");
         }, 1400);
@@ -149,12 +167,47 @@ export default function RegisterDevicePage() {
               : "고정 근무 직원용 가입 화면입니다. 당근 공고를 보고 오셨다면 공고에 있는 가입 링크로 다시 들어와 주세요."}
           </p>
 
-          {isSuccess ? (
+          {isSuccess && linkUrl ? (
+            <div className="py-8 text-center">
+              <p className="text-green-600 font-semibold">등록 완료!</p>
+              <p className="mt-3 text-sm text-gray-700">
+                출퇴근은 휴대폰 기본 브라우저({onIos ? "사파리" : "크롬 등"})에서 합니다.
+                <br />
+                아래 버튼을 누르면 다시 입력하지 않고 바로 연결됩니다.
+              </p>
+              <button
+                type="button"
+                onClick={() => openInDefaultBrowser(linkUrl)}
+                className="mt-6 w-full h-12 bg-black text-white rounded font-semibold"
+              >
+                출퇴근 화면 열기
+              </button>
+              <p className="mt-4 text-xs text-gray-500">
+                버튼을 눌러도 열리지 않으면 화면 오른쪽 위(또는 아래) ⋯ 메뉴에서
+                <b> &quot;다른 브라우저로 열기&quot;</b>를 눌러주세요. 10분 안에 열어야 합니다.
+              </p>
+            </div>
+          ) : isSuccess ? (
             <div className="py-10 text-center text-green-600">
               완료! 이동 중...
             </div>
           ) : (
             <>
+              {inApp && (
+                <div className="mt-5 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                  지금 앱 안의 브라우저로 열려 있습니다. 출퇴근은 휴대폰 기본 브라우저에서 합니다.
+                  <button
+                    type="button"
+                    onClick={() => openInDefaultBrowser(window.location.href)}
+                    className="mt-2 block w-full h-10 rounded bg-amber-500 text-white font-semibold"
+                  >
+                    기본 브라우저로 열기
+                  </button>
+                  <span className="mt-2 block text-xs text-amber-800">
+                    여기서 그대로 가입해도 가입 후 출퇴근 화면으로 연결해 드립니다.
+                  </span>
+                </div>
+              )}
               <div className="mt-6 space-y-5">
                 <input
                   placeholder="이름"

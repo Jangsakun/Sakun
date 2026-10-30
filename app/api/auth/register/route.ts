@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createPendingContract } from "@/app/lib/contracts/lifecycle";
 import { serviceClient } from "@/app/lib/contracts/server";
+import { createDeviceLinkToken, relinkEmployeeDevice } from "@/app/lib/deviceLink";
 
 function maskResidentNumber(value: string) {
   const digits = value.replace(/[^0-9]/g, "");
@@ -353,6 +354,7 @@ export async function POST(request: Request) {
           employmentType: updatedEmployee.employment_type,
         },
         reconnected: true,
+        linkToken: createDeviceLinkToken(reconnectEmployee.id, trimmedDeviceId),
       });
     }
 
@@ -427,7 +429,14 @@ export async function POST(request: Request) {
         resident_number_masked,
         reconnect_code,
         reconnect_expires_at,
-        is_active
+        is_active,
+        phone_last4,
+        birth_date,
+        gender,
+        bank_name,
+        account_number,
+        workplace_name,
+        employment_type
         `
       )
       .eq("resident_number", residentDigits)
@@ -460,6 +469,44 @@ export async function POST(request: Request) {
           },
           { status: 403 }
         );
+      }
+
+      // 당근 가입자는 이름·휴대폰·주민번호를 모두 똑같이 다시 입력하면 재연결 코드 없이 이 브라우저로 연결합니다(2026-10-30).
+      // 당근 앱 안에서 가입한 뒤 크롬/사파리로 sakun.kr 에 들어오면 처음 보는 기기로 보여 막히던 문제.
+      const sameCarrotPerson =
+        existingEmployee.employment_type === "carrot" &&
+        String(existingEmployee.name || "").trim() === trimmedName &&
+        String(existingEmployee.phone || "").replace(/[^0-9]/g, "") === phoneDigits;
+
+      if (sameCarrotPerson) {
+        const relinkError = await relinkEmployeeDevice(supabase, existingEmployee.id, trimmedDeviceId);
+
+        if (relinkError) {
+          return NextResponse.json(
+            { success: false, message: "기기 연결 중 오류가 발생했습니다." },
+            { status: 500 }
+          );
+        }
+
+        return NextResponse.json({
+          success: true,
+          message: "기기 재연결이 완료되었습니다.",
+          employee: {
+            id: existingEmployee.id,
+            name: existingEmployee.name,
+            phone: existingEmployee.phone,
+            phoneLast4: existingEmployee.phone_last4,
+            residentNumberMasked: existingEmployee.resident_number_masked,
+            birthDate: existingEmployee.birth_date,
+            gender: existingEmployee.gender,
+            bankName: existingEmployee.bank_name,
+            accountNumber: existingEmployee.account_number,
+            workplaceName: existingEmployee.workplace_name,
+            employmentType: existingEmployee.employment_type,
+          },
+          reconnected: true,
+          linkToken: createDeviceLinkToken(existingEmployee.id, trimmedDeviceId),
+        });
       }
 
       return NextResponse.json(
@@ -580,6 +627,8 @@ export async function POST(request: Request) {
       },
       reconnected: false,
       contractRequired,
+      // 앱 안 브라우저에서 가입했으면 이 연결표로 기본 브라우저를 엽니다.
+      linkToken: createDeviceLinkToken(data.id, trimmedDeviceId),
     });
   } catch (error) {
     return NextResponse.json(
