@@ -690,6 +690,9 @@ export default function Home() {
   const router = useRouter();
 
   const [employee, setEmployee] = useState<Employee | null>(null);
+  // 기기 연결 확인이 네트워크/서버 오류로 실패한 경우(2026-11-06): 가입 화면으로 보내지 않고 다시 시도 버튼을 보여 줍니다.
+  const [deviceCheckFailed, setDeviceCheckFailed] = useState(false);
+  const [deviceCheckAttempt, setDeviceCheckAttempt] = useState(0);
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   // 근로형태. 오늘 기록 API 가 알려줍니다. 시급+도급이면 도급 버튼을 추가로 보여줍니다.
@@ -1057,6 +1060,8 @@ export default function Home() {
     const initializeEmployee = async () => {
       const deviceId = getOrCreateDeviceId();
 
+      setDeviceCheckFailed(false);
+
       let storedEmployee: Partial<Employee> = {};
 
       try {
@@ -1115,17 +1120,24 @@ export default function Home() {
           return;
         }
 
-        clearEmployeeStorage();
-        router.push("/register-device");
+        // 서버가 "연결된 기기 없음"이라고 확실히 답한 경우에만 가입 화면으로 보냅니다.
+        if (deviceData.success && !deviceData.exists) {
+          clearEmployeeStorage();
+          router.push("/register-device");
+          return;
+        }
+
+        console.error("device status 확인 실패:", deviceData);
+        setDeviceCheckFailed(true);
       } catch (error) {
+        // 앱을 다시 열 때 인터넷이 잠깐 끊긴 경우 등. 기기 연결 정보는 그대로 둡니다.
         console.error("device status 확인 에러:", error);
-        clearEmployeeStorage();
-        router.push("/register-device");
+        setDeviceCheckFailed(true);
       }
     };
 
     initializeEmployee();
-  }, [router]);
+  }, [router, deviceCheckAttempt]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -1654,7 +1666,33 @@ export default function Home() {
   if (!employee) {
     return (
       <main style={pageStyle} className={notoSansKr.className}>
-        <div style={cardStyle}>불러오는 중...</div>
+        {deviceCheckFailed ? (
+          <div style={{ ...cardStyle, textAlign: "center" }}>
+            <p style={{ margin: "0 0 16px", lineHeight: 1.6 }}>
+              인터넷 연결이 불안정해서 확인하지 못했습니다.
+              <br />
+              다시 가입할 필요는 없습니다.
+            </p>
+            <button
+              type="button"
+              onClick={() => setDeviceCheckAttempt((n) => n + 1)}
+              style={{
+                width: "100%",
+                padding: "14px",
+                borderRadius: 12,
+                border: "none",
+                background: "#2563eb",
+                color: "#fff",
+                fontSize: 16,
+                fontWeight: 700,
+              }}
+            >
+              다시 시도
+            </button>
+          </div>
+        ) : (
+          <div style={cardStyle}>불러오는 중...</div>
+        )}
       </main>
     );
   }
