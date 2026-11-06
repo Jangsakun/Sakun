@@ -42,7 +42,7 @@ export default function MyContractsPage() {
     const id = identity();
 
     if (!id) {
-      router.push("/register-device");
+      router.push("/"); // 홈에서 기기 연결을 다시 확인(2026-11-06)
       return;
     }
 

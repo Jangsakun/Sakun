@@ -121,8 +121,10 @@ export default function ContractPage() {
   useEffect(() => {
     const id = readIdentity();
 
+    // 저장된 직원 정보가 없으면 홈에서 기기 연결부터 다시 확인합니다(2026-11-06).
+    // 연결된 폰이면 홈이 정보를 복구해 다시 계약서로 보내고, 아니면 홈이 가입 화면으로 보냅니다.
     if (!id) {
-      router.push("/register-device");
+      router.push("/");
       return;
     }
 
