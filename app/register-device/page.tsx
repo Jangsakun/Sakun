@@ -40,7 +40,24 @@ export default function RegisterDevicePage() {
     setEmploymentType(type === "carrot" ? "carrot" : "fixed");
     setInApp(isInAppBrowser());
     setOnIos(isIos());
-  }, []);
+
+    // 폰 저장값이 지워졌어도 서버 쿠키로 이미 연결된 폰인지 확인되면 출퇴근 화면으로 돌려보냅니다(2026-11-06).
+    const deviceId = getOrCreateDeviceId();
+    fetch("/api/device/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      body: JSON.stringify({ deviceId }),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.success && data.exists && data.deviceId && data.deviceId !== deviceId) {
+          localStorage.setItem("device_id", data.deviceId);
+          router.replace("/");
+        }
+      })
+      .catch(() => {});
+  }, [router]);
   const [reconnectCode, setReconnectCode] = useState("");
   const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
 

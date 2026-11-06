@@ -1,7 +1,32 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { NextRequest, NextResponse } from "next/server";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-export async function POST(request: Request) {
+// 폰 저장값(localStorage)이 지워져도 다시 연결되도록 기기 ID를 서버 쿠키에 한 벌 더 둡니다(2026-11-06).
+// 화면이 보낸 ID가 연결돼 있지 않으면 쿠키의 ID로 다시 찾고, 찾으면 그 ID를 돌려줘 화면이 저장값을 되살립니다.
+const DEVICE_COOKIE = "sakun_device";
+const DEVICE_COOKIE_MAX_AGE = 60 * 60 * 24 * 400;
+
+async function findDevice(supabase: SupabaseClient, deviceId: string) {
+  return supabase
+    .from("employee_devices")
+    .select(
+      `
+        employee_id,
+        employees (
+          id,
+          name,
+          birth_date,
+          phone_last4,
+          workplace_name,
+          employment_type
+        )
+      `
+    )
+    .eq("device_id", deviceId)
+    .maybeSingle();
+}
+
+export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { deviceId } = body;
@@ -31,23 +56,15 @@ export async function POST(request: Request) {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    const { data, error } = await supabase
-      .from("employee_devices")
-      .select(
-        `
-        employee_id,
-        employees (
-          id,
-          name,
-          birth_date,
-          phone_last4,
-          workplace_name,
-          employment_type
-        )
-      `
-      )
-      .eq("device_id", deviceId)
-      .maybeSingle();
+    let linkedDeviceId = String(deviceId);
+    let { data, error } = await findDevice(supabase, linkedDeviceId);
+
+    const cookieDeviceId = request.cookies.get(DEVICE_COOKIE)?.value;
+
+    if (!error && !data && cookieDeviceId && cookieDeviceId !== linkedDeviceId) {
+      ({ data, error } = await findDevice(supabase, cookieDeviceId));
+      if (data) linkedDeviceId = cookieDeviceId;
+    }
 
     if (error) {
       return NextResponse.json(
@@ -71,9 +88,11 @@ export async function POST(request: Request) {
       });
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       exists: true,
+      // 쿠키로 되살린 경우 화면이 이 값으로 저장값을 바꿉니다.
+      deviceId: linkedDeviceId,
       employee: {
         id: employeeData.id,
         name: employeeData.name,
@@ -90,6 +109,16 @@ export async function POST(request: Request) {
         employmentType: employeeData.employment_type || "fixed",
       },
     });
+
+    response.cookies.set(DEVICE_COOKIE, linkedDeviceId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: DEVICE_COOKIE_MAX_AGE,
+    });
+
+    return response;
   } catch (error) {
     console.error("device status API error:", error);
 

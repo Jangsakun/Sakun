@@ -82,6 +82,7 @@ type ValidateEmployeeResponse = {
 type DeviceStatusResponse = {
   success: boolean;
   exists: boolean;
+  deviceId?: string;
   message?: string;
   employee?: {
     id?: string;
@@ -1083,6 +1084,11 @@ export default function Home() {
         });
 
         const deviceData: DeviceStatusResponse = await deviceResponse.json();
+
+        // 폰 저장값이 지워져 서버 쿠키로 다시 찾은 경우, 그 기기 ID를 다시 저장합니다.
+        if (deviceData.success && deviceData.exists && deviceData.deviceId && deviceData.deviceId !== deviceId) {
+          localStorage.setItem("device_id", deviceData.deviceId);
+        }
 
         if (
           deviceData.success &&
