@@ -61,6 +61,41 @@ function normalizeScheduleItem(item: any) {
   };
 }
 
+const WEEKDAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
+
+function addDaysKey(key: string, days: number) {
+  const d = new Date(`${key}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** date 가 속한 주(월~일) 날짜 7개 */
+function weekDatesOf(date: string) {
+  const dow = new Date(`${date}T00:00:00Z`).getUTCDay(); // 0=일
+  const monday = addDaysKey(date, dow === 0 ? -6 : 1 - dow);
+  return Array.from({ length: 7 }, (_, i) => addDaysKey(monday, i));
+}
+
+type WeekContract = { employee_id: number; start_date: string | null; end_date: string | null; input_snapshot: { workDays?: unknown } | null };
+
+/**
+ * 당근 근로자의 그 주 스케줄 = 서명한 1주 근로계약서에서 고른 근무 요일(2026-11-10 사용자 요청).
+ * 계약 기간 안 + 계약서 근무 요일인 날만 출근(주간)으로 봅니다. 스케줄 조회 화면은 고정 직원과 같은 방식으로 표시합니다.
+ */
+function carrotContractSchedule(contracts: WeekContract[], weekDates: string[]) {
+  return weekDates.map((fullDate) => {
+    const weekday = WEEKDAY_KEYS[new Date(`${fullDate}T00:00:00Z`).getUTCDay()];
+    const available = contracts.some((c) => {
+      const days = Array.isArray(c.input_snapshot?.workDays) ? (c.input_snapshot!.workDays as unknown[]) : [];
+      return !!c.start_date && !!c.end_date && c.start_date <= fullDate && fullDate <= c.end_date && days.includes(weekday);
+    });
+    const dayLabel = WEEKDAY_LABELS[WEEKDAY_KEYS.indexOf(weekday)];
+
+    return normalizeScheduleItem({ day: dayLabel, dayLabel, label: fullDate.slice(5), fullDate, available, shift: "day" });
+  });
+}
+
 function getScheduleForDate(schedule: any[], date: string) {
   return schedule.find((item) => item.fullDate === date) || null;
 }
@@ -113,6 +148,30 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // 당근: 서명한(또는 다음 계약으로 끝난) 1주 계약서 중 이번 주와 겹치는 것
+    const weekDates = weekDatesOf(date);
+    const carrotIds = (employees || []).filter((e) => e.employment_type === "carrot").map((e) => e.id);
+    const contractsByEmployee = new Map<number, WeekContract[]>();
+
+    if (carrotIds.length > 0) {
+      const { data: contracts, error: contractError } = await supabase
+        .from("employment_contracts")
+        .select("employee_id, start_date, end_date, input_snapshot")
+        .in("employee_id", carrotIds)
+        .eq("kind", "week")
+        .in("status", ["signed", "ended"])
+        .lte("start_date", weekDates[6])
+        .gte("end_date", weekDates[0]);
+
+      if (contractError) {
+        console.error("당근 계약서 조회 실패:", contractError.message);
+      }
+
+      for (const c of (contracts || []) as WeekContract[]) {
+        contractsByEmployee.set(c.employee_id, [...(contractsByEmployee.get(c.employee_id) || []), c]);
+      }
+    }
+
     const available: any[] = [];
     const unavailable: any[] = [];
     const notSubmitted: any[] = [];
@@ -132,9 +191,15 @@ export async function GET(request: NextRequest) {
           )
         );
 
-      // 당근은 스케줄을 내지 않습니다(2026-10-30). 예전에 낸 스케줄도 쓰지 않고, 출근 기록으로만 당근 칸에 나옵니다(ScheduleTab 출근자 표시).
+      // 당근은 스케줄을 내지 않습니다(2026-10-30). 예전에 낸 스케줄은 쓰지 않고,
+      // 1주 근로계약서에서 고른 근무 요일을 스케줄로 씁니다(2026-11-10). 계약서가 없는 주는 출근 기록으로만 당근 칸에 나옵니다.
+      const carrotContracts = emp.employment_type === "carrot" ? contractsByEmployee.get(emp.id) || [] : [];
       const scheduleRow =
-        emp.employment_type === "carrot" ? null : employeeSchedules[0] || null;
+        emp.employment_type === "carrot"
+          ? carrotContracts.length > 0
+            ? { schedule: carrotContractSchedule(carrotContracts, weekDates) }
+            : null
+          : employeeSchedules[0] || null;
 
       const weeklySchedule = Array.isArray(scheduleRow?.schedule)
         ? scheduleRow.schedule.map((item: any) => normalizeScheduleItem(item))

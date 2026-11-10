@@ -604,6 +604,11 @@ function getUnavailableEmployeesForDate({
         return false;
       }
 
+      // 당근은 계약서 근무일이 아닌 날을 "출근 안함" 칸에 넣지 않습니다(출근한 날만 당근 칸에 보임).
+      if (isCarrotEmployee(employee)) {
+        return false;
+      }
+
       // "출근 안함"으로 냈지만 실제로 출근했으면 역할그룹 칸으로 옮겨졌으므로 여기서 뺍니다.
       if (isWalkIn(employee, date)) {
         return false;
