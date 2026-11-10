@@ -58,6 +58,8 @@ function normalizeScheduleItem(item: any) {
     shift,
     shiftType: shift,
     shiftLabel: getShiftLabel(shift),
+    // 당근: 1주 근로계약서상 근무일인지(조회할 때만 계산, 저장값은 쓰지 않음)
+    contractDay: item?.contractDay === true,
   };
 }
 
@@ -92,7 +94,33 @@ function carrotContractSchedule(contracts: WeekContract[], weekDates: string[]) 
     });
     const dayLabel = WEEKDAY_LABELS[WEEKDAY_KEYS.indexOf(weekday)];
 
-    return normalizeScheduleItem({ day: dayLabel, dayLabel, label: fullDate.slice(5), fullDate, available, shift: "day" });
+    return normalizeScheduleItem({ day: dayLabel, dayLabel, label: fullDate.slice(5), fullDate, available, shift: "day", contractDay: available });
+  });
+}
+
+/**
+ * 관리자가 스케줄 조회에서 당근 스케줄을 고친 주(2026-11-10 사용자 요청: 출근 안함으로 수정).
+ * 당근 본인 제출은 2026-10-30부터 막혀 있으므로, 이 날짜 이후 주의 당근 스케줄 행은 관리자가 고친 것입니다.
+ * 그 이전 주의 행은 예전 당근 본인 제출분이라 쓰지 않습니다.
+ */
+const CARROT_ADMIN_EDIT_FROM = "2026-11-09";
+
+function mergeCarrotSchedule(contractSchedule: any[], adminRow: any | null) {
+  if (!adminRow || !Array.isArray(adminRow.schedule)) return contractSchedule;
+
+  const edited = new Map<string, any>(
+    adminRow.schedule.map((item: any) => [String(item?.fullDate || ""), item])
+  );
+
+  if (contractSchedule.length === 0) {
+    return adminRow.schedule.map((item: any) => normalizeScheduleItem({ ...item, contractDay: false }));
+  }
+
+  return contractSchedule.map((item) => {
+    const override = edited.get(item.fullDate);
+    return override
+      ? normalizeScheduleItem({ ...override, fullDate: item.fullDate, contractDay: item.contractDay })
+      : item;
   });
 }
 
@@ -193,11 +221,25 @@ export async function GET(request: NextRequest) {
 
       // 당근은 스케줄을 내지 않습니다(2026-10-30). 예전에 낸 스케줄은 쓰지 않고,
       // 1주 근로계약서에서 고른 근무 요일을 스케줄로 씁니다(2026-11-10). 계약서가 없는 주는 출근 기록으로만 당근 칸에 나옵니다.
+      // 관리자가 이번 주 당근 스케줄을 고쳤으면 그 내용이 계약서 요일보다 우선합니다(2026-11-10).
       const carrotContracts = emp.employment_type === "carrot" ? contractsByEmployee.get(emp.id) || [] : [];
+      const carrotAdminRow =
+        emp.employment_type === "carrot" &&
+        employeeSchedules[0] &&
+        String(employeeSchedules[0].week_start_date || "") >= CARROT_ADMIN_EDIT_FROM
+          ? employeeSchedules[0]
+          : null;
+      const carrotSchedule =
+        emp.employment_type === "carrot"
+          ? mergeCarrotSchedule(
+              carrotContracts.length > 0 ? carrotContractSchedule(carrotContracts, weekDates) : [],
+              carrotAdminRow
+            )
+          : [];
       const scheduleRow =
         emp.employment_type === "carrot"
-          ? carrotContracts.length > 0
-            ? { schedule: carrotContractSchedule(carrotContracts, weekDates) }
+          ? carrotSchedule.length > 0
+            ? { schedule: carrotSchedule }
             : null
           : employeeSchedules[0] || null;
 

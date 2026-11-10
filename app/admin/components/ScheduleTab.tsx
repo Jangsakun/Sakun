@@ -13,6 +13,8 @@ type ScheduleDay = {
   dateLabel?: string;
   fullDate: string;
   available: boolean;
+  /** 당근: 1주 근로계약서상 근무일 */
+  contractDay?: boolean;
   shift?: ShiftType | null;
   shiftType?: ShiftType | null;
   shiftLabel?: string | null;
@@ -624,9 +626,11 @@ function getUnavailableEmployeesForDate({
         return false;
       }
 
-      // 당근은 계약서 근무일이 아닌 날을 "출근 안함" 칸에 넣지 않습니다(출근한 날만 당근 칸에 보임).
+      // 당근은 계약서 근무일인데 관리자가 "출근 안함"으로 고친 날만 이 칸에 넣습니다.
+      // 계약서 근무일이 아닌 날은 넣지 않습니다(출근한 날만 당근 칸에 보임).
       if (isCarrotEmployee(employee)) {
-        return false;
+        const carrotDay = employee.schedule?.find((item) => item.fullDate === date);
+        return carrotDay?.contractDay === true && carrotDay.available !== true && !isWalkIn(employee, date);
       }
 
       // "출근 안함"으로 냈지만 실제로 출근했으면 역할그룹 칸으로 옮겨졌으므로 여기서 뺍니다.
