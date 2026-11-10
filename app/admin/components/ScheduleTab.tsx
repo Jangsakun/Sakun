@@ -1215,6 +1215,34 @@ export default function ScheduleTab() {
                       >
                         {day.value}
                       </div>
+                      {selectedWorkplace !== "헤모즈" && (() => {
+                        // 요일별 총합(2026-11-10): 현장 = 랄라/모아림 + 몽글솜 + 당근, 택배 = 택배. 아래 칸과 같은 기준으로 셉니다.
+                        const countGroup = (key: RoleGroupKey) => {
+                          const group = ROLE_GROUPS.find((g) => g.key === key);
+                          return group
+                            ? getEmployeesForRoleAndDate({
+                                employees: allEmployees,
+                                group,
+                                date: day.value,
+                                selectedDate,
+                                isWalkIn: isWalkInOnDate,
+                              }).length
+                            : 0;
+                        };
+                        const fieldCount = countGroup("rallaMoarim") + countGroup("monggeul") + countGroup("carrot");
+                        const deliveryCount = countGroup("delivery");
+
+                        return (
+                          <div style={{ marginTop: "8px", display: "grid", gap: "4px", fontSize: "12px", fontWeight: 800 }}>
+                            <div style={{ color: "#1d4ed8", background: "#eff6ff", borderRadius: "6px", padding: "3px 8px" }}>
+                              현장 인원 : {fieldCount}명
+                            </div>
+                            <div style={{ color: "#0369a1", background: "#f0f9ff", borderRadius: "6px", padding: "3px 8px" }}>
+                              택배 : {deliveryCount}명
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </th>
                   );
                 })}
