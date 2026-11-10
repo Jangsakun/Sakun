@@ -127,16 +127,22 @@ export function calcPieceDay<T extends PayRecord>(
 // 하루 합계
 // ─────────────────────────────────────────────────────────────
 
-/** 그 날 시급: 시급 구간 기록의 스냅샷 → 직원 현재 시급 → 기본값 (기존 getWageForDay 와 같은 순서) */
+/**
+ * 그 날 시급: 시급 구간 기록의 스냅샷 → 직원 현재 시급 → 기본값 (기존 getWageForDay 와 같은 순서)
+ * 스냅샷이 0이면 "시급 0원"으로 그대로 씁니다(2026-11-10, 월급제로 바뀐 직원). 비어 있는(null) 스냅샷만 대신 계산합니다.
+ */
 export function getHourlyWageForDay(
   hourlyRecords: PayRecord[],
   fallbackHourlyWage?: number | null
 ) {
-  const snapshot = hourlyRecords
-    .map((record) => Number(record.hourly_wage_snapshot || 0))
-    .find((wage) => wage > 0);
+  const snapshots = hourlyRecords
+    .map((record) => record.hourly_wage_snapshot)
+    .filter((value) => value !== null && value !== undefined && value !== "")
+    .map((value) => Number(value));
+  const snapshot = snapshots.find((wage) => wage > 0);
 
   if (snapshot) return snapshot;
+  if (snapshots.some((wage) => wage === 0)) return 0;
 
   const fallback = Number(fallbackHourlyWage || 0);
 

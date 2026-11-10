@@ -62,8 +62,12 @@ async function resolveManualHourlyWageSnapshot(
   supabase: any,
   employeeId: number,
   targetDate: string,
-  currentHourlyWage: number
+  currentHourlyWage: number | null
 ) {
+  // 0은 "시급 0원"으로 지정된 값이라 그대로 씁니다(2026-11-10). 비어 있을 때만 10320.
+  const currentOrDefault =
+    currentHourlyWage !== null && currentHourlyWage >= 0 ? currentHourlyWage : 10320;
+
   const dayStart = new Date(`${targetDate}T00:00:00+09:00`).toISOString();
   const dayEnd = new Date(`${targetDate}T23:59:59.999+09:00`).toISOString();
 
@@ -82,17 +86,15 @@ async function resolveManualHourlyWageSnapshot(
     throw new Error(`같은 날짜 시급 조회 실패: ${sameDayError.message}`);
   }
 
-  const sameDayWage = Number(sameDayRows?.[0]?.hourly_wage_snapshot || 0);
-
-  if (sameDayWage > 0) {
-    return sameDayWage;
+  if (sameDayRows?.[0]) {
+    return Number(sameDayRows[0].hourly_wage_snapshot);
   }
 
   const todayKst = getKstDateKey();
 
   // 오늘 이후 날짜는 현재 시급을 사용
   if (targetDate >= todayKst) {
-    return currentHourlyWage > 0 ? currentHourlyWage : 10320;
+    return currentOrDefault;
   }
 
   // 2. 과거 날짜라면 그 날짜까지의 가장 최근 시급 스냅샷을 사용
@@ -109,14 +111,12 @@ async function resolveManualHourlyWageSnapshot(
     throw new Error(`과거 시급 조회 실패: ${previousError.message}`);
   }
 
-  const previousWage = Number(previousRows?.[0]?.hourly_wage_snapshot || 0);
-
-  if (previousWage > 0) {
-    return previousWage;
+  if (previousRows?.[0]) {
+    return Number(previousRows[0].hourly_wage_snapshot);
   }
 
   // 3. 과거 스냅샷 자체가 없는 아주 오래된 데이터는 현재 시급으로 fallback
-  return currentHourlyWage > 0 ? currentHourlyWage : 10320;
+  return currentOrDefault;
 }
 
 export async function POST(request: Request) {
@@ -525,7 +525,7 @@ async function handleEntryRows(
         supabase,
         entry.employeeId,
         entry.date,
-        Number(employee.hourly_wage || 0)
+        employee.hourly_wage === null || employee.hourly_wage === undefined ? null : Number(employee.hourly_wage)
       );
 
       // 도급 기록은 직원의 현재 일급을 스냅샷으로 남깁니다(없으면 비움 → 급여는 현재 일급으로 대신 계산).
@@ -1007,7 +1007,8 @@ export async function PUT(request: Request) {
           )
         );
 
-        const currentHourlyWage = Number(employee.hourly_wage || 0);
+        const currentHourlyWage =
+          employee.hourly_wage === null || employee.hourly_wage === undefined ? null : Number(employee.hourly_wage);
 
         for (const targetDate of targetDates) {
           // 그 날 이미 기록이 있으면 건너뜁니다.

@@ -144,9 +144,8 @@ async function freezeMissingWageSnapshots(
   const groups = new Map<number, { wage: number; ids: number[] }>();
 
   for (const record of records) {
-    const currentSnapshot = Number(record.hourly_wage_snapshot || 0);
-
-    if (currentSnapshot > 0) {
+    // 비어 있는(null) 스냅샷만 채웁니다. 0은 "시급 0원"으로 지정된 값이라 그대로 둡니다.
+    if (record.hourly_wage_snapshot !== null && record.hourly_wage_snapshot !== undefined) {
       continue;
     }
 
@@ -191,7 +190,7 @@ async function freezeMissingWageSnapshots(
     for (const record of records) {
       if (
         record.employee_id === employeeId &&
-        Number(record.hourly_wage_snapshot || 0) <= 0
+        (record.hourly_wage_snapshot === null || record.hourly_wage_snapshot === undefined)
       ) {
         record.hourly_wage_snapshot = group.wage;
       }
