@@ -966,6 +966,7 @@ export default function AdminPage() {
       // 시급분 + 도급분은 급여 API 와 같은 모듈(app/lib/dayPay.ts)로 계산합니다.
       // now 를 넘겨야 "오늘 아직 퇴근 전"이 "퇴근 누락"으로 잘못 표시되지 않습니다.
       const dayPay = calcDayPay(date, sorted, {
+        employeeId,
         fallbackHourlyWage: employee?.hourly_wage,
         fallbackDailyWage: getDailyWage(employee),
         now: new Date(),

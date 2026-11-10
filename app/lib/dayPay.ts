@@ -149,8 +149,24 @@ export function getHourlyWageForDay(
   return fallback > 0 ? fallback : DEFAULT_HOURLY_WAGE;
 }
 
+/**
+ * 직원별 근무시간 추가 규칙(2026-11-10 사용자 요청).
+ * 그 날 시급 근무시간이 minWorkedMinutes 이상이면 extraMinutes 를 더해 지급합니다(시급분·주휴 판정 모두 반영).
+ *   60 = 장사꾼 김난희: 6시간 이상 근무한 날 1시간 추가. 이번 주(2026-11-09)부터.
+ */
+const EXTRA_WORK_RULES: { employeeId: number; from: string; minWorkedMinutes: number; extraMinutes: number }[] = [
+  { employeeId: 60, from: "2026-11-09", minWorkedMinutes: 6 * 60, extraMinutes: 60 },
+];
+
+export function extraWorkMinutes(employeeId: number | string | null | undefined, dateKey: string, workedMinutes: number) {
+  const rule = EXTRA_WORK_RULES.find((r) => String(r.employeeId) === String(employeeId ?? ""));
+
+  return rule && dateKey >= rule.from && workedMinutes >= rule.minWorkedMinutes ? rule.extraMinutes : 0;
+}
+
 export type DayPayResult<T extends PayRecord = PayRecord> = {
-  hourly: DayWorkResult<T> & { wage: number; pay: number; hasHourly: boolean };
+  /** workedMinutes 에는 extraMinutes(직원별 추가 시간)가 이미 더해져 있습니다. */
+  hourly: DayWorkResult<T> & { wage: number; pay: number; hasHourly: boolean; extraMinutes: number };
   piece: PieceDayResult<T>;
   /** 자동 계산 금액 = 자동 시급분 + 도급분 */
   autoPay: number;
@@ -177,16 +193,20 @@ export function calcDayPay<T extends PayRecord>(
     now?: Date;
     /** 오늘 근무 중인 시급 구간을 현재 시각까지 추정할지(기본 true). 관리자 급여 API 는 false. */
     estimate?: boolean;
+    /** 직원별 추가 시간 규칙(EXTRA_WORK_RULES)을 찾는 데 씁니다. */
+    employeeId?: number | string | null;
   } = {}
 ): DayPayResult<T> {
   const hourlyRecords = records.filter(
     (record) => toSegmentType(record.segment_type) === "hourly"
   );
 
-  const work = calcDayWork(dateKey, hourlyRecords, {
+  const baseWork = calcDayWork(dateKey, hourlyRecords, {
     now: options.now,
     estimate: options.estimate,
   });
+  const extraMinutes = baseWork.inProgress ? 0 : extraWorkMinutes(options.employeeId, dateKey, baseWork.workedMinutes);
+  const work = { ...baseWork, workedMinutes: baseWork.workedMinutes + extraMinutes };
   const wage = getHourlyWageForDay(hourlyRecords, options.fallbackHourlyWage);
   const hourlyPay = calcHourlyPay(work.workedMinutes, wage);
 
@@ -209,7 +229,7 @@ export function calcDayPay<T extends PayRecord>(
     (WEEKLY_ALLOWANCE_INCLUDES_PIECE_MINUTES ? piece.elapsedMinutes ?? 0 : 0);
 
   return {
-    hourly: { ...work, wage, pay: hourlyPay, hasHourly: hourlyRecords.length > 0 },
+    hourly: { ...work, wage, pay: hourlyPay, hasHourly: hourlyRecords.length > 0, extraMinutes },
     piece,
     autoPay,
     override,

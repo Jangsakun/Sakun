@@ -404,6 +404,7 @@ export async function computeWeeklyPayroll({
       // now: 오늘 퇴근 전을 "누락"으로 잘못 잡지 않기 위해 넘깁니다.
       // estimate: false — 진행 중인 날은 기존처럼 0원(추정 금액을 지급액에 넣지 않음).
       const dayPay = calcDayPay(date, items, {
+        employeeId,
         fallbackHourlyWage: employee?.hourly_wage,
         fallbackDailyWage: getDailyWage(employee),
         override: override !== undefined ? override.grossPay : null,

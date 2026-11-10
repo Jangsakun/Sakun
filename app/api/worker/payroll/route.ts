@@ -267,6 +267,7 @@ export async function POST(request: NextRequest) {
         // 시급: 오늘 퇴근 전이면 현재 시각까지 추정, 퇴근이 누락된 지난 날은 0원(누락 표시).
         // 도급: 도급 출근+퇴근이 모두 있으면 일급 전액, 퇴근 누락이면 0원.
         const dayPay = calcDayPay(date, sortedItems, {
+          employeeId: employee.id,
           fallbackHourlyWage: hourlyWage,
           fallbackDailyWage: dailyWage,
           override: override !== undefined ? override.grossPay : null,
