@@ -96,6 +96,7 @@ type RoleGroupKey =
   | "alMaker"
   | "night"
   | "carrot"
+  | "carrotDelivery"
   | "unassigned"
   | "hemozOpen"
   | "hemozDay";
@@ -191,6 +192,16 @@ const ROLE_GROUPS: RoleGroupConfig[] = [
     bg: "#fff7ed",
     chipBg: "#ffedd5",
     chipColor: "#c2410c",
+  },
+  {
+    key: "carrotDelivery",
+    title: "당근 택배",
+    subtitle: "당근 남자 알바(택배)",
+    values: [],
+    accent: "#0284c7",
+    bg: "#f0f9ff",
+    chipBg: "#e0f2fe",
+    chipColor: "#075985",
   },
   {
     key: "unassigned",
@@ -335,6 +346,11 @@ function getEmployeeEmploymentType(employee: EmployeeItem) {
 
 function isCarrotEmployee(employee: EmployeeItem) {
   return getEmployeeEmploymentType(employee) === "carrot";
+}
+
+// 당근 남자는 "당근 택배" 칸에 넣습니다(2026-11-10). 성별은 가입 때 주민번호로 정해진 값입니다.
+function isCarrotDeliveryEmployee(employee: EmployeeItem) {
+  return isCarrotEmployee(employee) && String(employee.gender || "").trim() === "남성";
 }
 
 function getEmployeeKey(employee: EmployeeItem) {
@@ -520,7 +536,11 @@ function getEmployeesForRoleAndDate({
       }
 
       if (group.key === "carrot") {
-        return isCarrotEmployee(employee);
+        return isCarrotEmployee(employee) && !isCarrotDeliveryEmployee(employee);
+      }
+
+      if (group.key === "carrotDelivery") {
+        return isCarrotDeliveryEmployee(employee);
       }
 
       if (isCarrotEmployee(employee)) {
@@ -1216,7 +1236,7 @@ export default function ScheduleTab() {
                         {day.value}
                       </div>
                       {selectedWorkplace !== "헤모즈" && (() => {
-                        // 요일별 총합(2026-11-10): 현장 = 랄라/모아림 + 몽글솜 + 당근, 택배 = 택배. 아래 칸과 같은 기준으로 셉니다.
+                        // 요일별 총합(2026-11-10): 현장 = 랄라/모아림 + 몽글솜 + 당근, 택배 = 택배 + 당근 택배(당근 남자). 아래 칸과 같은 기준으로 셉니다.
                         const countGroup = (key: RoleGroupKey) => {
                           const group = ROLE_GROUPS.find((g) => g.key === key);
                           return group
@@ -1230,7 +1250,7 @@ export default function ScheduleTab() {
                             : 0;
                         };
                         const fieldCount = countGroup("rallaMoarim") + countGroup("monggeul") + countGroup("carrot");
-                        const deliveryCount = countGroup("delivery");
+                        const deliveryCount = countGroup("delivery") + countGroup("carrotDelivery");
 
                         return (
                           <div style={{ marginTop: "8px", display: "grid", gap: "4px", fontSize: "12px", fontWeight: 800 }}>
