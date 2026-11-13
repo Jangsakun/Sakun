@@ -4,6 +4,35 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { isInAppBrowser, isIos, openInDefaultBrowser } from "@/app/lib/inAppBrowser";
 
+// 은행 선택(2026-11-12). 값은 은행제출용 다건이체 공식 표기(app/lib/bankTransfer.ts OFFICIAL_BANK_NAMES)와 같게 저장합니다.
+const BANK_OPTIONS: { value: string; label: string }[] = [
+  { value: "국민", label: "KB국민은행" },
+  { value: "농협", label: "NH농협은행" },
+  { value: "신한", label: "신한은행" },
+  { value: "우리", label: "우리은행" },
+  { value: "KEB하나", label: "하나은행" },
+  { value: "기업", label: "IBK기업은행" },
+  { value: "카카오뱅크", label: "카카오뱅크" },
+  { value: "토스뱅크", label: "토스뱅크" },
+  { value: "케이뱅크", label: "케이뱅크" },
+  { value: "새마을금고", label: "새마을금고" },
+  { value: "우체국", label: "우체국" },
+  { value: "신협", label: "신협" },
+  { value: "수협", label: "수협은행" },
+  { value: "전북", label: "전북은행" },
+  { value: "광주", label: "광주은행" },
+  { value: "부산", label: "부산은행" },
+  { value: "경남", label: "경남은행" },
+  { value: "아이엠뱅크", label: "iM뱅크(대구은행)" },
+  { value: "제주", label: "제주은행" },
+  { value: "SC", label: "SC제일은행" },
+  { value: "씨티", label: "한국씨티은행" },
+  { value: "산업", label: "KDB산업은행" },
+  { value: "저축", label: "저축은행" },
+  { value: "HSBC", label: "HSBC" },
+];
+const BANK_OTHER = "__other__";
+
 function getOrCreateDeviceId() {
   let deviceId = localStorage.getItem("device_id");
 
@@ -22,6 +51,8 @@ export default function RegisterDevicePage() {
   const [phone, setPhone] = useState("");
   const [residentNumber, setResidentNumber] = useState("");
   const [bankName, setBankName] = useState("");
+  // 목록에 없는 은행(증권사 등)은 "기타"를 고르고 직접 입력합니다.
+  const [bankChoice, setBankChoice] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [workplaceName, setWorkplaceName] = useState("장사꾼");
   // 고용형태는 근로자가 고르지 않고 가입 주소로 정합니다(2026-10-27).
@@ -252,12 +283,32 @@ export default function RegisterDevicePage() {
                   className={inputClassName}
                 />
 
-                <input
-                  placeholder="은행명"
-                  value={bankName}
-                  onChange={(e) => setBankName(e.target.value)}
+                <select
+                  value={bankChoice}
+                  onChange={(e) => {
+                    const choice = e.target.value;
+                    setBankChoice(choice);
+                    setBankName(choice === BANK_OTHER ? "" : choice);
+                  }}
                   className={inputClassName}
-                />
+                >
+                  <option value="">은행 선택</option>
+                  {BANK_OPTIONS.map((bank) => (
+                    <option key={bank.value} value={bank.value}>
+                      {bank.label}
+                    </option>
+                  ))}
+                  <option value={BANK_OTHER}>기타 (직접 입력)</option>
+                </select>
+
+                {bankChoice === BANK_OTHER && (
+                  <input
+                    placeholder="은행명 직접 입력 (예: 카카오페이증권)"
+                    value={bankName}
+                    onChange={(e) => setBankName(e.target.value)}
+                    className={inputClassName}
+                  />
+                )}
 
                 <input
                   placeholder="계좌번호"
