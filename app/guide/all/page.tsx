@@ -5,7 +5,7 @@ import { Faq, Phone, Step, type Shot } from "../parts";
 // 화면 사진은 로컬에서 예시 계정으로 찍은 것(public/guide). 관리자 화면 사용법은 넣지 않습니다(사장님만 사용).
 export const metadata: Metadata = {
   title: "출퇴근 사용 안내",
-  description: "sakun.kr 가입부터 출퇴근·계약서·급여 확인까지 전체 안내",
+  description: "가입부터 출퇴근·계약서·급여 확인까지 전체 안내",
 };
 
 const SHOTS = {
@@ -65,7 +65,7 @@ export default function AllGuidePage() {
     <main className="min-h-screen bg-[#f5f5f7] px-4 py-8 text-black [color-scheme:light]">
       <div className="mx-auto w-full max-w-[480px] space-y-5">
         <header className="px-1">
-          <p className="text-sm font-semibold text-orange-500">sakun.kr 출퇴근 안내</p>
+          <p className="text-sm font-semibold text-orange-500">출퇴근 안내</p>
           <h1 className="mt-1 text-2xl font-bold text-gray-900">가입부터 급여 확인까지</h1>
           <p className="mt-2 text-sm text-gray-500">
             당근 단기 근무자와 고정 근무자 모두 이 안내를 보면 됩니다. 다른 부분에는 <Tag kind="carrot" /> <Tag kind="fixed" /> 표시를 했습니다.
@@ -82,7 +82,7 @@ export default function AllGuidePage() {
               <span className="text-sm text-gray-300">안드로이드는 크롬(또는 삼성 인터넷), 아이폰은 사파리</span>
             </li>
             <li>🚫 카카오톡·네이버·당근 앱 <b>안에서</b> 열린 화면으로는 출퇴근하지 마세요.</li>
-            <li>👉 한 번 연결되면 다음부터는 <b className="text-orange-300">sakun.kr</b> 만 열면 됩니다.</li>
+            <li>👉 한 번 연결되면 다음부터는 <b className="text-orange-300">홈 화면에 추가한 아이콘</b>으로 들어가면 됩니다.</li>
           </ul>
         </section>
 
@@ -176,7 +176,7 @@ export default function AllGuidePage() {
         <Anchor id="attendance">
           <Step no={4} title="출근·퇴근 누르기">
             <p>
-              기본 브라우저에서 <b>sakun.kr</b> 을 열면 바로 이 화면이 나옵니다. 출근할 때 <b>출근하기</b>, 일이 끝나면 <b>퇴근하기</b>.
+              <b>홈 화면 아이콘</b>으로 들어가면 바로 이 화면이 나옵니다. 출근할 때 <b>출근하기</b>, 일이 끝나면 <b>퇴근하기</b>.
             </p>
             <Phone shot={SHOTS.main} caption="출퇴근 화면" />
             <div className="space-y-3 text-sm">
@@ -224,7 +224,7 @@ export default function AllGuidePage() {
 
         <Anchor id="home">
           <Step no={7} title="홈 화면에 추가해 두기 (추천)">
-            <p>기본 브라우저에서 sakun.kr 을 연 상태로 하세요. 다음부터 아이콘 하나로 바로 들어옵니다.</p>
+            <p>가입 후 열린 출퇴근 화면에서 하세요. 다음부터 아이콘 하나로 바로 들어옵니다.</p>
             <div className="space-y-3">
               <div className="rounded-2xl bg-gray-50 px-4 py-3">
                 <p className="font-semibold text-gray-900">안드로이드 (크롬)</p>
@@ -243,7 +243,7 @@ export default function AllGuidePage() {
           <section className="rounded-3xl bg-white px-5 py-6 shadow-sm">
             <h2 className="text-lg font-bold text-gray-900">❓ 자주 묻는 질문</h2>
             <div className="mt-4 space-y-3">
-              <Faq q="sakun.kr 에 들어갔더니 가입 화면이 나오고 '이미 등록된 회원입니다'가 떠요">
+              <Faq q="출퇴근 화면에 들어갔더니 가입 화면이 나오고 '이미 등록된 회원입니다'가 떠요">
                 <p>다른 브라우저(카톡·당근 앱 안 등)에서 가입했거나 휴대폰을 바꿨을 때 생깁니다.</p>
                 <p>
                   <Tag kind="carrot" /> 가입 화면에 처음과 <b>똑같은 이름·휴대폰번호·주민번호</b>만 넣고 <b>등록하기</b> → 바로 연결됩니다.
@@ -270,7 +270,7 @@ export default function AllGuidePage() {
         <Anchor id="links">
           <section className="rounded-3xl bg-white px-5 py-6 shadow-sm">
             <h2 className="text-lg font-bold text-gray-900">🔗 링크 모음</h2>
-            <p className="mt-1 text-sm text-gray-500">누르면 바로 열립니다. 길게 누르면 주소를 복사할 수 있습니다.</p>
+            <p className="mt-1 text-sm text-gray-500">누르면 바로 열립니다.</p>
             <ul className="mt-4 divide-y divide-gray-100">
               {LINKS.map((link) => (
                 <li key={link.path} className="py-3">
@@ -278,7 +278,6 @@ export default function AllGuidePage() {
                     <p className="flex items-center gap-2 font-semibold text-gray-900">
                       {link.label} {link.tag && <Tag kind={link.tag} />}
                     </p>
-                    <p className="mt-0.5 break-all text-sm font-medium text-orange-600 underline">sakun.kr{link.path === "/" ? "" : link.path}</p>
                     <p className="mt-0.5 text-xs text-gray-500">{link.note}</p>
                   </a>
                 </li>
@@ -287,7 +286,7 @@ export default function AllGuidePage() {
           </section>
         </Anchor>
 
-        <p className="pb-6 text-center text-xs text-gray-400">sakun.kr 출퇴근 관리</p>
+        <p className="pb-6 text-center text-xs text-gray-400">출퇴근 관리</p>
       </div>
     </main>
   );

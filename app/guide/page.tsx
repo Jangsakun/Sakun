@@ -4,7 +4,7 @@ import { Phone, Step, type Shot } from "./parts";
 // 근로자용 출퇴근 사용 안내 (2026-10-30). 화면 사진은 로컬에서 예시 계정으로 찍은 것(public/guide).
 export const metadata: Metadata = {
   title: "출퇴근 사용 안내",
-  description: "당근 단기 근무자를 위한 sakun.kr 가입·출퇴근 안내",
+  description: "당근 단기 근무자를 위한 가입·출퇴근 안내",
 };
 
 const SHOTS = {
@@ -33,7 +33,7 @@ export default function GuidePage() {
               <span className="text-sm text-gray-300">안드로이드는 크롬(또는 삼성 인터넷), 아이폰은 사파리</span>
             </li>
             <li>🚫 카카오톡·네이버·당근 앱 <b>안에서</b> 열린 화면으로는 출퇴근하지 마세요.</li>
-            <li>👉 한 번 연결되면, 다음부터는 기본 브라우저에서 <b className="text-orange-300">sakun.kr</b> 만 들어가면 됩니다.</li>
+            <li>👉 한 번 연결되면, 다음부터는 <b className="text-orange-300">홈 화면에 추가한 아이콘</b>으로 들어가면 됩니다.</li>
           </ul>
         </section>
 
@@ -73,7 +73,7 @@ export default function GuidePage() {
         </Step>
 
         <Step no={4} title="홈 화면에 추가해 두기 (추천)">
-          <p>다음부터 아이콘 하나로 바로 들어올 수 있습니다. <b>기본 브라우저에서 sakun.kr 을 연 상태</b>에서 하세요.</p>
+          <p>다음부터 아이콘 하나로 바로 들어올 수 있습니다. <b>가입 후 열린 출퇴근 화면</b>에서 하세요.</p>
           <div className="space-y-3">
             <div className="rounded-2xl bg-gray-50 px-4 py-3">
               <p className="font-semibold text-gray-900">안드로이드 (크롬)</p>
@@ -104,7 +104,7 @@ export default function GuidePage() {
           </div>
         </section>
 
-        <p className="pb-6 text-center text-xs text-gray-400">sakun.kr 출퇴근 관리</p>
+        <p className="pb-6 text-center text-xs text-gray-400">출퇴근 관리</p>
       </div>
     </main>
   );
