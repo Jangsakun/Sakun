@@ -34,8 +34,8 @@ const TOC = [
 ] as const;
 
 // 근로자·현장 직원이 쓰는 주소 모음(2026-10-30). 관리자 주소는 넣지 않습니다(사장님만 사용).
+// 출퇴근 화면(/) 링크는 넣지 않습니다(2026-11-13): 안내 페이지 링크로 집에서 출퇴근을 찍는 사례가 있었음.
 const LINKS: { label: string; path: string; note: string; tag?: "carrot" | "fixed" }[] = [
-  { label: "출퇴근", path: "/", note: "매일 출근·퇴근, 스케줄 제출" },
   { label: "당근 가입", path: "/register-device?type=carrot", note: "당근 QR에 넣는 주소", tag: "carrot" },
   { label: "고정 직원 가입", path: "/register-device", note: "고정 QR에 넣는 주소 · 재연결 코드 입력도 여기서", tag: "fixed" },
   { label: "당근 안내", path: "/guide", note: "당근 근무자용 짧은 안내", tag: "carrot" },
