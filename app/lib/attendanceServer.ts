@@ -12,6 +12,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { toContractType, type SegmentType } from "./contractType";
 import { defaultSegmentFor } from "./attendanceFlow";
 import { contractGateReject } from "./contracts/attendanceGate";
+import { serviceClient } from "./contracts/server";
 
 /**
  * 요청 본문의 segment 값을 해석합니다.
@@ -95,9 +96,37 @@ export async function recordAttendance(
     return { ok: false, status: 500, message: "기록 저장 결과를 받지 못했습니다." };
   }
 
+  await keepZeroHourlyWage(input.employeeId, Number(row.record_id), input.segment);
+
   return {
     ok: true,
     recordId: Number(row.record_id),
     checkedAt: new Date(row.checked_at).toISOString(),
   };
+}
+
+/**
+ * 직원 시급이 0원(월급제 등)이면 방금 저장한 시급 구간 기록도 0원으로 맞춥니다(2026-11-17).
+ * DB 함수 record_attendance() 는 시급 0을 "없음"으로 보고 10320을 넣기 때문입니다
+ * (이종원: 11/10~ 기록이 10320으로 저장돼 급여가 잘못 나감).
+ * 실패해도 출퇴근 자체는 막지 않고 로그만 남깁니다.
+ */
+async function keepZeroHourlyWage(employeeId: number, recordId: number, segment: SegmentType) {
+  if (segment !== "hourly") return;
+
+  const supabase = serviceClient();
+
+  if (!supabase) return;
+
+  try {
+    const { data: employee } = await supabase.from("employees").select("hourly_wage").eq("id", employeeId).maybeSingle();
+
+    if (employee?.hourly_wage === null || employee?.hourly_wage === undefined || Number(employee.hourly_wage) !== 0) return;
+
+    const { error } = await supabase.from("attendance_records").update({ hourly_wage_snapshot: 0 }).eq("id", recordId);
+
+    if (error) console.error("[attendance] 시급 0원 반영 실패:", error.message);
+  } catch (error) {
+    console.error("[attendance] 시급 0원 반영 실패:", error);
+  }
 }
