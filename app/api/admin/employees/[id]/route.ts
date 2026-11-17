@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentWeekStartKst } from "@/app/lib/weeklyAllowanceHistory";
 import { createClient } from "@supabase/supabase-js";
-import { prepareFixedContractAfterTypeChange } from "@/app/lib/contracts/typeChange";
+import { markWeeklyAllowanceTarget, prepareFixedContractAfterTypeChange } from "@/app/lib/contracts/typeChange";
 
 export async function PATCH(
   request: Request,
@@ -476,6 +476,11 @@ export async function PATCH(
     let contractRequested = false;
 
     if (previousEmploymentType === "carrot" && updatePayload.employment_type === "fixed") {
+      // 고정이 되면 주휴수당도 대상으로(전환한 주부터). 같은 저장에서 관리자가 주휴수당을 직접 고르면 그 값을 따릅니다.
+      if (typeof updatePayload.weekly_allowance_status !== "string" || !allowanceChange) {
+        await markWeeklyAllowanceTarget(supabase, Number(id));
+      }
+
       // 서명 안 한 1주 계약서는 무효 처리하고 11개월 서명대기를 만듭니다(현장 직원 전환과 같은 함수).
       const prepared = await prepareFixedContractAfterTypeChange(supabase, request, Number(id), {
         actor: "admin-ui",

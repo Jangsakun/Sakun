@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { withWorker } from "@/app/lib/contracts/workerRoute";
 import { logContractEvent } from "@/app/lib/contracts/server";
-import { prepareFixedContractAfterTypeChange } from "@/app/lib/contracts/typeChange";
+import { markWeeklyAllowanceTarget, prepareFixedContractAfterTypeChange } from "@/app/lib/contracts/typeChange";
 import {
   FIELD_PIN_PATTERN,
   fieldPinLockReason,
@@ -91,6 +91,9 @@ export async function POST(request: Request) {
     if (updateError) {
       return NextResponse.json({ success: false, message: `고용구분 변경 실패: ${updateError.message}` }, { status: 500 });
     }
+
+    // 고정이 되면 주휴수당도 대상으로(전환한 주부터)
+    await markWeeklyAllowanceTarget(supabase, employee.id);
 
     const prepared = await prepareFixedContractAfterTypeChange(supabase, request, employee.id, {
       actor: "worker",
