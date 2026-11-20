@@ -7,6 +7,7 @@ import { CONTRACT_BUCKET, logContractEvent } from "@/app/lib/contracts/server";
 import { maskResidentNumber } from "@/app/lib/contracts/residentNumber";
 import { getRequestMeta } from "@/app/lib/attendanceAudit";
 import { queueContractLinkSms } from "@/app/lib/contracts/downloadLink";
+import { markWeeklyAllowanceTarget } from "@/app/lib/contracts/typeChange";
 
 /**
  * 서명 확정.
@@ -229,6 +230,19 @@ export async function POST(request: Request) {
         .from("employees")
         .update({ contract_start_date: input.startDate, contract_end_date: renderValues.endDate })
         .eq("id", employee.id);
+
+      // 당근이 11개월 계약서에 바로 서명한 경우에도 고정으로 바꾸고 주휴수당 대상으로(2026-11-20).
+      // (현장 PIN 전환은 convert-to-fixed 에서 이미 고정이 되어 여기서는 바뀌는 것이 없습니다)
+      const { data: carrotRows } = await supabase
+        .from("employees")
+        .update({ employment_type: "fixed" })
+        .eq("id", employee.id)
+        .eq("employment_type", "carrot")
+        .select("id");
+
+      if ((carrotRows ?? []).length > 0) {
+        await markWeeklyAllowanceTarget(supabase, employee.id);
+      }
     }
 
     await supabase.from("employees").update({ first_hire_date: input.startDate }).eq("id", employee.id).is("first_hire_date", null);
