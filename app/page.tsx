@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { attendanceWorkDateKey, calcDayWork } from "@/app/lib/workTime";
+import { isTimeRuleExempt } from "@/app/lib/timeRuleExempt";
 import {
   checkAttendanceAction,
   defaultSegmentFor,
@@ -270,7 +271,12 @@ async function isCarrotWorker(current: { name: string; birthDate: string; phoneL
   }
 }
 
-function getCheckoutAvailability(date = new Date()): CheckoutAvailability {
+function getCheckoutAvailability(date = new Date(), exempt = false): CheckoutAvailability {
+  // 시각 보정 제외 직원은 언제든 퇴근 가능(app/lib/timeRuleExempt.ts).
+  if (exempt) {
+    return { enabled: true, notice: "퇴근 시각은 누른 시각 그대로 기록됩니다.", nextAvailableLabel: "" };
+  }
+
   const { hour, minute } = getKstParts(date);
   const totalMinutes = hour * 60 + minute;
   const checkoutStartMinutes = 12 * 60 + 30;
@@ -1259,8 +1265,8 @@ export default function Home() {
   }, [employee]);
 
   const checkoutAvailability = useMemo(() => {
-    return getCheckoutAvailability(now);
-  }, [now]);
+    return getCheckoutAvailability(now, isTimeRuleExempt(employee?.id));
+  }, [now, employee?.id]);
 
   // [출근]/[퇴근] 버튼이 기록하는 구간. 도급 직원은 도급, 그 외는 시급.
   const mainSegment: SegmentType = defaultSegmentFor(contractType);
