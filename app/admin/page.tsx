@@ -557,6 +557,9 @@ export default function AdminPage() {
           data.firstHireFilled
             ? `첫입사일이 비어 있어 직전 계약 시작일 ${data.firstHireDate} 로 채웠습니다.`
             : "",
+          data.contractRequested
+            ? "직원이 앱을 열면 새 11개월 전자 근로계약서가 뜹니다(서명 대기)."
+            : "전자 근로계약서는 만들지 않았습니다(계약서 대상이 아닌 직원이거나 이미 서명 대기 중).",
         ]
           .filter(Boolean)
           .join("\n")
@@ -3938,9 +3941,24 @@ export default function AdminPage() {
               {filteredContractEmployees.map((emp) => {
                 const workplaceName = emp.workplace_name || "장사꾼";
 
+                const isCarrot = emp.employment_type === "carrot";
+
                 return (
                   <tr key={emp.id}>
-                    <td style={tdStyle}>{emp.name}</td>
+                    <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+                      {emp.name}
+                      {/* 고용형태 표시(2026-11-23 사용자 요청). 직원관리 목록과 같은 색 */}
+                      <span
+                        style={{
+                          ...badgeStyle,
+                          marginLeft: 6,
+                          backgroundColor: isCarrot ? "#ffedd5" : "#dcfce7",
+                          color: isCarrot ? "#c2410c" : "#166534",
+                        }}
+                      >
+                        {isCarrot ? "당근" : "고정"}
+                      </span>
+                    </td>
                     <td style={tdStyle}>
                       <span
                         style={{
