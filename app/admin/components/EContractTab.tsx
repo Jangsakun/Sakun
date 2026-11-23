@@ -26,6 +26,8 @@ type ContractRow = {
   resident_number_masked: string | null;
   entity: { business_name: string } | null;
   template: { code: string; title: string } | null;
+  /** 지금 고용형태(계약서 작성 당시가 아니라 현재 직원정보 기준) */
+  employee?: { employment_type: string | null } | null;
   sms?: SmsInfo | null;
   link?: LinkInfo | null;
 };
@@ -48,6 +50,34 @@ type LinkInfo = {
   failed_attempts: number;
   last_used_at: string | null;
 };
+
+/** 이름 옆 고용형태 표시(2026-11-23 사용자 요청): 고정 / 당근 */
+function EmployeeName({ row }: { row: ContractRow }) {
+  const type = row.employee?.employment_type;
+  const isCarrot = type === "carrot";
+  const label = type ? (isCarrot ? "당근" : "고정") : null;
+
+  return (
+    <span style={{ whiteSpace: "nowrap" }}>
+      {row.employee_name}
+      {label && (
+        <span
+          style={{
+            marginLeft: 6,
+            padding: "1px 6px",
+            borderRadius: 999,
+            fontSize: 11,
+            fontWeight: 700,
+            background: isCarrot ? "#fff1e6" : "#e8f1ff",
+            color: isCarrot ? "#c2410c" : "#1d4ed8",
+          }}
+        >
+          {label}
+        </span>
+      )}
+    </span>
+  );
+}
 
 type WeekStreak = { employeeId: number; employeeName: string; count: number; from: string; to: string };
 type MinimumWage = { year: number; hourly_wage: number; note: string | null; updated_at: string };
@@ -377,7 +407,7 @@ export default function EContractTab() {
               <tbody>
                 {pending.map((row) => (
                   <tr key={row.id}>
-                    <td style={tdStyle}>{row.employee_name}</td>
+                    <td style={tdStyle}><EmployeeName row={row} /></td>
                     <td style={tdStyle}>
                       <span style={{ ...badgeStyle, ...getWorkplaceBadgeColor(row.workplace_name) }}>{row.workplace_name}</span>
                     </td>
@@ -455,7 +485,7 @@ export default function EContractTab() {
               <tbody>
                 {contracts.map((row) => (
                   <tr key={row.id}>
-                    <td style={tdStyle}>{row.employee_name}</td>
+                    <td style={tdStyle}><EmployeeName row={row} /></td>
                     <td style={nowrapTdStyle}>{row.resident_number_masked || "-"}</td>
                     <td style={tdStyle}>
                       <span style={{ ...badgeStyle, ...getWorkplaceBadgeColor(row.workplace_name) }}>{row.workplace_name}</span>

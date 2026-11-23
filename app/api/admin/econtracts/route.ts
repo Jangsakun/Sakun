@@ -74,8 +74,24 @@ export async function GET(request: Request) {
     if (!latestLink.has(link.contract_id)) latestLink.set(link.contract_id, link);
   }
 
-  const withSms = (rows as unknown as { id: number }[]).map((row) => ({
+  // 이름 옆 고정/당근 표시용 현재 고용형태(2026-11-23). 계약서 표와 직원 표가 DB 에서 연결돼 있지 않아 따로 읽습니다.
+  const employeeIds = [...new Set(rows.map((r) => r.employee_id))];
+  const typeById = new Map<number, string | null>();
+
+  for (let i = 0; i < employeeIds.length; i += 500) {
+    const { data: emps } = await supabase
+      .from("employees")
+      .select("id, employment_type")
+      .in("id", employeeIds.slice(i, i + 500));
+
+    for (const e of emps ?? []) typeById.set(e.id, e.employment_type ?? null);
+  }
+
+  const withEmployee = (row: { employee_id: number }) => ({ employment_type: typeById.get(row.employee_id) ?? null });
+
+  const withSms = (rows as unknown as { id: number; employee_id: number }[]).map((row) => ({
     ...row,
+    employee: withEmployee(row),
     sms: latestSms.get(row.id) ?? null,
     link: latestLink.get(row.id) ?? null,
   }));
@@ -84,7 +100,7 @@ export async function GET(request: Request) {
     success: true,
     smsReady: !smsRows.error,
     contracts: withSms,
-    pending: rows.filter((r) => r.status === "pending"),
+    pending: rows.filter((r) => r.status === "pending").map((r) => ({ ...r, employee: withEmployee(r) })),
     weekStreaks: findWeekStreaks(rows),
     minimumWages: wages.data ?? [],
   });

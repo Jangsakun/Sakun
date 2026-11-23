@@ -11,7 +11,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { attendanceWorkDateKey } from "../workTime";
 import { contractKindForEmploymentType } from "./period";
 import { serviceClient } from "./server";
-import { resolveContractTarget } from "./lifecycle";
 
 export const CONTRACT_EXPIRED_CODE = "contract_expired";
 export const CONTRACT_EXPIRED_MESSAGE =
@@ -57,15 +56,6 @@ export async function contractGateReject(
   const reject = { status: 403, message: CONTRACT_EXPIRED_MESSAGE, code: CONTRACT_EXPIRED_CODE };
 
   if (gate === "expired") return reject;
-
-  // 종이 계약만 있는 고정 직원(2026-11-23): 직원정보 계약 만료일이 지났으면 출근 전에 전자계약서를 쓰게 합니다.
-  // 출근만 막습니다(이미 출근한 사람의 퇴근은 막지 않음). 계약서를 만들 수 없는 직원(도급·대상 아닌 사업장)은 막지 않습니다.
-  if (gate === "no_history" && kind === "month11" && recordType === "check_in") {
-    const { data: paper } = await supabase.from("employees").select("contract_end_date").eq("id", employeeId).maybeSingle();
-    const end = paper?.contract_end_date ?? null;
-
-    if (end && workDate > end && (await resolveContractTarget(supabase, employeeId)).ok) return reject;
-  }
 
   return null;
 }
