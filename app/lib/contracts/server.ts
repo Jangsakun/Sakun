@@ -98,6 +98,14 @@ export function findWeekStreaks(
   minCount = 4
 ): WeekStreak[] {
   const byEmployee = new Map<number, typeof rows>();
+  // 11개월 계약으로 전환한 근로자(2026-11-23): 그 11개월 계약 시작 전의 1주 연속은 이미 해결된 것이므로 표시하지 않습니다.
+  const elevenMonthStart = new Map<number, string>();
+
+  for (const row of rows) {
+    if (row.kind !== "month11" || (row.status !== "signed" && row.status !== "ended") || !row.start_date) continue;
+    const prev = elevenMonthStart.get(row.employee_id);
+    if (!prev || row.start_date > prev) elevenMonthStart.set(row.employee_id, row.start_date);
+  }
 
   for (const row of rows) {
     if (row.kind !== "week") continue;
@@ -127,7 +135,10 @@ export function findWeekStreaks(
 
       const count = i - runStart;
 
-      if (count >= minCount) {
+      const converted = elevenMonthStart.get(employeeId);
+      const resolved = !!converted && converted >= list[i - 1].end_date!;
+
+      if (count >= minCount && !resolved) {
         streaks.push({
           employeeId,
           employeeName: list[runStart].employee_name,
