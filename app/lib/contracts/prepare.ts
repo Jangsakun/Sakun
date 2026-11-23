@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { checkResidentNumber } from "./residentNumber";
 import { getTemplate, type ContractTemplate } from "./templates";
-import { validateContractInput, type ContractInput, type ValidationResult } from "./validation";
+import { contractHourlyWage, validateContractInput, type ContractInput, type ValidationResult } from "./validation";
 import { loadMinimumWages, readContractInput, todayKst, validationContext, type WorkerEmployee } from "./worker";
 import { resolveResidentNumber } from "./workerRoute";
 import type { RenderValues } from "./renderPdf";
@@ -101,6 +101,7 @@ export async function prepareContract(
         dailyNetMinutes: validation.derived.dailyNetMinutes,
         note: input.note,
         serviceScopeOther: input.serviceScopeOther,
+        hourlyWage: contractHourlyWage({ printedHourlyWage: templateRow.printed_hourly_wage, employeeHourlyWage: employee.hourly_wage }),
       }
     : null;
 

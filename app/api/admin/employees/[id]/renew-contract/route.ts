@@ -171,13 +171,14 @@ export async function POST(
       );
     }
 
-    // 전자 근로계약서를 쓰는 근로자면 새 11개월 계약서를 작성하게 합니다.
+    // 새 11개월 전자 계약서를 작성하게 합니다.
     // 시작일은 직전 만료일 다음 날로 고정되고, 직전 계약 입력값을 미리 채웁니다.
-    // 계약서 기록이 없는 기존 직원은 대상이 아닙니다(2026-10-14 결정).
+    // 종이 계약만 있던 기존 직원도 대상입니다(2026-11-23 사용자 결정: 전원 전자계약).
+    // 계약서 대상이 아닌 직원(도급·대상 아닌 사업장)은 createPendingContract 가 거절합니다.
     let contractRequested = false;
     const history = await contractHistory(supabase, employeeId);
 
-    if (history.length > 0 && result.new_start && result.new_end) {
+    if (result.new_start && result.new_end) {
       const pending = await createPendingContract(supabase, request, {
         employeeId,
         triggerReason: "renewal",

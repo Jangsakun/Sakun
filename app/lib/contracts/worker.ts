@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createPendingContract } from "./lifecycle";
 import { contractKindForEmploymentType } from "./period";
+import { calcRenewalDates } from "../contractRenewal";
 import type { ContractInput, ValidationContext } from "./validation";
 
 // 서버 전용. 근로자 앱의 계약서 API 가 공통으로 쓰는 것들.
@@ -107,6 +108,12 @@ export async function contractRequirement(
 
   if (pending) return { required: true, contractId: pending.id, kind: pending.kind };
 
+  // 고정(11개월): 계약이 끝났으면 출근할 때 다음 11개월 계약서를 준비합니다(2026-11-23 사용자 요청).
+  // 종이 계약만 있던 기존 직원도 직원정보의 계약 만료일로 판단합니다.
+  if (options.onCheckIn && contractKindForEmploymentType(employee.employment_type) === "month11") {
+    return elevenMonthRenewalRequirement(supabase, request, employee, history);
+  }
+
   // 기존 직원(계약서 행이 하나도 없음)은 대상이 아닙니다.
   if (history.length === 0 || !options.onCheckIn) {
     return { required: false, contractId: null, kind: null };
@@ -133,6 +140,68 @@ export async function contractRequirement(
   return created.ok
     ? { required: true, contractId: created.contractId, kind: "week" }
     : { required: false, contractId: null, kind: null };
+}
+
+/**
+ * 고정 직원의 11개월 계약이 끝났는지 보고, 끝났으면 갱신 서명대기를 만듭니다.
+ *   직전 만료일 = 서명한 11개월 전자계약 중 가장 늦은 만료일, 없으면 직원정보 contract_end_date(종이 계약)
+ *   새 계약 = 직전 만료일 다음 날부터 11개월(관리자 [계약 갱신] 버튼과 같은 계산), 시작일 고정
+ * 만료일이 없거나(무기계약·미입력) 아직 안 끝났으면 아무것도 하지 않습니다.
+ */
+async function elevenMonthRenewalRequirement(
+  supabase: SupabaseClient,
+  request: Request,
+  employee: WorkerEmployee,
+  history: ContractRow[]
+): Promise<{ required: boolean; contractId: number | null; kind: string | null }> {
+  const none = { required: false, contractId: null, kind: null };
+  const today = todayKst();
+  const signed = history.filter((c) => (c.status === "signed" || c.status === "ended") && c.start_date && c.end_date);
+
+  if (signed.some((c) => c.start_date! <= today && today <= c.end_date!)) return none;
+
+  const electronicEnds = signed.filter((c) => c.kind === "month11").map((c) => c.end_date!).sort();
+  let lastEnd = electronicEnds[electronicEnds.length - 1] ?? null;
+  let paper: { contract_start_date: string | null; contract_end_date: string | null } | null = null;
+
+  if (!lastEnd) {
+    const { data } = await supabase
+      .from("employees")
+      .select("contract_start_date, contract_end_date")
+      .eq("id", employee.id)
+      .maybeSingle();
+
+    paper = data;
+    lastEnd = data?.contract_end_date ?? null;
+  }
+
+  if (!lastEnd || today <= lastEnd) return none;
+
+  const dates = calcRenewalDates(lastEnd);
+
+  if (!dates) return none;
+
+  const created = await createPendingContract(supabase, request, {
+    employeeId: employee.id,
+    triggerReason: "renewal",
+    prefill: previousInput(history),
+    startDate: dates.newStart,
+    endDate: dates.newEnd,
+    actor: "system",
+  });
+
+  if (!created.ok) return none;
+
+  // 종이 계약 직원: 서명 때 첫입사일이 새 계약 시작일로 채워지지 않도록 기존 계약 시작일을 먼저 넣어 둡니다.
+  if (paper?.contract_start_date && !employee.first_hire_date) {
+    await supabase
+      .from("employees")
+      .update({ first_hire_date: paper.contract_start_date })
+      .eq("id", employee.id)
+      .is("first_hire_date", null);
+  }
+
+  return { required: true, contractId: created.contractId, kind: "month11" };
 }
 
 /** 연도별 최저시급 표(검사 함수에 넘기기 위해 미리 다 읽어 둡니다). */

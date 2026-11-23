@@ -8,6 +8,7 @@ import {
   WORK_DAY_LABELS,
   formatNetHours,
   validateContractInput,
+  contractHourlyWage,
   type ContractInput,
   type Issue,
   type WorkDay,
@@ -481,7 +482,7 @@ export default function ContractPage() {
       {step === "form" && (
         <div className="flex flex-col gap-4">
           <ReadOnly label="사업주" value={`${contract.entity.business_name} · 대표 ${contract.entity.representative}`} />
-          <ReadOnly label="시급" value={`1시간당 ${contract.printedHourlyWage.toLocaleString()}원 (계약서에 인쇄된 금액)`} errors={errorFor("hourlyWage")} />
+          <ReadOnly label="시급" value={`1시간당 ${contractHourlyWage(contract).toLocaleString()}원`} errors={errorFor("hourlyWage")} />
 
           <Field label="성명" errors={errorFor("name")}>
             <input className={inputCls} value={input.name} onChange={(e) => update({ name: e.target.value })} autoComplete="name" />

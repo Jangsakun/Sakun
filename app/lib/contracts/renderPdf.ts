@@ -28,6 +28,8 @@ export type RenderValues = {
   dailyNetMinutes?: number | null;
   note?: string;
   serviceScopeOther?: string;
+  /** 계약 시급. 양식에 인쇄된 금액과 다르면 그 자리를 덮어 씁니다. 없으면 인쇄된 금액 그대로. */
+  hourlyWage?: number | null;
 };
 
 export type RenderInput = {
@@ -155,6 +157,28 @@ export async function renderContractPdf(input: RenderInput): Promise<Uint8Array>
     const text = String(actual);
     const width = font.widthOfTextAtSize(text, size);
     page.drawText(text, { x: field.x + (field.width - width) / 2, y: field.y, size, font, color: INK });
+  }
+
+  // 계약 시급: 인쇄된 금액과 다르면 그 숫자만 흰색으로 덮고 계약 시급을 씁니다(2026-11-23).
+  const wage = Number(values.hourlyWage ?? 0);
+
+  if (template.printedWage && wage > 0 && wage !== template.printedHourlyWage) {
+    const field = template.printedWage;
+    const page = pages[field.page];
+    page.drawRectangle({
+      x: field.x - 0.6,
+      y: field.y - 0.8,
+      width: field.width + 1.2,
+      height: field.height,
+      color: rgb(1, 1, 1),
+    });
+
+    const text = wage.toLocaleString("ko-KR");
+    let size = field.height;
+    while (size > 6 && font.widthOfTextAtSize(text, size) > field.width + 1) size -= 0.25;
+    const width = font.widthOfTextAtSize(text, size);
+    // 뒤에 인쇄된 "원"에 붙도록 오른쪽 끝을 맞춥니다.
+    page.drawText(text, { x: field.x + field.width - width, y: field.y, size, font, color: INK });
   }
 
   // 1주 양식 근무표: 한 번 입력한 시간을 체크한 요일 칸에 똑같이 채웁니다.

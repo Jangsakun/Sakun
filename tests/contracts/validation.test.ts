@@ -12,6 +12,7 @@ import {
   maskResidentNumber,
 } from "../../app/lib/contracts/residentNumber";
 import {
+  contractHourlyWage,
   validateContractInput,
   type ContractInput,
   type ValidationContext,
@@ -163,9 +164,18 @@ test("최저시급: 시작 연도 기준 — 그 해 설정이 없으면 차단"
   assert.ok(codes(r).includes("min_wage_missing"));
 });
 
-test("등록 시급이 양식 인쇄 시급과 다르면 차단(관리자 문의)", () => {
+test("등록 시급이 양식과 달라도 통과하고 계약 시급은 등록 시급(2026-11-23)", () => {
   const r = validateContractInput(week(), ctx({ employeeHourlyWage: 11000 }));
-  assert.ok(codes(r).includes("wage_mismatch"));
+  assert.ok(!codes(r).includes("wage_mismatch"));
+  assert.ok(r.ok);
+  assert.equal(contractHourlyWage({ printedHourlyWage: 10320, employeeHourlyWage: 11000 }), 11000);
+  assert.equal(contractHourlyWage({ printedHourlyWage: 10320, employeeHourlyWage: null }), 10320);
+  assert.equal(contractHourlyWage({ printedHourlyWage: 10320, employeeHourlyWage: 0 }), 10320);
+});
+
+test("등록 시급이 최저시급보다 낮으면 차단", () => {
+  const r = validateContractInput(week(), ctx({ employeeHourlyWage: 9000 }));
+  assert.ok(codes(r).includes("below_min_wage"));
 });
 
 test("주민번호 형식 오류는 차단", () => {

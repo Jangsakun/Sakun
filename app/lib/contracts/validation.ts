@@ -53,7 +53,7 @@ export type ValidationContext = {
   minimumWageForYear: (year: number) => number | null;
   /** 양식에 인쇄된 시급(장사꾼 양식은 10,320원) */
   printedHourlyWage: number;
-  /** 직원 정보에 등록된 시급 */
+  /** 직원 정보에 등록된 시급. 있으면 계약서에 이 금액을 씁니다(contractHourlyWage). */
   employeeHourlyWage: number | null;
   /**
    * 시작일을 시스템이 정한 경우(11개월 갱신 = 직전 만료일 다음 날).
@@ -98,6 +98,16 @@ function minutesOf(value: string | undefined): number | null {
   const m = TIME.exec(String(value || ""));
 
   return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+
+/**
+ * 계약서에 적는 시급(2026-11-23 사용자 요청: 사람마다 시급이 달라 등록된 시급으로).
+ * 직원 시급이 등록돼 있으면(0 초과) 그 금액, 없으면 양식에 인쇄된 금액.
+ */
+export function contractHourlyWage(ctx: Pick<ValidationContext, "printedHourlyWage" | "employeeHourlyWage">) {
+  const registered = Number(ctx.employeeHourlyWage ?? 0);
+
+  return registered > 0 ? Math.floor(registered) : ctx.printedHourlyWage;
 }
 
 export function formatWon(value: number) {
@@ -171,13 +181,9 @@ export function validateContractInput(
 
     if (minimum === null) {
       add("hourlyWage", "min_wage_missing", `${year}년 최저시급이 설정되어 있지 않습니다. 관리자에게 문의하세요.`);
-    } else if (ctx.printedHourlyWage < minimum) {
-      add("hourlyWage", "below_min_wage", `계약서의 시급 ${formatWon(ctx.printedHourlyWage)}이 ${year}년 최저시급 ${formatWon(minimum)}보다 적습니다. 관리자에게 문의하세요.`);
+    } else if (contractHourlyWage(ctx) < minimum) {
+      add("hourlyWage", "below_min_wage", `계약서의 시급 ${formatWon(contractHourlyWage(ctx))}이 ${year}년 최저시급 ${formatWon(minimum)}보다 적습니다. 관리자에게 문의하세요.`);
     }
-  }
-
-  if (ctx.employeeHourlyWage !== null && ctx.employeeHourlyWage !== ctx.printedHourlyWage) {
-    add("hourlyWage", "wage_mismatch", `계약서에 인쇄된 시급(${formatWon(ctx.printedHourlyWage)})과 등록된 시급(${formatWon(ctx.employeeHourlyWage)})이 다릅니다. 관리자에게 문의하세요.`);
   }
 
   // 3. 주민등록번호

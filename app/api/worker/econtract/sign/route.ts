@@ -165,6 +165,7 @@ export async function POST(request: Request) {
       serviceScopeOther: input.serviceScopeOther,
       printedHourlyWage: prepared.templateRow.printed_hourly_wage,
       employeeHourlyWage: employee.hourly_wage,
+      contractHourlyWage: renderValues.hourlyWage ?? prepared.templateRow.printed_hourly_wage,
       templateCode: prepared.templateRow.code,
       templateSha256: prepared.templateRow.file_sha256,
       fieldMapVersion: prepared.templateRow.field_map_version,

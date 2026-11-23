@@ -78,6 +78,8 @@ export type ContractTemplate = {
   sha256: string;
   fieldMapVersion: number;
   printedHourlyWage: number;
+  /** 인쇄된 시급 숫자("10,320") 자리. 계약 시급이 다르면 흰색으로 덮고 그 금액을 씁니다. */
+  printedWage?: { page: number; x: number; y: number; width: number; height: number };
   text: Record<string, TextField>;
   printedYears: Record<string, PrintedYearField>;
   images: {
@@ -121,6 +123,8 @@ const JANGSAKUN_TEMPLATES: Record<string, ContractTemplate> = {
     sha256: "f9e98f11efe46b57278f9037757ec951de94e924f96a78cc9911323a70c92274",
     fieldMapVersion: 1,
     printedHourlyWage: 10320,
+    // 제5조 ③ "1시간당 10,320원" (원본 PDF 글자 위치, 2026-11-23)
+    printedWage: { page: 0, x: 174.6, y: 299.1, width: 30.0, height: 9.5 },
     text: {
       name: { page: 0, x: 206, y: 695.6, size: 10, maxWidth: 148 },
       residentNumber: { page: 0, x: 436, y: 695.6, size: 10, maxWidth: 100 },
@@ -165,6 +169,8 @@ const JANGSAKUN_TEMPLATES: Record<string, ContractTemplate> = {
     sha256: "66ba744c8cadf23401147d46f7bd3dbb7d2131bc87ce196c4d0a8bbc1991a897",
     fieldMapVersion: 1,
     printedHourlyWage: 10320,
+    // "을에게 1시간당 10,320원의 용역대금" (원본 PDF 글자 위치, 2026-11-23). 아래 "최저임금(10,320원)"은 그대로 둡니다.
+    printedWage: { page: 0, x: 178.4, y: 268.2, width: 34.9, height: 11.0 },
     text: {
       name: { page: 0, x: 206, y: 713.2, size: 10, maxWidth: 148 },
       residentNumber: { page: 0, x: 436, y: 713.2, size: 10, maxWidth: 100 },
