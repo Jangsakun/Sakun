@@ -68,8 +68,9 @@ function EmployeeName({ row }: { row: ContractRow }) {
             borderRadius: 999,
             fontSize: 11,
             fontWeight: 700,
-            background: isCarrot ? "#fff1e6" : "#e8f1ff",
-            color: isCarrot ? "#c2410c" : "#1d4ed8",
+            // 직원관리·근로계약서 탭과 같은 색
+            background: isCarrot ? "#ffedd5" : "#dcfce7",
+            color: isCarrot ? "#c2410c" : "#166534",
           }}
         >
           {label}
@@ -387,7 +388,7 @@ export default function EContractTab() {
       <section>
         <h3 style={sectionTitleStyle}>서명 대기 ({pending.length}명)</h3>
         <p style={hintStyle}>
-          계약서 작성 화면이 떠야 하는데 아직 서명하지 않은 근로자입니다. 신규 가입자부터 대상이며 기존 직원은 포함되지 않습니다.
+          계약서 작성 화면이 떠야 하는데 아직 서명하지 않은 근로자입니다. 신규 가입·당근 1주 만료 후 출근·고정 전환, 근로계약서 탭의 [11개월 갱신] 버튼으로 생깁니다.
         </p>
         {pending.length === 0 ? (
           <div style={emptyStyle}>서명 대기 중인 근로자가 없습니다.</div>
@@ -399,6 +400,7 @@ export default function EContractTab() {
                   <th style={thStyle}>이름</th>
                   <th style={thStyle}>사업장</th>
                   <th style={thStyle}>계약 종류</th>
+                  <th style={thStyle}>계약기간</th>
                   <th style={thStyle}>필요해진 이유</th>
                   <th style={thStyle}>생성 시각</th>
                   <th style={thStyle}>관리</th>
@@ -411,9 +413,10 @@ export default function EContractTab() {
                     <td style={tdStyle}>
                       <span style={{ ...badgeStyle, ...getWorkplaceBadgeColor(row.workplace_name) }}>{row.workplace_name}</span>
                     </td>
-                    <td style={tdStyle}>{KIND_LABEL[row.kind]}</td>
-                    <td style={tdStyle}>{TRIGGER_LABEL[row.trigger_reason] ?? row.trigger_reason}</td>
-                    <td style={tdStyle}>{formatDateTime(row.created_at)}</td>
+                    <td style={nowrapTdStyle}>{KIND_LABEL[row.kind]}</td>
+                    <td style={nowrapTdStyle}>{row.start_date ? formatPeriod(row) : "서명할 때 정함"}</td>
+                    <td style={nowrapTdStyle}>{TRIGGER_LABEL[row.trigger_reason] ?? row.trigger_reason}</td>
+                    <td style={nowrapTdStyle}>{formatDateTime(row.created_at)}</td>
                     <td style={tdStyle}>
                       <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
                         <button style={dangerButtonStyle} disabled={busyId === row.id} onClick={() => voidContract(row)}>
@@ -491,11 +494,11 @@ export default function EContractTab() {
                       <span style={{ ...badgeStyle, ...getWorkplaceBadgeColor(row.workplace_name) }}>{row.workplace_name}</span>
                     </td>
                     <td style={nowrapTdStyle}>{row.entity?.business_name ?? "-"}</td>
-                    <td style={tdStyle}>{KIND_LABEL[row.kind]}</td>
+                    <td style={nowrapTdStyle}>{KIND_LABEL[row.kind]}</td>
                     <td style={nowrapTdStyle}>{formatPeriod(row)}</td>
                     <td style={tdStyle}>
                       <span style={{ ...badgeStyle, ...STATUS_COLOR[row.status] }}>{STATUS_LABEL[row.status]}</span>
-                      {row.status === "void" && row.void_reason && <div style={subTextStyle}>사유: {row.void_reason}</div>}
+                      {row.status === "void" && row.void_reason && <div style={{ ...subTextStyle, minWidth: "160px", wordBreak: "keep-all" }}>사유: {row.void_reason}</div>}
                     </td>
                     <td style={nowrapTdStyle}>{formatDateTime(row.signed_at)}</td>
                     {data?.smsReady && (
