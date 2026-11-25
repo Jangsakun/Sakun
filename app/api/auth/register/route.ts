@@ -519,6 +519,36 @@ export async function POST(request: Request) {
       );
     }
 
+    // 주민번호를 한 자리 잘못 입력해 같은 사람이 계정을 하나 더 만드는 일을 막습니다(2026-11-25, 김은정·조금선 사례).
+    // 이름·생년월일·휴대폰번호가 모두 같은 회원이 이미 있으면 새로 가입시키지 않습니다.
+    const { data: samePeople, error: samePersonError } = await supabase
+      .from("employees")
+      .select("id, phone")
+      .eq("name", trimmedName)
+      .eq("birth_date", birthDate);
+
+    if (samePersonError) {
+      return NextResponse.json(
+        { success: false, message: "기존 회원 확인 중 오류가 발생했습니다." },
+        { status: 500 }
+      );
+    }
+
+    const samePhone = (samePeople ?? []).some(
+      (person) => String(person.phone || "").replace(/[^0-9]/g, "") === phoneDigits
+    );
+
+    if (samePhone) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "이미 같은 이름·생년월일·휴대폰번호로 가입된 회원이 있습니다. 주민번호를 처음 가입할 때와 똑같이 입력했는지 확인하시고, 그래도 안 되면 관리자에게 재연결 코드를 받아주세요.",
+        },
+        { status: 409 }
+      );
+    }
+
     if (!trimmedBankName || !trimmedAccountNumber) {
       return NextResponse.json(
         { success: false, message: "은행명과 계좌번호를 입력해주세요." },
