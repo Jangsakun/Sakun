@@ -90,7 +90,7 @@ export default function InquiryPage() {
   const [photos, setPhotos] = useState<string[]>([]);
   const [photoBusy, setPhotoBusy] = useState(false);
 
-  const addPhotos = async (files: FileList | null) => {
+  const addPhotos = async (files: FileList | File[] | null) => {
     if (!files || files.length === 0) return;
 
     const room = MAX_PHOTOS - photos.length;
@@ -191,7 +191,16 @@ export default function InquiryPage() {
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value.slice(0, MAX_MESSAGE))}
-            placeholder="문의 내용을 입력해주세요"
+            onPaste={(e) => {
+              // 캡처한 사진을 Ctrl+V(폰은 길게 눌러 붙여넣기)로 바로 첨부합니다. 글자 붙여넣기는 그대로 둡니다.
+              const images = Array.from(e.clipboardData?.files ?? []).filter((f) => f.type.startsWith("image/"));
+
+              if (images.length > 0) {
+                e.preventDefault();
+                addPhotos(images);
+              }
+            }}
+            placeholder="문의 내용을 입력해주세요 (사진은 Ctrl+V 로 붙여넣기도 됩니다)"
             rows={5}
             className="w-full resize-none rounded-xl border border-gray-300 p-3 text-[15px] outline-none focus:border-black"
           />
