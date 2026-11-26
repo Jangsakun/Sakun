@@ -242,6 +242,7 @@ function badgeStyle(item: Inquiry): CSSProperties {
 }
 
 const cardStyle: CSSProperties = {
+  color: "#111827",
   border: "1px solid #e5e7eb",
   borderRadius: "14px",
   padding: "14px",
@@ -249,6 +250,7 @@ const cardStyle: CSSProperties = {
 };
 
 const answerBoxStyle: CSSProperties = {
+  color: "#111827",
   marginTop: "12px",
   backgroundColor: "#f0f7ff",
   borderRadius: "10px",
@@ -256,6 +258,8 @@ const answerBoxStyle: CSSProperties = {
 };
 
 const textareaStyle: CSSProperties = {
+  color: "#111827",
+  backgroundColor: "#ffffff",
   width: "100%",
   boxSizing: "border-box",
   border: "1px solid #d1d5db",
