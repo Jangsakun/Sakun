@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import ScheduleTab from "./components/ScheduleTab";
 import DbSizeTab from "./components/DbSizeTab";
 import EContractTab from "./components/EContractTab";
+import InquiryTab from "./components/InquiryTab";
 import SmsWorkerBanner from "./components/SmsWorkerBanner";
 import {
   cell,
@@ -334,7 +335,20 @@ export default function AdminPage() {
     | "econtracts"
     | "schedule"
     | "dbSize"
+    | "inquiries"
   >("attendance");
+
+  // 문의사항 탭 버튼에 답변 대기 수 표시(2026-11-26)
+  const [inquiryPending, setInquiryPending] = useState(0);
+
+  useEffect(() => {
+    fetch("/api/admin/inquiries", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.success) setInquiryPending(j.pendingCount ?? 0);
+      })
+      .catch(() => undefined);
+  }, []);
 
   const [selectedWorkplaces, setSelectedWorkplaces] = useState<WorkplaceName[]>(
     []
@@ -2198,6 +2212,32 @@ export default function AdminPage() {
             }}
           >
             전자계약
+          </button>
+
+          <button
+            onClick={() => setTab("inquiries")}
+            style={{
+              ...tabButtonStyle,
+              backgroundColor: tab === "inquiries" ? "#111827" : "#f3f4f6",
+              color: tab === "inquiries" ? "#ffffff" : "#111827",
+            }}
+          >
+            문의사항
+            {inquiryPending > 0 && (
+              <span
+                style={{
+                  marginLeft: "6px",
+                  backgroundColor: "#ef4444",
+                  color: "#ffffff",
+                  borderRadius: "999px",
+                  padding: "1px 7px",
+                  fontSize: "12px",
+                  fontWeight: 800,
+                }}
+              >
+                {inquiryPending}
+              </span>
+            )}
           </button>
 
           <button
@@ -4152,6 +4192,21 @@ export default function AdminPage() {
             </div>
 
             <EContractTab />
+          </section>
+        )}
+
+        {tab === "inquiries" && (
+          <section style={cardStyle}>
+            <div style={sectionHeaderStyle}>
+              <div>
+                <h2 style={sectionTitleStyle}>문의사항</h2>
+                <p style={sectionDescriptionStyle}>
+                  근로자가 출퇴근 화면에서 남긴 문의에 답변합니다. 저장한 답변은 근로자 문의사항 화면에 바로 보입니다.
+                </p>
+              </div>
+            </div>
+
+            <InquiryTab onPendingCount={setInquiryPending} />
           </section>
         )}
 

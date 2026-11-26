@@ -718,6 +718,23 @@ export default function Home() {
   const [weekEndDate, setWeekEndDate] = useState("");
   const [isHolidayLoading, setIsHolidayLoading] = useState(true);
 
+  // 문의사항에 새 답변이 있으면 버튼에 표시(2026-11-26)
+  const [inquiryNewAnswers, setInquiryNewAnswers] = useState(0);
+
+  useEffect(() => {
+    if (!employee?.id) return;
+
+    fetch("/api/worker/inquiries", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deviceId: getOrCreateDeviceId(), action: "summary" }),
+      cache: "no-store",
+    })
+      .then((r) => r.json())
+      .then((j) => setInquiryNewAnswers(j.success ? j.unreadAnswers ?? 0 : 0))
+      .catch(() => undefined);
+  }, [employee?.id]);
+
   const [workerContract, setWorkerContract] = useState<WorkerContract | null>(
     null
   );
@@ -2317,6 +2334,33 @@ export default function Home() {
           <div style={payrollTextWrapStyle}>
             <div style={payrollTitleStyle}>내 계약서</div>
             <div style={payrollDescStyle}>서명한 근로계약서를 언제든 다시 받을 수 있습니다</div>
+          </div>
+          <div style={payrollArrowStyle}>›</div>
+        </Link>
+
+        <Link href="/inquiry" style={{ ...payrollLinkStyle, marginTop: "10px", border: "1px solid #e5e7eb", background: "#ffffff" }}>
+          <div style={{ ...payrollIconStyle, backgroundColor: "#f3f4f6" }}>💬</div>
+          <div style={payrollTextWrapStyle}>
+            <div style={payrollTitleStyle}>
+              문의사항
+              {inquiryNewAnswers > 0 && (
+                <span
+                  style={{
+                    marginLeft: "6px",
+                    backgroundColor: "#ef4444",
+                    color: "#ffffff",
+                    borderRadius: "999px",
+                    padding: "2px 8px",
+                    fontSize: "12px",
+                    fontWeight: 800,
+                    verticalAlign: "middle",
+                  }}
+                >
+                  새 답변 {inquiryNewAnswers}
+                </span>
+              )}
+            </div>
+            <div style={payrollDescStyle}>궁금한 점을 남기면 관리자가 답변드립니다</div>
           </div>
           <div style={payrollArrowStyle}>›</div>
         </Link>
