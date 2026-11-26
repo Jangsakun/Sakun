@@ -97,6 +97,12 @@ export function toKstDateKey(value: Date | string) {
 // 한쪽을 바꾸면 다른 쪽도 같이 바꿉니다.
 export const OVERNIGHT_CHECKOUT_CUTOFF_HOUR = 6;
 
+// 자정 넘어 새벽 05:00(KST) 전에 찍은 "출근"도 전날 근무로 봅니다(2026-11-26, 한나라 11/25 00:41 출근 → 03:45 퇴근 실패).
+// 그 전 기록(유원미 11/17 02:30 등)은 바꾸지 않도록 2026-11-20 이후 기록에만 적용합니다.
+// DB 함수 attendance_work_date(20261126300000_overnight_check_in.sql)와 같은 규칙입니다.
+export const OVERNIGHT_CHECKIN_CUTOFF_HOUR = 5;
+export const OVERNIGHT_CHECKIN_RULE_FROM = "2026-11-20";
+
 function getKstHour(date: Date) {
   return Number(
     new Intl.DateTimeFormat("en-GB", {
@@ -114,7 +120,7 @@ export function addDaysToDateKey(dateKey: string, days: number) {
   return date.toISOString().slice(0, 10);
 }
 
-/** 기록이 속한 근무일(KST). 새벽 06:00 전 퇴근은 전날. */
+/** 기록이 속한 근무일(KST). 새벽 06:00 전 퇴근, 새벽 05:00 전 출근(2026-11-20~)은 전날. */
 export function attendanceWorkDateKey(record: AttendanceLike) {
   const at = new Date(record.checked_at);
   const dateKey = toKstDateKey(at);
@@ -122,6 +128,14 @@ export function attendanceWorkDateKey(record: AttendanceLike) {
   if (
     isCheckOutType(record.record_type) &&
     getKstHour(at) < OVERNIGHT_CHECKOUT_CUTOFF_HOUR
+  ) {
+    return addDaysToDateKey(dateKey, -1);
+  }
+
+  if (
+    isCheckInType(record.record_type) &&
+    getKstHour(at) < OVERNIGHT_CHECKIN_CUTOFF_HOUR &&
+    dateKey >= OVERNIGHT_CHECKIN_RULE_FROM
   ) {
     return addDaysToDateKey(dateKey, -1);
   }

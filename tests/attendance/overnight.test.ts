@@ -19,6 +19,22 @@ test("새벽 06:00 전 퇴근만 전날 근무일", () => {
   assert.equal(attendanceWorkDateKey({ record_type: "check_out", checked_at: at("2026-11-01T01:00:00") }), "2026-10-31");
 });
 
+test("2026-11-20부터 새벽 05:00 전 출근은 전날 근무일", () => {
+  assert.equal(attendanceWorkDateKey({ record_type: "check_in", checked_at: at("2026-11-25T00:41:00") }), "2026-11-24");
+  assert.equal(attendanceWorkDateKey({ record_type: "check_out", checked_at: at("2026-11-25T03:45:00") }), "2026-11-24");
+  assert.equal(attendanceWorkDateKey({ record_type: "check_in", checked_at: at("2026-11-25T04:59:00") }), "2026-11-24");
+  assert.equal(attendanceWorkDateKey({ record_type: "check_in", checked_at: at("2026-11-25T05:00:00") }), "2026-11-25");
+  // 규칙 시작 전 기록은 그대로(유원미 11/17 02:30)
+  assert.equal(attendanceWorkDateKey({ record_type: "check_in", checked_at: at("2026-11-17T02:30:00") }), "2026-11-17");
+
+  const records = [
+    { record_type: "check_in", segment_type: "hourly", checked_at: at("2026-11-25T00:41:00"), hourly_wage_snapshot: 13000 },
+    { record_type: "check_out", segment_type: "hourly", checked_at: at("2026-11-25T03:40:00"), hourly_wage_snapshot: 13000 },
+  ];
+  const work = calcDayWork("2026-11-24", records);
+  assert.ok(work.workedMinutes > 150 && work.workedMinutes <= 180, `worked ${work.workedMinutes}`);
+});
+
 test("19일 21:00 ~ 20일 02:00 = 5시간, 점심 차감 없음", () => {
   const records = [
     { record_type: "check_in", segment_type: "hourly", checked_at: at("2026-10-19T21:00:00"), hourly_wage_snapshot: 10320 },
