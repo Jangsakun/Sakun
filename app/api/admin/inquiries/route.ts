@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAdminRequest, serviceClient } from "@/app/lib/contracts/server";
+import { photoPathsOf, signInquiryPhotos } from "@/app/lib/inquiryPhotos";
 
 /**
  * 관리자 "문의사항" 탭.
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabase
     .from("worker_inquiries")
-    .select("id, employee_id, employee_name, workplace_name, message, answer, answered_at, answer_read_at, created_at")
+    .select("*")
     .order("created_at", { ascending: false })
     .limit(300);
 
@@ -44,6 +45,7 @@ export async function GET(request: Request) {
   }
 
   const rows = data ?? [];
+  const urls = await signInquiryPhotos(supabase, rows.flatMap(photoPathsOf));
 
   return NextResponse.json({
     success: true,
@@ -54,6 +56,7 @@ export async function GET(request: Request) {
       employeeName: r.employee_name,
       workplaceName: r.workplace_name,
       message: r.message,
+      photos: photoPathsOf(r).map((p) => urls.get(p)).filter(Boolean),
       answer: r.answer,
       answeredAt: r.answered_at,
       answerReadAt: r.answer_read_at,

@@ -10,6 +10,7 @@ type Inquiry = {
   employeeName: string;
   workplaceName: string | null;
   message: string;
+  photos?: string[];
   answer: string | null;
   answeredAt: string | null;
   answerReadAt: string | null;
@@ -160,6 +161,24 @@ export default function InquiryTab({ onPendingCount }: { onPendingCount?: (count
               </div>
 
               <p style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", margin: 0, fontSize: "15px", lineHeight: 1.5 }}>{item.message}</p>
+
+              {item.photos && item.photos.length > 0 && (
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "10px" }}>
+                  {item.photos.map((src, i) => (
+                    <a
+                      key={i}
+                      href={src}
+                      target="_blank"
+                      rel="noreferrer"
+                      title="크게 보기"
+                      style={{ display: "block", width: "96px", height: "96px", borderRadius: "10px", overflow: "hidden", border: "1px solid #e5e7eb" }}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={src} alt={`첨부 사진 ${i + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    </a>
+                  ))}
+                </div>
+              )}
 
               {!isEditing && item.answer && (
                 <div style={answerBoxStyle}>

@@ -1,11 +1,19 @@
 import { NextResponse } from "next/server";
 import { serviceClient } from "@/app/lib/contracts/server";
+import { randomUUID } from "node:crypto";
+import {
+  INQUIRY_PHOTO_BUCKET,
+  MAX_INQUIRY_PHOTOS,
+  decodeJpegDataUrl,
+  photoPathsOf,
+  signInquiryPhotos,
+} from "@/app/lib/inquiryPhotos";
 
 /**
  * 근로자 문의사항(본인 것만).
  *   action "list"   — 내 문의 목록 + 새 답변 수
  *   action "summary" — 새 답변 수만(출퇴근 화면 표시용)
- *   action "create" — 문의 남기기 { message }
+ *   action "create" — 문의 남기기 { message, photos?: JPEG data URL 최대 3장 }
  *   action "read"   — 답변 확인 처리(목록을 연 뒤 호출)
  *
  * 근로자 확인은 이 휴대폰에 연결된 기기 ID 로 합니다(이름·생년월일만으로 남의 문의를 볼 수 없게).
@@ -56,7 +64,19 @@ export async function POST(request: Request) {
     }
 
     if (action === "create") {
-      const message = String(body.message ?? "").trim();
+      const rawPhotos = Array.isArray(body.photos) ? body.photos : [];
+
+      if (rawPhotos.length > MAX_INQUIRY_PHOTOS) {
+        return NextResponse.json({ success: false, message: `사진은 ${MAX_INQUIRY_PHOTOS}장까지 붙일 수 있습니다.` }, { status: 400 });
+      }
+
+      const photos = rawPhotos.map(decodeJpegDataUrl);
+
+      if (photos.some((p) => !p)) {
+        return NextResponse.json({ success: false, message: "사진 파일을 읽지 못했습니다. 다른 사진으로 다시 시도해주세요." }, { status: 400 });
+      }
+
+      const message = String(body.message ?? "").trim() || (photos.length > 0 ? "(사진 문의)" : "");
 
       if (!message) {
         return NextResponse.json({ success: false, message: "문의 내용을 입력해주세요." }, { status: 400 });
@@ -84,14 +104,41 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: false, message: "하루에 남길 수 있는 문의 수를 넘었습니다. 내일 다시 남기거나 관리자에게 직접 문의해주세요." }, { status: 429 });
       }
 
+      const photoPaths: string[] = [];
+
+      for (const bytes of photos) {
+        const path = `${employee.id}/${randomUUID()}.jpg`;
+        const { error: uploadError } = await supabase.storage
+          .from(INQUIRY_PHOTO_BUCKET)
+          .upload(path, bytes as Buffer, { contentType: "image/jpeg", upsert: false });
+
+        if (uploadError) {
+          if (photoPaths.length > 0) await supabase.storage.from(INQUIRY_PHOTO_BUCKET).remove(photoPaths);
+          console.error("[inquiries] 사진 업로드 실패:", uploadError.message);
+
+          return NextResponse.json(
+            {
+              success: false,
+              message: /bucket/i.test(uploadError.message) ? "사진 첨부 기능을 준비 중입니다. 사진 없이 남겨주세요." : "사진을 올리지 못했습니다.",
+            },
+            { status: 500 }
+          );
+        }
+
+        photoPaths.push(path);
+      }
+
       const { error } = await supabase.from("worker_inquiries").insert({
         employee_id: employee.id,
         employee_name: employee.name,
         workplace_name: employee.workplace_name,
         message,
+        ...(photoPaths.length > 0 ? { photo_paths: photoPaths } : {}),
       });
 
       if (error) {
+        if (photoPaths.length > 0) await supabase.storage.from(INQUIRY_PHOTO_BUCKET).remove(photoPaths);
+
         return NextResponse.json(
           { success: false, message: notReady(error.message) ? "문의사항 기능을 준비 중입니다." : "문의를 저장하지 못했습니다." },
           { status: 500 }
@@ -125,7 +172,7 @@ export async function POST(request: Request) {
 
     const { data, error } = await supabase
       .from("worker_inquiries")
-      .select("id, message, answer, answered_at, answer_read_at, created_at")
+      .select("*")
       .eq("employee_id", employee.id)
       .order("created_at", { ascending: false })
       .limit(50);
@@ -137,11 +184,15 @@ export async function POST(request: Request) {
       );
     }
 
+    const rows = data ?? [];
+    const urls = await signInquiryPhotos(supabase, rows.flatMap(photoPathsOf));
+
     return NextResponse.json({
       success: true,
-      inquiries: (data ?? []).map((row) => ({
+      inquiries: rows.map((row) => ({
         id: row.id,
         message: row.message,
+        photos: photoPathsOf(row).map((p) => urls.get(p)).filter(Boolean),
         answer: row.answer,
         answeredAt: row.answered_at,
         isNewAnswer: !!row.answer && !row.answer_read_at,
