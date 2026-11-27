@@ -1,6 +1,5 @@
 "use client";
 
-import { Noto_Sans_KR } from "next/font/google";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -19,12 +18,11 @@ import {
   type SegmentType,
 } from "@/app/lib/contractType";
 
-const notoSansKr = Noto_Sans_KR({
-  subsets: ["latin"],
-  weight: ["400", "500", "700", "900"],
-  display: "swap",
-  preload: false,
-});
+// Noto Sans KR 은 app/layout.tsx 의 구글 폰트 링크로 불러옵니다(빌드 때 다운로드하지 않음, 2026-11-27).
+const notoSansKr = {
+  className: "",
+  style: { fontFamily: '"Noto Sans KR"' },
+};
 
 type Employee = {
   id?: string;
